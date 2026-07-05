@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app/shell.dart';
 import 'app/theme.dart';
 import 'providers/providers.dart';
 
@@ -25,12 +26,7 @@ class ExpenseTrackerApp extends StatelessWidget {
       title: 'Expense Tracker',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
-      // ponytail: placeholder home for Step 1; real shell arrives in Step 4.
-      home: const Scaffold(
-        body: Center(
-          child: Text('Expense Tracker', style: TextStyle(fontSize: 20)),
-        ),
-      ),
+      home: const AppShell(),
     );
   }
 }
