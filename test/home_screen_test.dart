@@ -38,10 +38,17 @@ void main() {
       ],
       child: MaterialApp(theme: buildTheme(), home: const Scaffold(body: HomeScreen())),
     ));
-    await tester.pumpAndSettle();
+    // Let the drift streams emit; avoid pumpAndSettle (progress bars animate).
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
 
     expect(find.text('75 000'), findsNWidgets(2)); // hero total + Food category row
     expect(find.textContaining('4 000 000'), findsWidgets); // default budget in hero footer
     expect(find.text('Food & dining'), findsOneWidget);
+
+    // Dispose the tree, then pump once so drift's stream-cleanup timer fires.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 }
