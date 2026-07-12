@@ -57,6 +57,13 @@ class AppDatabase extends _$AppDatabase {
   Future<int> insertCategory(CategoriesCompanion entry) =>
       into(categories).insert(entry);
 
+  /// Rename or archive (flip [Category.isArchived]) — categories are never
+  /// hard-deleted (Expenses.categoryId is onDelete: restrict).
+  Future<bool> updateCategory(Category c) => update(categories).replace(c);
+
+  /// Includes archived — for the Settings manage sheet (unarchive).
+  Future<List<Category>> getAllCategories() => select(categories).get();
+
   // --- Expenses ---
   Future<int> insertExpense(ExpensesCompanion entry) =>
       into(expenses).insert(entry);
@@ -68,6 +75,10 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Expense>> watchExpenses() =>
       (select(expenses)..orderBy([(e) => OrderingTerm.desc(e.date)])).watch();
+
+  /// One-shot fetch (date desc) for CSV export.
+  Future<List<Expense>> getExpenses() =>
+      (select(expenses)..orderBy([(e) => OrderingTerm.desc(e.date)])).get();
 
   /// Sum of expenses per category between [start] (inclusive) and [end]
   /// (exclusive). Returns categoryId -> total amount.

@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/activity/activity_screen.dart';
 import '../features/add/add_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/insights/insights_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../providers/providers.dart';
 import 'theme.dart';
 
 /// Bottom-nav shell: 4 tabs in an IndexedStack + a center FAB that pushes the
-/// Add screen as a full route (matches the mockup).
-class AppShell extends StatefulWidget {
+/// Add screen as a full route (matches the mockup). Tab index lives in
+/// [tabIndexProvider] so other screens can switch tabs.
+class AppShell extends ConsumerWidget {
   const AppShell({super.key});
-
-  @override
-  State<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends State<AppShell> {
-  int _index = 0;
 
   static const _pages = [
     HomeScreen(),
@@ -26,20 +22,17 @@ class _AppShellState extends State<AppShell> {
     SettingsScreen(),
   ];
 
-  void _openAdd() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AddScreen(), fullscreenDialog: true),
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final index = ref.watch(tabIndexProvider);
     return Scaffold(
-      body: SafeArea(bottom: false, child: IndexedStack(index: _index, children: _pages)),
+      body: SafeArea(bottom: false, child: IndexedStack(index: index, children: _pages)),
       bottomNavigationBar: _NavBar(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
-        onAdd: _openAdd,
+        index: index,
+        onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
+        onAdd: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AddScreen(), fullscreenDialog: true),
+        ),
       ),
     );
   }
@@ -64,11 +57,11 @@ class _NavBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavItem(icon: Icons.home_outlined, label: 'Home', selected: index == 0, onTap: () => onTap(0)),
-          _NavItem(icon: Icons.receipt_long_outlined, label: 'Activity', selected: index == 1, onTap: () => onTap(1)),
+          _NavItem(icon: Icons.home_outlined, label: 'Asosiy', selected: index == 0, onTap: () => onTap(0)),
+          _NavItem(icon: Icons.receipt_long_outlined, label: 'Tarix', selected: index == 1, onTap: () => onTap(1)),
           _Fab(onTap: onAdd),
-          _NavItem(icon: Icons.donut_large_outlined, label: 'Insights', selected: index == 2, onTap: () => onTap(2)),
-          _NavItem(icon: Icons.settings_outlined, label: 'Settings', selected: index == 3, onTap: () => onTap(3)),
+          _NavItem(icon: Icons.donut_large_outlined, label: 'Tahlil', selected: index == 2, onTap: () => onTap(2)),
+          _NavItem(icon: Icons.settings_outlined, label: 'Sozlamalar', selected: index == 3, onTap: () => onTap(3)),
         ],
       ),
     );

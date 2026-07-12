@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
+import '../common/ui_utils.dart';
 
 class CatLine {
   final Category category;
@@ -29,14 +29,14 @@ class HomeSummary {
   int get maxCatAmount => byCategory.isEmpty ? 0 : byCategory.first.amount;
 }
 
-/// Aggregates the current calendar month from the watched expense/category
-/// streams. Recomputes whenever an expense or the budget changes.
-final homeSummaryProvider = Provider<HomeSummary>((ref) {
-  final expenses = ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
-  final categories = ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
-  final budget = ref.watch(settingsProvider).monthlyBudget;
-
-  final now = DateTime.now();
+/// Aggregates the calendar month containing [now] into a [HomeSummary].
+/// Pure — no Riverpod/DB — so it is directly unit-testable.
+HomeSummary summarize(
+  List<Expense> expenses,
+  List<Category> categories,
+  int budget,
+  DateTime now,
+) {
   final start = DateTime(now.year, now.month, 1);
   final end = DateTime(now.year, now.month + 1, 1);
 
@@ -57,9 +57,17 @@ final homeSummaryProvider = Provider<HomeSummary>((ref) {
   lines.sort((a, b) => b.amount.compareTo(a.amount));
 
   return HomeSummary(
-    monthLabel: DateFormat('MMMM yyyy').format(now),
+    monthLabel: uzMonthYear(now),
     spent: spent,
     budget: budget,
     byCategory: lines,
   );
+}
+
+/// Recomputes whenever an expense or the budget changes.
+final homeSummaryProvider = Provider<HomeSummary>((ref) {
+  final expenses = ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
+  final categories = ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+  final budget = ref.watch(settingsProvider).monthlyBudget;
+  return summarize(expenses, categories, budget, DateTime.now());
 });

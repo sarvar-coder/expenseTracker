@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
 import 'home_summary.dart';
 
@@ -22,9 +23,12 @@ class HomeScreen extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('By category',
+            const Text('Turkumlar bo\'yicha',
                 style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.text)),
-            Text('See all', style: TextStyle(color: AppColors.accent, fontSize: 13)),
+            GestureDetector(
+              onTap: () => ref.read(tabIndexProvider.notifier).set(1),
+              child: const Text('Hammasi', style: TextStyle(color: AppColors.accent, fontSize: 13)),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -32,7 +36,7 @@ class HomeScreen extends ConsumerWidget {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 28),
             child: Center(
-              child: Text('No expenses yet this month',
+              child: Text('Bu oy hali xarajat yo\'q',
                   style: TextStyle(color: AppColors.muted)),
             ),
           )
@@ -56,7 +60,7 @@ class _Header extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Total spent', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+            const Text('Jami sarflangan', style: TextStyle(fontSize: 11, color: AppColors.muted)),
             Text(monthLabel,
                 style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w500, color: AppColors.text)),
           ],
@@ -91,7 +95,7 @@ class _HeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Spent this month',
+          const Text('Bu oy sarflangan',
               style: TextStyle(fontSize: 12, color: Color(0xFF9EC1B4))),
           const SizedBox(height: 8),
           Row(
@@ -105,25 +109,30 @@ class _HeroCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: summary.progress,
-              minHeight: 7,
-              backgroundColor: Colors.white.withValues(alpha: 0.15),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC79A)),
+          if (summary.budget <= 0)
+            const Text('Sozlamalarda oylik byudjet belgilang',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF7FB3A0)))
+          else ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: summary.progress,
+                minHeight: 7,
+                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC79A)),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('${summary.percent}% of ${formatMoney(summary.budget)}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFFA7C9BC))),
-              Text('${formatMoney(summary.remaining)} left',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFFA7C9BC))),
-            ],
-          ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${formatMoney(summary.budget)} dan ${summary.percent}%',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFFA7C9BC))),
+                Text('${formatMoney(summary.remaining)} qoldi',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFFA7C9BC))),
+              ],
+            ),
+          ],
         ],
       ),
     );

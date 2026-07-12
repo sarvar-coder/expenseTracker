@@ -35,8 +35,8 @@ class SettingsStore {
 
   Settings load() => Settings(
         currencyCode: _prefs.getString(_kCurrency) ?? 'UZS',
-        monthlyBudget: _prefs.getInt(_kBudget) ?? 4000000,
-        sttLocale: _prefs.getString(_kLocale) ?? 'en_US',
+        monthlyBudget: _prefs.getInt(_kBudget) ?? 0,
+        sttLocale: _prefs.getString(_kLocale) ?? 'uz_UZ',
       );
 
   Future<void> setCurrency(String v) => _prefs.setString(_kCurrency, v);

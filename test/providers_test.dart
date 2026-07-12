@@ -26,7 +26,7 @@ void main() {
 
     final s = c.read(settingsProvider);
     expect(s.currencyCode, 'UZS');
-    expect(s.monthlyBudget, 4000000);
+    expect(s.monthlyBudget, 0); // default budget (unset)
 
     await c.read(settingsProvider.notifier).setBudget(5000000);
     expect(c.read(settingsProvider).monthlyBudget, 5000000);
