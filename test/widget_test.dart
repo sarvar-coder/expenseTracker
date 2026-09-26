@@ -35,6 +35,13 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     }
 
+    // FAB is labeled and big enough.
+    expect(find.bySemanticsLabel('Xarajat qo\'shish'), findsOneWidget);
+    final fab = tester.getSize(find
+        .ancestor(of: find.byIcon(Icons.add), matching: find.byType(InkWell))
+        .first);
+    expect(fab.width, greaterThanOrEqualTo(56));
+
     // Home header: gear replaces the dead bell; no duplicate "Hammasi" link.
     expect(find.byTooltip('Sozlamalar'), findsOneWidget);
     expect(find.byIcon(Icons.notifications_none), findsNothing);
