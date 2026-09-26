@@ -53,7 +53,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         const SizedBox(height: 24),
         if (data.slices.isEmpty)
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 60),
+            padding: const EdgeInsets.symmetric(vertical: 60),
             child: Center(
               child: Text(
                 'Bu davrda xarajat yo\'q',
@@ -62,60 +62,80 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             ),
           )
         else ...[
-          SizedBox(
-            height: 220,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                PieChart(
-                  PieChartData(
-                    sectionsSpace: 2,
-                    centerSpaceRadius: 70,
-                    sections: [
-                      for (final s in data.slices)
-                        PieChartSectionData(
-                          value: s.amount.toDouble(),
-                          color: colorFromHex(s.category.colorHex),
-                          radius: 26,
-                          showTitle: false,
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Semantics(
+                label: 'Jami ${formatMoney(data.total)} UZS',
+                excludeSemantics: true,
+                child: SizedBox(
+                  height: 220,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 70,
+                          sections: [
+                            for (final s in data.slices)
+                              PieChartSectionData(
+                                value: s.amount.toDouble(),
+                                color: colorFromHex(s.category.colorHex),
+                                radius: 26,
+                                showTitle: false,
+                              ),
+                          ],
                         ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Jami',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.colors.muted,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            formatMoney(data.total),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: context.colors.text,
+                            ),
+                          ),
+                          Text(
+                            'UZS',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.colors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Jami',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.colors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatMoney(data.total),
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        color: context.colors.text,
-                      ),
-                    ),
-                    Text(
-                      'UZS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.colors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 24),
-          for (final s in data.slices)
-            _LegendRow(slice: s, fraction: data.fraction(s.amount)),
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Column(
+                children: [
+                  for (final s in data.slices)
+                    _LegendRow(slice: s, fraction: data.fraction(s.amount)),
+                ],
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -131,17 +151,10 @@ class _LegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = colorFromHex(slice.category.colorHex);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
+          CircleAvatar(radius: 6, backgroundColor: color),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -160,7 +173,7 @@ class _LegendRow extends StatelessWidget {
             formatMoney(slice.amount),
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               color: context.colors.text,
             ),
           ),
