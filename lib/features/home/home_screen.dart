@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
+import '../settings/settings_screen.dart';
 import 'home_summary.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -17,32 +17,21 @@ class HomeScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
       children: [
         _Header(monthLabel: s.monthLabel),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         _HeroCard(summary: s),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Turkumlar bo\'yicha',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: context.colors.text,
-              ),
-            ),
-            GestureDetector(
-              onTap: () => ref.read(tabIndexProvider.notifier).set(1),
-              child: Text(
-                'Hammasi',
-                style: TextStyle(color: context.colors.accent, fontSize: 13),
-              ),
-            ),
-          ],
+        const SizedBox(height: 24),
+        Text(
+          'Turkumlar bo\'yicha',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: context.colors.text,
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (s.byCategory.isEmpty)
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 28),
+            padding: const EdgeInsets.symmetric(vertical: 28),
             child: Center(
               child: Text(
                 'Bu oy hali xarajat yo\'q',
@@ -51,8 +40,17 @@ class HomeScreen extends ConsumerWidget {
             ),
           )
         else
-          ...s.byCategory.map(
-            (line) => _CategoryRow(line: line, max: s.maxCatAmount),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Column(
+                children: [
+                  for (final line in s.byCategory)
+                    _CategoryRow(line: line, max: s.maxCatAmount),
+                ],
+              ),
+            ),
           ),
       ],
     );
@@ -66,38 +64,39 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Jami sarflangan',
-              style: TextStyle(fontSize: 11, color: context.colors.muted),
-            ),
-            Text(
-              monthLabel,
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w500,
-                color: context.colors.text,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Jami sarflangan',
+                style: TextStyle(fontSize: 12, color: context.colors.muted),
               ),
-            ),
-          ],
-        ),
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: context.colors.card,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: context.colors.border),
+              Text(
+                monthLabel,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: context.colors.text,
+                ),
+              ),
+            ],
           ),
-          child: const Icon(
-            Icons.notifications_none,
-            size: 18,
-            color: Color(0xFF57544E),
+        ),
+        IconButton(
+          tooltip: 'Sozlamalar',
+          icon: Icon(Icons.settings_outlined, color: context.colors.text),
+          style: IconButton.styleFrom(
+            backgroundColor: context.colors.card,
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              side: BorderSide(color: context.colors.border),
+            ),
+          ),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
           ),
         ),
       ],
@@ -111,54 +110,53 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final soft = c.onHero.withValues(alpha: 0.72);
+    final over = summary.budget > 0 && summary.spent > summary.budget;
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: context.colors.hero,
-        borderRadius: BorderRadius.circular(20),
+        color: c.hero,
+        borderRadius: BorderRadius.circular(AppRadii.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Bu oy sarflangan',
-            style: TextStyle(fontSize: 12, color: Color(0xFF9EC1B4)),
-          ),
-          const SizedBox(height: 8),
+          Text('Bu oy sarflangan', style: TextStyle(fontSize: 13, color: soft)),
+          const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
                 formatMoney(summary.spent),
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w600,
+                  color: c.onHero,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(width: 4),
-              const Text(
-                'UZS',
-                style: TextStyle(fontSize: 14, color: Color(0xFF7FB3A0)),
-              ),
+              const SizedBox(width: 6),
+              Text('UZS', style: TextStyle(fontSize: 14, color: soft)),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           if (summary.budget <= 0)
-            const Text(
+            Text(
               'Sozlamalarda oylik byudjet belgilang',
-              style: TextStyle(fontSize: 11.5, color: Color(0xFF7FB3A0)),
+              style: TextStyle(fontSize: 12, color: soft),
             )
           else ...[
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(AppRadii.chip),
               child: LinearProgressIndicator(
                 value: summary.progress,
-                minHeight: 7,
-                backgroundColor: Colors.white.withValues(alpha: 0.15),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC79A)),
+                minHeight: 8,
+                backgroundColor: c.onHero.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation(
+                  over ? c.danger : c.success,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -167,17 +165,11 @@ class _HeroCard extends StatelessWidget {
               children: [
                 Text(
                   '${formatMoney(summary.budget)} dan ${summary.percent}%',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFA7C9BC),
-                  ),
+                  style: TextStyle(fontSize: 12, color: soft),
                 ),
                 Text(
                   '${formatMoney(summary.remaining)} qoldi',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFA7C9BC),
-                  ),
+                  style: TextStyle(fontSize: 12, color: soft),
                 ),
               ],
             ),
@@ -198,7 +190,7 @@ class _CategoryRow extends StatelessWidget {
     final color = colorFromHex(line.category.colorHex);
     final frac = max <= 0 ? 0.0 : (line.amount / max).clamp(0.0, 1.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Container(
@@ -206,7 +198,7 @@ class _CategoryRow extends StatelessWidget {
             height: 38,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
             child: Center(
               child: CircleAvatar(radius: 6, backgroundColor: color),
@@ -219,11 +211,11 @@ class _CategoryRow extends StatelessWidget {
               children: [
                 Text(
                   line.category.name,
-                  style: TextStyle(fontSize: 13, color: context.colors.text),
+                  style: TextStyle(fontSize: 14, color: context.colors.text),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 6),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(AppRadii.chip),
                   child: LinearProgressIndicator(
                     value: frac,
                     minHeight: 5,
@@ -238,8 +230,8 @@ class _CategoryRow extends StatelessWidget {
           Text(
             formatMoney(line.amount),
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: context.colors.text,
             ),
           ),
