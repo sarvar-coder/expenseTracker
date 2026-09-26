@@ -185,25 +185,7 @@ class _TxnRow extends ConsumerWidget {
         color: Colors.redAccent,
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      confirmDismiss: (_) async =>
-          await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Xarajat o\'chirilsinmi?'),
-              content: Text('“${expense.description}” o\'chiriladi.'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Bekor qilish'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('O\'chirish'),
-                ),
-              ],
-            ),
-          ) ??
-          false,
+      confirmDismiss: (_) => confirmDeleteExpense(context, expense.description),
       onDismissed: (_) async {
         await ref.read(databaseProvider).deleteExpense(expense.id);
         if (context.mounted) {

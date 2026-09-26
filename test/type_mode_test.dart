@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:expense_tracker/data/db/database.dart';
 import 'package:expense_tracker/data/db/tables.dart';
@@ -24,8 +25,13 @@ void main() {
     addTearDown(db.close);
     final food = (await db.getCategories()).firstWhere((c) => c.name == 'Food & dining');
 
+    // AddScreen reads/writes lastAddMode → needs real prefs.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        sharedPrefsProvider.overrideWithValue(prefs),
         databaseProvider.overrideWithValue(db),
         // Closing streams: no drift stream timers pending at teardown.
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),

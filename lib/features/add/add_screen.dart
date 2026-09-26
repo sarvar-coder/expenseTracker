@@ -28,7 +28,11 @@ class AddScreen extends ConsumerStatefulWidget {
 typedef _Prefill = ({String amount, String desc, int? categoryId});
 
 class _AddScreenState extends ConsumerState<AddScreen> {
-  late AddMode _mode = AddMode.manual;
+  // Editing forces Manual; otherwise reopen in the last picked mode.
+  late AddMode _mode = widget.editing != null
+      ? AddMode.manual
+      : AddMode.values.asNameMap()[ref.read(settingsStoreProvider).lastAddMode] ??
+            AddMode.type;
   late _Prefill? _prefill = widget.editing == null
       ? null
       : (
@@ -53,37 +57,23 @@ class _AddScreenState extends ConsumerState<AddScreen> {
         title: Text(
           widget.editing == null ? 'Xarajat qo\'shish' : 'Xarajatni tahrirlash',
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
           SegmentedButton<AddMode>(
             showSelectedIcon: false,
+            // Labels only: the Speak form has its own mic, one mic on screen.
             segments: const [
-              ButtonSegment(
-                value: AddMode.type,
-                icon: Icon(Icons.edit_outlined),
-                label: Text('Yozish'),
-              ),
-              ButtonSegment(
-                value: AddMode.speak,
-                icon: Icon(Icons.mic_none),
-                label: Text('Aytish'),
-              ),
-              ButtonSegment(
-                value: AddMode.manual,
-                icon: Icon(Icons.list_alt),
-                label: Text('Qo\'lda'),
-              ),
+              ButtonSegment(value: AddMode.type, label: Text('Yozish')),
+              ButtonSegment(value: AddMode.speak, label: Text('Aytish')),
+              ButtonSegment(value: AddMode.manual, label: Text('Qo\'lda')),
             ],
             selected: {_mode},
-            onSelectionChanged: (s) => setState(() => _mode = s.first),
+            onSelectionChanged: (s) {
+              setState(() => _mode = s.first);
+              ref.read(settingsStoreProvider).setLastAddMode(s.first.name);
+            },
           ),
           const SizedBox(height: 16),
           switch (_mode) {
@@ -181,6 +171,15 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
   void _toast(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
+  Future<void> _delete() async {
+    final editing = widget.editing!;
+    if (!await confirmDeleteExpense(context, editing.description)) return;
+    await ref.read(databaseProvider).deleteExpense(editing.id);
+    if (!mounted) return;
+    _toast('Xarajat o\'chirildi');
+    Navigator.of(context).maybePop();
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -206,7 +205,6 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           decoration: const InputDecoration(
             hintText: '45000',
             suffixText: 'UZS',
-            border: OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
@@ -215,14 +213,12 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           controller: _desc,
           decoration: const InputDecoration(
             hintText: 'Kofe va kruassan',
-            border: OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         _label('Turkum'),
         DropdownButtonFormField<int>(
           initialValue: _categoryId,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
           hint: const Text('Turkum tanlang'),
           items: [
             for (final c in categories)
@@ -247,7 +243,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
         InkWell(
           onTap: _pickDate,
           child: InputDecorator(
-            decoration: const InputDecoration(border: OutlineInputBorder()),
+            decoration: const InputDecoration(),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -267,6 +263,19 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           icon: const Icon(Icons.check),
           label: const Text('Saqlash'),
         ),
+        if (widget.editing != null) ...[
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _delete,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.colors.danger,
+              side: BorderSide(color: context.colors.danger),
+              minimumSize: const Size(0, 48),
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('O\'chirish'),
+          ),
+        ],
       ],
     );
   }
@@ -400,9 +409,10 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                   padding: const EdgeInsets.all(18),
                   style: IconButton.styleFrom(
                     backgroundColor: _listening
-                        ? Colors.redAccent
+                        ? context.colors.danger
                         : context.colors.accent,
                   ),
+                  tooltip: _listening ? 'To\'xtatish' : 'Gapirish',
                   icon: Icon(_listening ? Icons.stop : Icons.mic),
                 ),
                 const SizedBox(height: 6),
@@ -426,7 +436,6 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
             hintText: widget.voice
                 ? 'Matn shu yerda chiqadi — kerak bo\'lsa tahrirlang'
                 : 'masalan: kofe va kruassan 45000',
-            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 14),
@@ -494,7 +503,7 @@ class _ParsedCard extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.colors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadii.card),
         border: Border.all(color: context.colors.border),
       ),
       child: Column(
