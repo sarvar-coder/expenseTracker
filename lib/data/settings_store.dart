@@ -32,6 +32,7 @@ class SettingsStore {
   static const _kBudget = 'monthlyBudget';
   static const _kLocale = 'sttLocale';
   static const _kApiKey = 'geminiApiKey';
+  static const _kAddMode = 'lastAddMode';
 
   Settings load() => Settings(
         currencyCode: _prefs.getString(_kCurrency) ?? 'UZS',
@@ -42,6 +43,10 @@ class SettingsStore {
   Future<void> setCurrency(String v) => _prefs.setString(_kCurrency, v);
   Future<void> setBudget(int v) => _prefs.setInt(_kBudget, v);
   Future<void> setLocale(String v) => _prefs.setString(_kLocale, v);
+
+  /// Last Add mode the user picked (enum name), so Add reopens in it.
+  String? get lastAddMode => _prefs.getString(_kAddMode);
+  Future<void> setLastAddMode(String v) => _prefs.setString(_kAddMode, v);
 
   // API key — secure storage, read on demand.
   Future<String?> getApiKey() => _secure.read(key: _kApiKey);

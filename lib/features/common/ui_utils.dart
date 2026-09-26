@@ -38,3 +38,24 @@ int? parseAmount(String raw) {
   if (digits.isEmpty) return null;
   return int.tryParse(digits);
 }
+
+/// "Delete this expense?" confirm. Shared by swipe-delete and the edit screen.
+Future<bool> confirmDeleteExpense(BuildContext context, String description) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xarajat o\'chirilsinmi?'),
+        content: Text('“$description” o\'chiriladi.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('O\'chirish'),
+          ),
+        ],
+      ),
+    ) ??
+    false;
