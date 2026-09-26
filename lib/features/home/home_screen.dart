@@ -159,7 +159,7 @@ class _CategoryRow extends StatelessWidget {
               color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(iconForKey(line.category.iconKey), size: 18, color: color),
+            child: Center(child: CircleAvatar(radius: 6, backgroundColor: color)),
           ),
           const SizedBox(width: 12),
           Expanded(

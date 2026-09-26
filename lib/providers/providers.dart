@@ -64,6 +64,11 @@ final categoriesProvider = StreamProvider<List<Category>>(
   (ref) => ref.watch(databaseProvider).watchCategories(),
 );
 
+/// Includes archived — Settings > Categories.
+final allCategoriesProvider = StreamProvider<List<Category>>(
+  (ref) => ref.watch(databaseProvider).watchAllCategories(),
+);
+
 final expensesProvider = StreamProvider<List<Expense>>(
   (ref) => ref.watch(databaseProvider).watchExpenses(),
 );

@@ -272,10 +272,9 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
                 value: c.id,
                 child: Row(
                   children: [
-                    Icon(
-                      iconForKey(c.iconKey),
-                      size: 18,
-                      color: colorFromHex(c.colorHex),
+                    CircleAvatar(
+                      radius: 6,
+                      backgroundColor: colorFromHex(c.colorHex),
                     ),
                     const SizedBox(width: 8),
                     Text(c.name),
@@ -597,11 +596,7 @@ class _ParsedCard extends ConsumerWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                iconForKey(cat?.iconKey ?? 'category'),
-                size: 16,
-                color: color,
-              ),
+              CircleAvatar(radius: 5, backgroundColor: color),
               const SizedBox(width: 6),
               Text(
                 cat?.name ?? parsed.category,
