@@ -42,7 +42,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         AppSpace.page,
         8,
         AppSpace.page,
-        AppSpace.section,
+        AppSpace.section + 72, // clear the floating add button
       ),
       children: [
         Text('Tarix', style: t.headlineMedium),
