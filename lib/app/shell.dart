@@ -5,13 +5,12 @@ import '../features/activity/activity_screen.dart';
 import '../features/add/add_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/insights/insights_screen.dart';
-import '../features/settings/settings_screen.dart';
 import '../providers/providers.dart';
 import 'theme.dart';
 
-/// Bottom-nav shell: 4 tabs in an IndexedStack + a center FAB that pushes the
-/// Add screen as a full route (matches the mockup). Tab index lives in
-/// [tabIndexProvider] so other screens can switch tabs.
+/// Bottom-nav shell: 3 tabs in an IndexedStack + a center FAB that pushes the
+/// Add screen as a full route. Settings opens from the Home header. Tab index
+/// lives in [tabIndexProvider] so other screens can switch tabs.
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
@@ -19,7 +18,6 @@ class AppShell extends ConsumerWidget {
     HomeScreen(),
     ActivityScreen(),
     InsightsScreen(),
-    SettingsScreen(),
   ];
 
   @override
@@ -86,12 +84,6 @@ class _NavBar extends StatelessWidget {
             selected: index == 2,
             onTap: () => onTap(2),
           ),
-          _NavItem(
-            icon: Icons.settings_outlined,
-            label: 'Sozlamalar',
-            selected: index == 3,
-            onTap: () => onTap(3),
-          ),
         ],
       ),
     );
@@ -113,19 +105,24 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? context.colors.accent : const Color(0xFFB0ACA2);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        width: 56,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(color: color, fontSize: 10)),
-          ],
+    final color = selected ? context.colors.accent : context.colors.navInactive;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        child: SizedBox(
+          width: 72,
+          height: 56,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 3),
+              Text(label, style: TextStyle(color: color, fontSize: 11)),
+            ],
+          ),
         ),
       ),
     );
@@ -142,16 +139,21 @@ class _Fab extends StatelessWidget {
       offset: const Offset(0, -12),
       child: Material(
         color: context.colors.accent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.card),
         elevation: 6,
         shadowColor: context.colors.accent.withValues(alpha: 0.4),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: const SizedBox(
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          child: SizedBox(
             width: 56,
             height: 56,
-            child: Icon(Icons.add, color: Colors.white, size: 26),
+            child: Icon(
+              Icons.add,
+              color: context.colors.onAccent,
+              size: 26,
+              semanticLabel: 'Xarajat qo\'shish',
+            ),
           ),
         ),
       ),
