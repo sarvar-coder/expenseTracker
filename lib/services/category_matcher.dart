@@ -1,36 +1,27 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:flutter/painting.dart' show HSLColor;
 
 import '../data/db/database.dart';
 
-/// Palette for auto-created categories (6-hex, no '#'), cycled by category count.
-/// Mirrors the design tokens' spare hues; icon defaults to the generic 'category'.
-const _autoColors = ['E08A5B', '6FA86A', 'C07FA6', '5B8DB8', 'D9A24E', '7E88C3'];
+/// Distinct hues for new categories (6-hex, no '#'). Seed colors first so they
+/// are skipped (already used); the rest keep pie-chart slices easy to tell apart.
+const _palette = [
+  'E08A5B', '6FA86A', 'C07FA6', '5B8DB8', 'D9A24E', '7E88C3',
+  'D0655F', '4FA3A0', '9C7A56', 'A3B84F', '8D6BC4', 'E07FA0',
+];
 
 String _norm(String s) => s.trim().toLowerCase();
 
-/// Keyword -> iconKey (keys must exist in ui_utils.iconForKey's map). First
-/// substring hit wins; unknown names fall back to the generic 'category'.
-const _iconKeywords = <String, String>{
-  'food': 'restaurant', 'restaurant': 'restaurant', 'dining': 'restaurant',
-  'cafe': 'restaurant', 'coffee': 'restaurant', 'lunch': 'restaurant',
-  'grocery': 'shopping_cart', 'groceries': 'shopping_cart', 'market': 'shopping_cart',
-  'shop': 'shopping_bag', 'clothes': 'shopping_bag', 'clothing': 'shopping_bag',
-  'transport': 'directions_car', 'taxi': 'directions_car', 'car': 'directions_car',
-  'fuel': 'directions_car', 'gas': 'directions_car', 'bus': 'directions_car',
-  'bill': 'receipt_long', 'utilit': 'receipt_long', 'rent': 'receipt_long',
-  'movie': 'movie', 'cinema': 'movie', 'entertain': 'movie',
-  'health': 'medical_services', 'pharmacy': 'medical_services', 'medical': 'medical_services',
-  'doctor': 'medical_services', 'gym': 'fitness_center', 'fitness': 'fitness_center',
-  'sport': 'fitness_center', 'flight': 'flight', 'travel': 'flight', 'hotel': 'flight',
-  'pet': 'pets', 'school': 'school', 'education': 'school', 'course': 'school',
-};
-
-String _guessIcon(String name) {
-  final n = name.toLowerCase();
-  for (final e in _iconKeywords.entries) {
-    if (n.contains(e.key)) return e.value;
+/// First palette color not taken by any category (archived included, so
+/// unarchiving can't clash); past the palette, golden-angle hues.
+String _uniqueColor(Set<String> used) {
+  for (final c in _palette) {
+    if (!used.contains(c)) return c;
   }
-  return 'category';
+  for (var n = 0;; n++) {
+    final argb = HSLColor.fromAHSL(1, (n * 137.508) % 360, 0.45, 0.55).toColor().toARGB32();
+    final hex = (argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+    if (!used.contains(hex)) return hex;
+  }
 }
 
 /// Finds an existing category whose name matches [rawName] (trim + case
@@ -39,14 +30,9 @@ String _guessIcon(String name) {
 Future<int> matchOrCreateCategory(AppDatabase db, String rawName) async {
   final name = rawName.trim();
   final target = _norm(rawName);
-  final existing = await db.getCategories();
-  for (final c in existing) {
+  for (final c in await db.getCategories()) {
     if (_norm(c.name) == target) return c.id;
   }
-  final color = _autoColors[existing.length % _autoColors.length];
-  return db.insertCategory(CategoriesCompanion.insert(
-    name: name,
-    colorHex: color,
-    iconKey: Value(_guessIcon(name)),
-  ));
+  final used = {for (final c in await db.getAllCategories()) c.colorHex.toUpperCase()};
+  return db.insertCategory(CategoriesCompanion.insert(name: name, colorHex: _uniqueColor(used)));
 }

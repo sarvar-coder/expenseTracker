@@ -7,11 +7,11 @@ part 'database.g.dart';
 
 /// Default categories seeded on first launch. AI can add more later.
 const _defaultCategories = [
-  (name: 'Food & dining', icon: 'restaurant', color: 'E08A5B'),
-  (name: 'Groceries', icon: 'shopping_cart', color: '6FA86A'),
-  (name: 'Shopping', icon: 'shopping_bag', color: 'C07FA6'),
-  (name: 'Transport', icon: 'directions_car', color: '5B8DB8'),
-  (name: 'Bills', icon: 'receipt_long', color: 'D9A24E'),
+  (name: 'Food & dining', color: 'E08A5B'),
+  (name: 'Groceries', color: '6FA86A'),
+  (name: 'Shopping', color: 'C07FA6'),
+  (name: 'Transport', color: '5B8DB8'),
+  (name: 'Bills', color: 'D9A24E'),
 ];
 
 @DriftDatabase(tables: [Categories, Expenses])
@@ -39,7 +39,6 @@ class AppDatabase extends _$AppDatabase {
         _defaultCategories
             .map((c) => CategoriesCompanion.insert(
                   name: c.name,
-                  iconKey: Value(c.icon),
                   colorHex: c.color,
                 ))
             .toList(),

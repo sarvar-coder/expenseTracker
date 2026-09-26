@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
+import '../../services/category_matcher.dart';
 import '../../services/csv_export.dart';
 import '../common/ui_utils.dart';
 
@@ -238,8 +239,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 }
 
-/// Manage categories: rename + archive/unarchive. Shows archived (muted) so they
-/// can be restored. No add — AI creates categories on the fly.
+/// Manage categories: add (name only, color auto-assigned), rename,
+/// archive/unarchive. Shows archived (muted) so they can be restored.
 class _CategoriesScreen extends ConsumerStatefulWidget {
   const _CategoriesScreen();
 
@@ -272,6 +273,28 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
     _refresh();
   }
 
+  Future<void> _add() async {
+    final ctl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yangi turkum'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Turkum nomi'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor qilish')),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Qo\'shish')),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    await matchOrCreateCategory(ref.read(databaseProvider), name);
+    _refresh();
+  }
+
   Future<void> _toggleArchive(Category c) async {
     await ref.read(databaseProvider).updateCategory(c.copyWith(isArchived: !c.isArchived));
     _refresh();
@@ -280,7 +303,10 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Turkumlar')),
+      appBar: AppBar(
+        title: const Text('Turkumlar'),
+        actions: [IconButton(icon: const Icon(Icons.add), onPressed: _add)],
+      ),
       body: FutureBuilder<List<Category>>(
         future: _future,
         builder: (context, snap) {
@@ -291,8 +317,9 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
             children: [
               for (final c in cats)
                 ListTile(
-                  leading: Icon(iconForKey(c.iconKey),
-                      color: c.isArchived ? AppColors.muted : colorFromHex(c.colorHex)),
+                  leading: CircleAvatar(
+                      radius: 8,
+                      backgroundColor: c.isArchived ? AppColors.muted : colorFromHex(c.colorHex)),
                   title: Text(
                     c.name,
                     style: TextStyle(color: c.isArchived ? AppColors.muted : AppColors.text),

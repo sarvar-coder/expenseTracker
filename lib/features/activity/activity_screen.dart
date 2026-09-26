@@ -225,10 +225,8 @@ class _TxnRow extends ConsumerWidget {
                   color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(
-                  iconForKey(category?.iconKey ?? 'category'),
-                  size: 18,
-                  color: color,
+                child: Center(
+                  child: CircleAvatar(radius: 6, backgroundColor: color),
                 ),
               ),
               const SizedBox(width: 12),

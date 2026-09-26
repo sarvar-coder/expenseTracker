@@ -33,17 +33,13 @@ void main() {
     final created = (await db.getCategories()).firstWhere((c) => c.id == id1);
     expect(created.name, 'Coffee shops'); // stores the original display name
     expect(RegExp(r'^[0-9A-Fa-f]{6}$').hasMatch(created.colorHex), isTrue);
-    expect(created.iconKey, isNotEmpty);
   });
 
-  test('new category icon is inferred from the name, generic when unknown', () async {
-    final coffeeId = await matchOrCreateCategory(db, 'Coffee shops');
-    final taxiId = await matchOrCreateCategory(db, 'Taxi rides');
-    final miscId = await matchOrCreateCategory(db, 'Zorbular');
-    final cats = {for (final c in await db.getCategories()) c.id: c};
-
-    expect(cats[coffeeId]!.iconKey, 'restaurant');
-    expect(cats[taxiId]!.iconKey, 'directions_car');
-    expect(cats[miscId]!.iconKey, 'category');
+  test('every category gets its own color, beyond the palette too', () async {
+    for (var i = 0; i < 20; i++) {
+      await matchOrCreateCategory(db, 'Cat $i');
+    }
+    final cats = await db.getAllCategories();
+    expect(cats.map((c) => c.colorHex).toSet().length, cats.length);
   });
 }
