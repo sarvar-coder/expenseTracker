@@ -36,7 +36,7 @@ void main() {
     'Home': (_) async {},
     'Activity': (t) => t.tap(find.text('Tarix')),
     'Insights': (t) => t.tap(find.text('Tahlil')),
-    'Add': (t) => t.tap(find.byIcon(Icons.add)),
+    'Add type': (t) => t.tap(find.byIcon(Icons.add)),
     'Add speak': (t) async {
       await t.tap(find.byIcon(Icons.add));
       await t.pumpAndSettle();
@@ -48,6 +48,11 @@ void main() {
       await t.tap(find.text('Qo\'lda'));
     },
     'Settings': (t) => t.tap(find.byTooltip('Sozlamalar')),
+    'Categories': (t) async {
+      await t.tap(find.byTooltip('Sozlamalar'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Turkumlar'));
+    },
   };
 
   for (final brightness in Brightness.values) {

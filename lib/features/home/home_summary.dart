@@ -2,66 +2,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
-import '../common/ui_utils.dart';
 
-class CatLine {
-  final Category category;
-  final int amount;
-  const CatLine(this.category, this.amount);
-}
-
+/// This month's spend against the budget, for Home's month line.
 class HomeSummary {
-  final String monthLabel; // "July 2026"
   final int spent;
   final int budget;
-  final List<CatLine> byCategory; // sorted desc by amount
 
-  const HomeSummary({
-    required this.monthLabel,
-    required this.spent,
-    required this.budget,
-    required this.byCategory,
-  });
+  const HomeSummary({required this.spent, required this.budget});
 
   double get progress => budget <= 0 ? 0 : (spent / budget).clamp(0.0, 1.0);
   int get remaining => budget - spent;
-  int get percent => budget <= 0 ? 0 : (spent / budget * 100).round();
-  int get maxCatAmount => byCategory.isEmpty ? 0 : byCategory.first.amount;
 }
 
-/// Aggregates the calendar month containing [now] into a [HomeSummary].
+/// Sums the calendar month containing [now] into a [HomeSummary].
 /// Pure — no Riverpod/DB — so it is directly unit-testable.
-HomeSummary summarize(
-  List<Expense> expenses,
-  List<Category> categories,
-  int budget,
-  DateTime now,
-) {
+HomeSummary summarize(List<Expense> expenses, int budget, DateTime now) {
   final start = DateTime(now.year, now.month, 1);
   final end = DateTime(now.year, now.month + 1, 1);
-
-  final catById = {for (final c in categories) c.id: c};
-  final sums = <int, int>{};
   var spent = 0;
   for (final e in expenses) {
-    if (e.date.isBefore(start) || !e.date.isBefore(end)) continue;
-    spent += e.amount;
-    sums[e.categoryId] = (sums[e.categoryId] ?? 0) + e.amount;
+    if (!e.date.isBefore(start) && e.date.isBefore(end)) spent += e.amount;
   }
-
-  final lines = <CatLine>[];
-  sums.forEach((catId, amount) {
-    final cat = catById[catId];
-    if (cat != null) lines.add(CatLine(cat, amount));
-  });
-  lines.sort((a, b) => b.amount.compareTo(a.amount));
-
-  return HomeSummary(
-    monthLabel: uzMonthYear(now),
-    spent: spent,
-    budget: budget,
-    byCategory: lines,
-  );
+  return HomeSummary(spent: spent, budget: budget);
 }
 
 /// Expenses on the local calendar day of [now], newest first.
@@ -78,8 +40,6 @@ List<Expense> todayExpenses(List<Expense> expenses, DateTime now) {
 final homeSummaryProvider = Provider<HomeSummary>((ref) {
   final expenses =
       ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
-  final categories =
-      ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
   final budget = ref.watch(settingsProvider).monthlyBudget;
-  return summarize(expenses, categories, budget, DateTime.now());
+  return summarize(expenses, budget, DateTime.now());
 });
