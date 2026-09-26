@@ -64,6 +64,16 @@ HomeSummary summarize(
   );
 }
 
+/// Expenses on the local calendar day of [now], newest first.
+List<Expense> todayExpenses(List<Expense> expenses, DateTime now) {
+  final start = DateTime(now.year, now.month, now.day);
+  final end = DateTime(now.year, now.month, now.day + 1);
+  return [
+    for (final e in expenses)
+      if (!e.date.isBefore(start) && e.date.isBefore(end)) e,
+  ]..sort((a, b) => b.date.compareTo(a.date));
+}
+
 /// Recomputes whenever an expense or the budget changes.
 final homeSummaryProvider = Provider<HomeSummary>((ref) {
   final expenses =

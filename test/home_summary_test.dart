@@ -42,4 +42,15 @@ void main() {
     expect(s.byCategory.first.amount, 75000);
     expect(s.byCategory[1].amount, 20000);
   });
+
+  test('todayExpenses keeps local today only, newest first', () {
+    final now = DateTime(2026, 9, 26, 15);
+    final t = todayExpenses([
+      _exp(1, 1, 1, DateTime(2026, 9, 26, 0, 0)), // midnight: in
+      _exp(2, 1, 1, DateTime(2026, 9, 25, 23, 59)), // yesterday: out
+      _exp(3, 1, 1, DateTime(2026, 9, 26, 12)),
+      _exp(4, 1, 1, DateTime(2026, 9, 27, 0, 0)), // tomorrow: out
+    ], now);
+    expect(t.map((e) => e.id), [3, 1]);
+  });
 }

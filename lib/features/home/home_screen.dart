@@ -2,54 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../data/db/database.dart';
+import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
+import '../common/widgets.dart';
 import '../settings/settings_screen.dart';
 import 'home_summary.dart';
 
+/// Today: big total, slim month-budget line, today's expenses.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(homeSummaryProvider);
+    final month = ref.watch(homeSummaryProvider);
+    final now = DateTime.now();
+    final today = todayExpenses(
+      ref.watch(expensesProvider).asData?.value ?? const <Expense>[],
+      now,
+    );
+    final categories =
+        ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+    final catById = {for (final c in categories) c.id: c};
+    final total = today.fold(0, (sum, e) => sum + e.amount);
+    final t = Theme.of(context).textTheme;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.page,
+        8,
+        AppSpace.page,
+        AppSpace.section,
+      ),
       children: [
-        _Header(monthLabel: s.monthLabel),
-        const SizedBox(height: 16),
-        _HeroCard(summary: s),
-        const SizedBox(height: 24),
-        Text(
-          'Turkumlar bo\'yicha',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: context.colors.text,
-          ),
-        ),
+        _Header(date: now),
+        const SizedBox(height: AppSpace.gap),
+        _TodayHero(total: total, count: today.length, month: month),
+        const SizedBox(height: AppSpace.section),
+        Text('Bugungi xarajatlar', style: t.titleMedium),
         const SizedBox(height: 10),
-        if (s.byCategory.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            child: Center(
-              child: Text(
-                'Bu oy hali xarajat yo\'q',
-                style: TextStyle(color: context.colors.muted),
-              ),
-            ),
+        if (today.isEmpty)
+          const EmptyState(
+            icon: Icons.receipt_long_outlined,
+            title: 'Bugun hali xarajat yo\'q',
+            hint: 'Pastdagi tugma bilan birinchisini qo\'shing',
           )
         else
           Card(
             margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Column(
-                children: [
-                  for (final line in s.byCategory)
-                    _CategoryRow(line: line, max: s.maxCatAmount),
-                ],
-              ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (final e in today)
+                  ExpenseTile(expense: e, category: catById[e.categoryId]),
+              ],
             ),
           ),
       ],
@@ -58,41 +64,33 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.monthLabel});
-  final String monthLabel;
+  const _Header({required this.date});
+  final DateTime date;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Jami sarflangan',
-                style: TextStyle(fontSize: 12, color: context.colors.muted),
-              ),
-              Text(
-                monthLabel,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.text,
-                ),
-              ),
+              Text(uzDayMonth(date), style: t.labelMedium),
+              Text('Bugun', style: t.headlineMedium),
             ],
           ),
         ),
         IconButton(
           tooltip: 'Sozlamalar',
-          icon: Icon(Icons.settings_outlined, color: context.colors.text),
+          icon: Icon(Icons.settings_outlined, color: c.text),
           style: IconButton.styleFrom(
-            backgroundColor: context.colors.card,
+            backgroundColor: c.card,
             minimumSize: const Size(48, 48),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadii.md),
-              side: BorderSide(color: context.colors.border),
+              side: BorderSide(color: c.border),
             ),
           ),
           onPressed: () => Navigator.of(context).push(
@@ -104,137 +102,78 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.summary});
-  final HomeSummary summary;
+class _TodayHero extends StatelessWidget {
+  const _TodayHero({
+    required this.total,
+    required this.count,
+    required this.month,
+  });
+  final int total;
+  final int count;
+  final HomeSummary month;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final soft = c.onHero.withValues(alpha: 0.72);
-    final over = summary.budget > 0 && summary.spent > summary.budget;
+    final over = month.budget > 0 && month.spent > month.budget;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
       decoration: BoxDecoration(
         color: c.hero,
-        borderRadius: BorderRadius.circular(AppRadii.card),
+        borderRadius: BorderRadius.circular(AppRadii.hero),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Bu oy sarflangan', style: TextStyle(fontSize: 13, color: soft)),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                formatMoney(summary.spent),
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w600,
-                  color: c.onHero,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text('UZS', style: TextStyle(fontSize: 14, color: soft)),
-            ],
+          Text(
+            count == 0 ? 'Bugun sarflangan' : 'Bugun sarflangan · $count ta',
+            style: t.labelMedium!.copyWith(color: soft),
           ),
-          const SizedBox(height: 16),
-          if (summary.budget <= 0)
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Money(total, style: t.displayLarge, color: c.onHero),
+          ),
+          const SizedBox(height: 20),
+          if (month.budget <= 0)
             Text(
-              'Sozlamalarda oylik byudjet belgilang',
-              style: TextStyle(fontSize: 12, color: soft),
+              'Oy: ${formatMoney(month.spent)} UZS · Sozlamalarda byudjet belgilang',
+              style: t.labelSmall!.copyWith(color: soft),
             )
           else ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadii.chip),
               child: LinearProgressIndicator(
-                value: summary.progress,
-                minHeight: 8,
+                value: month.progress,
+                minHeight: 6,
                 backgroundColor: c.onHero.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation(
-                  over ? c.danger : c.success,
-                ),
+                valueColor: AlwaysStoppedAnimation(over ? c.danger : c.accent),
               ),
             ),
             const SizedBox(height: 8),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${formatMoney(summary.budget)} dan ${summary.percent}%',
-                  style: TextStyle(fontSize: 12, color: soft),
+                Expanded(
+                  child: Text(
+                    'Oy: ${formatMoney(month.spent)} / ${formatMoney(month.budget)}',
+                    style: t.labelSmall!.copyWith(color: soft),
+                  ),
                 ),
                 Text(
-                  '${formatMoney(summary.remaining)} qoldi',
-                  style: TextStyle(fontSize: 12, color: soft),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({required this.line, required this.max});
-  final CatLine line;
-  final int max;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = colorFromHex(line.category.colorHex);
-    final frac = max <= 0 ? 0.0 : (line.amount / max).clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(AppRadii.md),
-            ),
-            child: Center(
-              child: CircleAvatar(radius: 6, backgroundColor: color),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  line.category.name,
-                  style: TextStyle(fontSize: 14, color: context.colors.text),
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadii.chip),
-                  child: LinearProgressIndicator(
-                    value: frac,
-                    minHeight: 5,
-                    backgroundColor: context.colors.border,
-                    valueColor: AlwaysStoppedAnimation(color),
+                  over
+                      ? '${formatMoney(-month.remaining)} oshdi'
+                      : '${formatMoney(month.remaining)} qoldi',
+                  style: t.labelSmall!.copyWith(
+                    color: c.onHero,
+                    fontWeight: over ? FontWeight.w800 : null,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            formatMoney(line.amount),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: context.colors.text,
-            ),
-          ),
+          ],
         ],
       ),
     );
