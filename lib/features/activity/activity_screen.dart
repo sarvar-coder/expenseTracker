@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
+import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 import 'activity_filter.dart';
 
-/// Transactions: search + category-chip filter over the full expense stream,
-/// grouped by day, with swipe-to-delete.
+/// Tarix: search + category chips over every expense, grouped by day with
+/// each day's total.
 class ActivityScreen extends ConsumerStatefulWidget {
   const ActivityScreen({super.key});
 
@@ -22,6 +23,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final expenses =
         ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
     final categories =
@@ -35,26 +38,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     );
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.page,
+        8,
+        AppSpace.page,
+        AppSpace.section,
+      ),
       children: [
-        Text(
-          'Tranzaksiyalar',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: context.colors.text,
-          ),
-        ),
-        const SizedBox(height: 12),
+        Text('Tarix', style: t.headlineMedium),
+        const SizedBox(height: AppSpace.gap),
         TextField(
           onChanged: (v) => setState(() => _query = v),
           decoration: InputDecoration(
             hintText: 'Xarajatlarni qidirish',
-            prefixIcon: Icon(
-              Icons.search,
-              size: 20,
-              color: context.colors.muted,
-            ),
+            prefixIcon: Icon(Icons.search, color: c.muted),
           ),
         ),
         const SizedBox(height: 12),
@@ -63,30 +60,32 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           selected: _categoryId,
           onSelect: (id) => setState(() => _categoryId = id),
         ),
-        const SizedBox(height: 8),
         if (sections.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: Text(
-                expenses.isEmpty
-                    ? 'Hali xarajat yo\'q'
-                    : 'Mos keladigani yo\'q',
-                style: TextStyle(color: context.colors.muted),
-              ),
-            ),
-          )
+          expenses.isEmpty
+              ? const EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Hali xarajat yo\'q',
+                  hint: 'Pastdagi tugma bilan birinchisini qo\'shing',
+                )
+              : const EmptyState(
+                  icon: Icons.search_off,
+                  title: 'Mos keladigani yo\'q',
+                  hint: 'Boshqa so\'z yoki turkumni sinab ko\'ring',
+                )
         else
           for (final section in sections) ...[
             Padding(
-              padding: const EdgeInsets.only(top: 16, bottom: 6, left: 4),
-              child: Text(
-                section.label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.muted,
-                ),
+              padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+              child: Row(
+                children: [
+                  Expanded(child: Text(section.label, style: t.titleMedium)),
+                  Text(
+                    formatMoney(
+                      section.items.fold(0, (sum, e) => sum + e.amount),
+                    ),
+                    style: t.labelMedium,
+                  ),
+                ],
               ),
             ),
             Card(
@@ -105,6 +104,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 }
 
+/// Horizontal chip row: `Hammasi` then each category with its color dot.
 class _ChipBar extends StatelessWidget {
   const _ChipBar({
     required this.categories,
@@ -117,24 +117,17 @@ class _ChipBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    Widget chip(String label, int? id) {
-      final on = id == selected;
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          label: Text(label),
-          selected: on,
-          showCheckmark: false,
-          onSelected: (_) => onSelect(id),
-          backgroundColor: c.card,
-          selectedColor: c.accent,
-          labelStyle: TextStyle(fontSize: 13, color: on ? c.onAccent : c.text),
-          side: BorderSide(color: on ? c.accent : c.border),
-          shape: const StadiumBorder(),
-        ),
-      );
-    }
+    Widget chip(String label, int? id, {Color? dot}) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        avatar: dot == null
+            ? null
+            : CircleAvatar(radius: 5, backgroundColor: dot),
+        label: Text(label),
+        selected: id == selected,
+        onSelected: (_) => onSelect(id),
+      ),
+    );
 
     return SizedBox(
       height: 48,
@@ -142,7 +135,8 @@ class _ChipBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         children: [
           chip('Hammasi', null),
-          for (final c in categories) chip(c.name, c.id),
+          for (final cat in categories)
+            chip(cat.name, cat.id, dot: colorFromHex(cat.colorHex)),
         ],
       ),
     );
