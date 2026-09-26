@@ -176,7 +176,8 @@ ThemeData buildTheme(Brightness brightness) {
     outlineVariant: c.border,
     error: c.danger,
   );
-  final text = _textTheme(c);
+  // apply: component themes below read these styles directly, and ThemeData.fontFamily doesn't reach them.
+  final text = _textTheme(c).apply(fontFamily: _font);
   final md = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md));
   final fieldBorder = OutlineInputBorder(
     borderRadius: BorderRadius.circular(AppRadii.field),

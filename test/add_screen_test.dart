@@ -12,6 +12,7 @@ import 'package:expense_tracker/providers/providers.dart';
 void main() {
   late AppDatabase db;
   late SharedPreferences prefs;
+  var cats = const <Category>[];
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -24,7 +25,7 @@ void main() {
         overrides: [
           sharedPrefsProvider.overrideWithValue(prefs),
           databaseProvider.overrideWithValue(db),
-          categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
+          categoriesProvider.overrideWith((ref) => Stream.value(cats)),
           expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
         ],
         child: MaterialApp(home: home),
@@ -74,5 +75,40 @@ void main() {
     });
     await tester.pump();
     expect(await tester.runAsync(db.getExpenses), isEmpty);
+  });
+
+  testWidgets('Qo\'lda validates, then saves amount/desc/chip category/Kecha', (tester) async {
+    cats = (await tester.runAsync(db.getCategories))!;
+    await prefs.setString('lastAddMode', 'manual');
+    await tester.pumpWidget(app(const AddScreen()));
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('Saqlash'));
+    await tester.pump();
+    await tester.tap(find.text('Saqlash'));
+    await tester.pump();
+    expect(find.text('To\'g\'ri summa kiriting'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '45000');
+    await tester.enterText(find.byType(TextField).last, 'Coffee');
+    await tester.tap(find.widgetWithText(ChoiceChip, cats[1].name));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Kecha'));
+    await tester.pump();
+    expect(tester.getSize(find.widgetWithText(ChoiceChip, 'Kecha')).height,
+        greaterThanOrEqualTo(48));
+
+    await tester.ensureVisible(find.text('Saqlash'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Saqlash'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    final row = (await tester.runAsync(db.getExpenses))!.single;
+    expect(row.amount, 45000);
+    expect(row.description, 'Coffee');
+    expect(row.categoryId, cats[1].id);
+    expect(row.source, ExpenseSource.manual);
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    expect(DateUtils.isSameDay(row.date, yesterday), isTrue);
   });
 }
