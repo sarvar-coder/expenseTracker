@@ -22,8 +22,18 @@ void main() {
     ));
 
     // Nav labels present; Home tab active by default.
-    expect(find.text('Sozlamalar'), findsOneWidget); // nav label only
     expect(find.text('Asosiy'), findsWidgets); // nav label
+    expect(find.text('Tarix'), findsOneWidget);
+    expect(find.text('Sozlamalar'), findsNothing); // moved to Home header
+
+    // Nav targets meet the 48dp minimum.
+    for (final label in ['Asosiy', 'Tarix', 'Tahlil']) {
+      final size = tester.getSize(find
+          .ancestor(of: find.text(label).last, matching: find.byType(InkWell))
+          .first);
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    }
 
     // Switch to Insights tab.
     await tester.tap(find.text('Tahlil'));
