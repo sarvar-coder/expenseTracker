@@ -44,7 +44,7 @@ class AppColors extends ThemeExtension<AppColors> {
     muted: Color(0xFF6F6B64), // darker than old #8C8880 for AA contrast on bg
     danger: Color(0xFFC6443A),
     success: Color(0xFF2E8B57),
-    navInactive: Color(0xFF8C8880),
+    navInactive: Color(0xFF6F6B64), // = muted; lighter failed AA on card
   );
 
   static const dark = AppColors(
@@ -59,7 +59,7 @@ class AppColors extends ThemeExtension<AppColors> {
     muted: Color(0xFF9A968E),
     danger: Color(0xFFE57368),
     success: Color(0xFF5CC08A),
-    navInactive: Color(0xFF6E6A63),
+    navInactive: Color(0xFF9A968E), // = muted; darker failed AA on card
   );
 
   @override
