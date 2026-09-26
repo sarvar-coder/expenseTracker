@@ -23,7 +23,7 @@ final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(
       const FlutterSecureStorage(),
     ));
 
-/// Reactive settings (currency / budget / locale). Home watches this so budget
+/// Reactive settings (budget / locale). Home watches this so budget
 /// changes update the dashboard immediately.
 final settingsProvider =
     NotifierProvider<SettingsController, Settings>(SettingsController.new);
@@ -33,11 +33,6 @@ class SettingsController extends Notifier<Settings> {
 
   @override
   Settings build() => _store.load();
-
-  Future<void> setCurrency(String v) async {
-    await _store.setCurrency(v);
-    state = state.copyWith(currencyCode: v);
-  }
 
   Future<void> setBudget(int v) async {
     await _store.setBudget(v);

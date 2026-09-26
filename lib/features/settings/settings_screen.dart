@@ -9,7 +9,6 @@ import '../../services/category_matcher.dart';
 import '../../services/csv_export.dart';
 import '../common/ui_utils.dart';
 
-const _currencies = ['UZS', 'USD', 'EUR'];
 const _locales = {
   'en_US': 'Inglizcha',
   'uz_UZ': 'O\'zbekcha',
@@ -43,82 +42,65 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 32),
-      children: [
-        Text(
-          'Sozlamalar',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: context.colors.text,
+    // Pushed from the Home gear, so it owns its Scaffold (back arrow).
+    return Scaffold(
+      appBar: AppBar(title: const Text('Sozlamalar')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
+        children: [
+          _sectionHeader('Umumiy'),
+          _row(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Oylik byudjet',
+            subtitle: s.monthlyBudget > 0
+                ? '${formatMoney(s.monthlyBudget)} UZS'
+                : 'Belgilanmagan',
+            onTap: () => _editBudget(s.monthlyBudget, ctrl.setBudget),
           ),
-        ),
-        const SizedBox(height: 8),
+          _row(
+            icon: Icons.category_outlined,
+            title: 'Turkumlar',
+            subtitle: 'Nomini o\'zgartirish yoki arxivlash',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const _CategoriesScreen()),
+            ),
+          ),
 
-        _sectionHeader('Umumiy'),
-        _row(
-          icon: Icons.payments_outlined,
-          title: 'Valyuta',
-          subtitle: s.currencyCode,
-          onTap: () => _pickOption(
-            title: 'Valyuta',
-            current: s.currencyCode,
-            options: {for (final c in _currencies) c: c},
-            onPick: ctrl.setCurrency,
+          _sectionHeader('AI va ovoz'),
+          _row(
+            icon: Icons.key_outlined,
+            title: 'Gemini API kaliti',
+            subtitle: _hasKey ? 'Kalit o\'rnatilgan' : 'O\'rnatilmagan',
+            onTap: _editApiKey,
           ),
-        ),
-        _row(
-          icon: Icons.account_balance_wallet_outlined,
-          title: 'Oylik byudjet',
-          subtitle: s.monthlyBudget > 0
-              ? '${formatMoney(s.monthlyBudget)} ${s.currencyCode}'
-              : 'Belgilanmagan',
-          onTap: () => _editBudget(s.monthlyBudget, ctrl.setBudget),
-        ),
-        _row(
-          icon: Icons.category_outlined,
-          title: 'Turkumlar',
-          subtitle: 'Nomini o\'zgartirish yoki arxivlash',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const _CategoriesScreen())),
-        ),
-
-        _sectionHeader('AI va ovoz'),
-        _row(
-          icon: Icons.key_outlined,
-          title: 'Gemini API kaliti',
-          subtitle: _hasKey ? 'Kalit o\'rnatilgan' : 'O\'rnatilmagan',
-          onTap: _editApiKey,
-        ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(52, 0, 4, 8),
-          child: Text(
-            'Bepul tarif so\'rovlari Google tomonidan modellarini yaxshilash uchun ishlatilishi mumkin.',
-            style: TextStyle(fontSize: 11.5, color: context.colors.muted),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(52, 0, 4, 8),
+            child: Text(
+              'Bepul tarif so\'rovlari Google tomonidan modellarini yaxshilash uchun ishlatilishi mumkin.',
+              style: TextStyle(fontSize: 11.5, color: context.colors.muted),
+            ),
           ),
-        ),
-        _row(
-          icon: Icons.mic_none,
-          title: 'Voice language',
-          subtitle: _locales[s.sttLocale] ?? s.sttLocale,
-          onTap: () => _pickOption(
+          _row(
+            icon: Icons.mic_none,
             title: 'Ovoz tili',
-            current: s.sttLocale,
-            options: _locales,
-            onPick: ctrl.setLocale,
+            subtitle: _locales[s.sttLocale] ?? s.sttLocale,
+            onTap: () => _pickOption(
+              title: 'Ovoz tili',
+              current: s.sttLocale,
+              options: _locales,
+              onPick: ctrl.setLocale,
+            ),
           ),
-        ),
 
-        _sectionHeader('Ma\'lumotlar'),
-        _row(
-          icon: Icons.ios_share,
-          title: 'Ma\'lumotni eksport (CSV)',
-          subtitle: 'Barcha xarajatlarni ulashish',
-          onTap: _export,
-        ),
-      ],
+          _sectionHeader('Ma\'lumotlar'),
+          _row(
+            icon: Icons.ios_share,
+            title: 'Ma\'lumotni eksport (CSV)',
+            subtitle: 'Barcha xarajatlarni ulashish',
+            onTap: _export,
+          ),
+        ],
+      ),
     );
   }
 
@@ -352,7 +334,13 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Turkumlar'),
-        actions: [IconButton(icon: const Icon(Icons.add), onPressed: _add)],
+        actions: [
+          IconButton(
+            tooltip: 'Turkum qo\'shish',
+            icon: const Icon(Icons.add),
+            onPressed: _add,
+          ),
+        ],
       ),
       body: ref
           .watch(allCategoriesProvider)
@@ -360,47 +348,60 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
             // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
             loading: () => const SizedBox.shrink(),
             error: (e, _) => Center(child: Text('Xatolik: $e')),
-            data: (cats) => ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                for (final c in cats)
-                  ListTile(
-                    leading: CircleAvatar(
-                      radius: 8,
-                      backgroundColor: c.isArchived
-                          ? context.colors.muted
-                          : colorFromHex(c.colorHex),
+            data: (cats) => cats.isEmpty
+                ? Center(
+                    child: Text(
+                      'Hali turkum yo\'q — + bilan qo\'shing',
+                      style: TextStyle(color: context.colors.muted),
                     ),
-                    title: Text(
-                      c.name,
-                      style: TextStyle(
-                        color: c.isArchived
-                            ? context.colors.muted
-                            : context.colors.text,
-                      ),
-                    ),
-                    subtitle: c.isArchived ? const Text('Arxivlangan') : null,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                          onPressed: () => _rename(c),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            c.isArchived
-                                ? Icons.unarchive_outlined
-                                : Icons.archive_outlined,
-                            size: 20,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      for (final c in cats)
+                        ListTile(
+                          leading: CircleAvatar(
+                            radius: 8,
+                            backgroundColor: c.isArchived
+                                ? context.colors.muted
+                                : colorFromHex(c.colorHex),
                           ),
-                          onPressed: () => _toggleArchive(c),
+                          title: Text(
+                            c.name,
+                            style: TextStyle(
+                              color: c.isArchived
+                                  ? context.colors.muted
+                                  : context.colors.text,
+                            ),
+                          ),
+                          subtitle: c.isArchived
+                              ? const Text('Arxivlangan')
+                              : null,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Nomini o\'zgartirish',
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                onPressed: () => _rename(c),
+                              ),
+                              IconButton(
+                                tooltip: c.isArchived
+                                    ? 'Arxivdan chiqarish'
+                                    : 'Arxivlash',
+                                icon: Icon(
+                                  c.isArchived
+                                      ? Icons.unarchive_outlined
+                                      : Icons.archive_outlined,
+                                  size: 20,
+                                ),
+                                onPressed: () => _toggleArchive(c),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-              ],
-            ),
           ),
     );
   }

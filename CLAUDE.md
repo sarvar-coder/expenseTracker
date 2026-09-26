@@ -1,8 +1,7 @@
 # CLAUDE.md — Expense Tracker
 
 Single-user personal expense tracker (Flutter, mobile). Offline-first, no auth,
-one user (the owner). Full design reference:
-`~/Downloads/expense_tracker_flutter_mockup.html`.
+one user (the owner).
 
 ## Core idea
 
@@ -39,12 +38,13 @@ search, category filters.
 
 ## Design tokens
 
-Accent `#1C7A5E` · hero `#123328` · bg `#F5F3EE` · card `#FFFFFF` · border
-`#EAE7E0` · text `#1B1A17` · muted `#8C8880`.
-Category colors: Food `#E08A5B`, Groceries `#6FA86A`, Shopping `#C07FA6`,
-Transport `#5B8DB8`, Bills `#D9A24E`.
-Currency default **UZS** (whole units, no decimals). Default monthly budget
-4 000 000. Rounded cards, pill chips, segmented controls, bottom nav + center FAB.
+Semantic colors live in `AppColors` (a `ThemeExtension` in `lib/app/theme.dart`)
+with light and dark sets; read them via `context.colors.x`, never hardcode.
+Dark mode follows the system. Radii via `AppRadii`.
+Category colors are stored per category row (hex): Food `#E08A5B`, Groceries
+`#6FA86A`, Shopping `#C07FA6`, Transport `#5B8DB8`, Bills `#D9A24E`.
+Currency is **UZS only** (whole units, no decimals). UI language is Uzbek.
+Three tabs (Asosiy, Tarix, Tahlil) + center FAB; Settings opens from the Home gear.
 
 ## Layout
 
@@ -71,7 +71,7 @@ lib/
   Seed: Food & dining, Groceries, Shopping, Transport, Bills. AI adds more.
 - **Expense**: id, description, amount (int, UZS), categoryId (FK), date,
   source (`typed`/`voice`/`manual`), rawInput (nullable), createdAt.
-- **Settings**: currencyCode, monthlyBudget, geminiApiKey (secure), sttLocale.
+- **Settings**: monthlyBudget, geminiApiKey (secure), sttLocale, lastAddMode.
 
 ## Conventions
 

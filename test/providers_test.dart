@@ -20,12 +20,11 @@ Future<ProviderContainer> makeContainer() async {
 }
 
 void main() {
-  test('settings default to UZS / 4 000 000, then persist a change', () async {
+  test('settings default to unset budget, then persist a change', () async {
     final c = await makeContainer();
     addTearDown(c.dispose);
 
     final s = c.read(settingsProvider);
-    expect(s.currencyCode, 'UZS');
     expect(s.monthlyBudget, 0); // default budget (unset)
 
     await c.read(settingsProvider.notifier).setBudget(5000000);
