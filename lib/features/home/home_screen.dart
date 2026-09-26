@@ -32,7 +32,7 @@ class HomeScreen extends ConsumerWidget {
         AppSpace.page,
         8,
         AppSpace.page,
-        AppSpace.section,
+        AppSpace.section + 72, // clear the floating add button
       ),
       children: [
         _Header(date: now),

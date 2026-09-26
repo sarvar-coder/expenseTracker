@@ -8,8 +8,8 @@ import '../features/insights/insights_screen.dart';
 import '../providers/providers.dart';
 import 'theme.dart';
 
-/// Bottom-nav shell: 3 tabs in an IndexedStack + a center FAB that pushes the
-/// Add screen as a full route. Settings opens from the Home header. Tab index
+/// Bottom-nav shell: 3 tabs in an IndexedStack + a bottom-right FAB that
+/// pushes the Add screen as a full route. Settings opens from the Home header. Tab index
 /// lives in [tabIndexProvider] so other screens can switch tabs.
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
@@ -24,30 +24,27 @@ class AppShell extends ConsumerWidget {
         bottom: false,
         child: IndexedStack(index: index, children: _pages),
       ),
-      bottomNavigationBar: _NavBar(
-        index: index,
-        onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
-        onAdd: () => Navigator.of(context).push(
+      floatingActionButton: _Fab(
+        onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => const AddScreen(),
             fullscreenDialog: true,
           ),
         ),
       ),
+      bottomNavigationBar: _NavBar(
+        index: index,
+        onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
+      ),
     );
   }
 }
 
 class _NavBar extends StatelessWidget {
-  const _NavBar({
-    required this.index,
-    required this.onTap,
-    required this.onAdd,
-  });
+  const _NavBar({required this.index, required this.onTap});
 
   final int index;
   final ValueChanged<int> onTap;
-  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +85,6 @@ class _NavBar extends StatelessWidget {
                   selected: index == 1,
                   onTap: () => onTap(1),
                 ),
-                _Fab(onTap: onAdd),
                 _NavItem(
                   icon: Icons.donut_large_outlined,
                   selectedIcon: Icons.donut_large_rounded,
@@ -165,7 +161,7 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-/// Center add button: chunky accent square, lifted above the bar.
+/// Floating add button: chunky accent square, bottom-right above the bar.
 class _Fab extends StatelessWidget {
   const _Fab({required this.onTap});
   final VoidCallback onTap;
@@ -173,38 +169,31 @@ class _Fab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Expanded(
-      child: Center(
-        child: Transform.translate(
-          offset: const Offset(0, -18),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadii.card),
-              boxShadow: [
-                BoxShadow(
-                  color: c.accent.withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Material(
-              color: c.accent,
-              borderRadius: BorderRadius.circular(AppRadii.card),
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(AppRadii.card),
-                child: SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: Icon(
-                    Icons.add,
-                    color: c.onAccent,
-                    size: 30,
-                    semanticLabel: 'Xarajat qo\'shish',
-                  ),
-                ),
-              ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        boxShadow: [
+          BoxShadow(
+            color: c.accent.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: c.accent,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          child: SizedBox(
+            width: 64,
+            height: 64,
+            child: Icon(
+              Icons.add,
+              color: c.onAccent,
+              size: 30,
+              semanticLabel: 'Xarajat qo\'shish',
             ),
           ),
         ),

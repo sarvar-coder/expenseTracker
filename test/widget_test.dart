@@ -52,7 +52,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Tahlil'), findsNWidgets(2)); // body + nav label
 
-    // Center FAB pushes the Add screen.
+    // FAB pushes the Add screen.
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
     expect(find.text('Xarajat qo\'shish'), findsWidgets);
