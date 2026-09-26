@@ -63,6 +63,8 @@ class AppDatabase extends _$AppDatabase {
   /// Includes archived — for the Settings manage sheet (unarchive).
   Future<List<Category>> getAllCategories() => select(categories).get();
 
+  Stream<List<Category>> watchAllCategories() => select(categories).watch();
+
   // --- Expenses ---
   Future<int> insertExpense(ExpensesCompanion entry) =>
       into(expenses).insert(entry);

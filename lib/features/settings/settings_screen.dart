@@ -249,12 +249,6 @@ class _CategoriesScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
-  late Future<List<Category>> _future = _load();
-
-  Future<List<Category>> _load() => ref.read(databaseProvider).getAllCategories();
-
-  void _refresh() => setState(() => _future = _load());
-
   Future<void> _rename(Category c) async {
     final ctl = TextEditingController(text: c.name);
     final name = await showDialog<String>(
@@ -270,7 +264,6 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
     );
     if (name == null || name.isEmpty || name == c.name) return;
     await ref.read(databaseProvider).updateCategory(c.copyWith(name: name));
-    _refresh();
   }
 
   Future<void> _add() async {
@@ -292,12 +285,10 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
     );
     if (name == null || name.isEmpty) return;
     await matchOrCreateCategory(ref.read(databaseProvider), name);
-    _refresh();
   }
 
   Future<void> _toggleArchive(Category c) async {
     await ref.read(databaseProvider).updateCategory(c.copyWith(isArchived: !c.isArchived));
-    _refresh();
   }
 
   @override
@@ -307,12 +298,11 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
         title: const Text('Turkumlar'),
         actions: [IconButton(icon: const Icon(Icons.add), onPressed: _add)],
       ),
-      body: FutureBuilder<List<Category>>(
-        future: _future,
-        builder: (context, snap) {
-          final cats = snap.data;
-          if (cats == null) return const Center(child: CircularProgressIndicator());
-          return ListView(
+      body: ref.watch(allCategoriesProvider).when(
+        // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
+        loading: () => const SizedBox.shrink(),
+        error: (e, _) => Center(child: Text('Xatolik: $e')),
+        data: (cats) => ListView(
             padding: const EdgeInsets.all(12),
             children: [
               for (final c in cats)
@@ -341,8 +331,7 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
                   ),
                 ),
             ],
-          );
-        },
+          ),
       ),
     );
   }
