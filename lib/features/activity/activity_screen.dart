@@ -58,12 +58,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               size: 20,
               color: context.colors.muted,
             ),
-            filled: true,
-            fillColor: context.colors.card,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(color: context.colors.border),
-            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -88,18 +82,26 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         else
           for (final section in sections) ...[
             Padding(
-              padding: const EdgeInsets.only(top: 14, bottom: 4),
+              padding: const EdgeInsets.only(top: 16, bottom: 6, left: 4),
               child: Text(
                 section.label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                   color: context.colors.muted,
                 ),
               ),
             ),
-            for (final e in section.items)
-              _TxnRow(expense: e, category: catById[e.categoryId]),
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (final e in section.items)
+                    _TxnRow(expense: e, category: catById[e.categoryId]),
+                ],
+              ),
+            ),
           ],
       ],
     );
@@ -118,35 +120,27 @@ class _ChipBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     Widget chip(String label, int? id) {
       final on = id == selected;
       return Padding(
         padding: const EdgeInsets.only(right: 8),
-        child: GestureDetector(
-          onTap: () => onSelect(id),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: on ? context.colors.accent : context.colors.card,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: on ? context.colors.accent : context.colors.border,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: on ? Colors.white : context.colors.text,
-              ),
-            ),
-          ),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: on,
+          showCheckmark: false,
+          onSelected: (_) => onSelect(id),
+          backgroundColor: c.card,
+          selectedColor: c.accent,
+          labelStyle: TextStyle(fontSize: 13, color: on ? c.onAccent : c.text),
+          side: BorderSide(color: on ? c.accent : c.border),
+          shape: const StadiumBorder(),
         ),
       );
     }
 
     return SizedBox(
-      height: 38,
+      height: 48,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -182,8 +176,11 @@ class _TxnRow extends ConsumerWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.redAccent,
-        child: const Icon(Icons.delete, color: Colors.white),
+        color: context.colors.danger,
+        child: Icon(
+          Icons.delete_outline,
+          color: Theme.of(context).colorScheme.onError,
+        ),
       ),
       confirmDismiss: (_) => confirmDeleteExpense(context, expense.description),
       onDismissed: (_) async {
@@ -199,7 +196,7 @@ class _TxnRow extends ConsumerWidget {
           context,
         ).push(MaterialPageRoute(builder: (_) => AddScreen(editing: expense))),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
             children: [
               Container(
@@ -207,7 +204,7 @@ class _TxnRow extends ConsumerWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(AppRadii.md),
                 ),
                 child: Center(
                   child: CircleAvatar(radius: 6, backgroundColor: color),
@@ -230,11 +227,15 @@ class _TxnRow extends ConsumerWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        Text(
-                          '${category?.name ?? 'Turkumsiz'} · ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.colors.muted,
+                        Flexible(
+                          child: Text(
+                            '${category?.name ?? 'Turkumsiz'} · ',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.colors.muted,
+                            ),
                           ),
                         ),
                         Icon(src.icon, size: 12, color: context.colors.muted),
@@ -259,7 +260,7 @@ class _TxnRow extends ConsumerWidget {
                     formatMoney(expense.amount),
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: context.colors.text,
                     ),
                   ),
