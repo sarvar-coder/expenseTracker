@@ -35,6 +35,11 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     }
 
+    // Home header: gear replaces the dead bell; no duplicate "Hammasi" link.
+    expect(find.byTooltip('Sozlamalar'), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_none), findsNothing);
+    expect(find.text('Hammasi'), findsNothing);
+
     // Switch to Insights tab.
     await tester.tap(find.text('Tahlil'));
     await tester.pumpAndSettle();
