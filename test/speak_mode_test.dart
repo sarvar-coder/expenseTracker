@@ -74,6 +74,8 @@ void main() {
     expect(find.text('Coffee'), findsOneWidget);
     expect(find.text('45 000'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Saqlash'));
+    await tester.pump();
     await tester.runAsync(() async {
       await tester.tap(find.text('Saqlash'));
       await Future<void>.delayed(const Duration(milliseconds: 300));

@@ -10,6 +10,7 @@ import '../../providers/providers.dart';
 import '../../services/ai_parser.dart';
 import '../../services/category_matcher.dart';
 import '../common/ui_utils.dart';
+import '../common/widgets.dart';
 
 enum AddMode { type, speak, manual }
 
@@ -59,7 +60,12 @@ class _AddScreenState extends ConsumerState<AddScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.page,
+          8,
+          AppSpace.page,
+          AppSpace.section,
+        ),
         children: [
           SegmentedButton<AddMode>(
             showSelectedIcon: false,
@@ -75,7 +81,7 @@ class _AddScreenState extends ConsumerState<AddScreen> {
               ref.read(settingsStoreProvider).setLastAddMode(s.first.name);
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.gap + 4),
           switch (_mode) {
             AddMode.manual => _ManualForm(
               key: ValueKey(_prefill),
@@ -192,72 +198,101 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final categories =
         ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+    final now = DateTime.now();
+    final isToday = DateUtils.isSameDay(_date, now);
+    final isYesterday =
+        DateUtils.isSameDay(_date, now.subtract(const Duration(days: 1)));
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label('Summa'),
-        TextField(
-          controller: _amount,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(
-            hintText: '45000',
-            suffixText: 'UZS',
-          ),
-        ),
-        const SizedBox(height: 12),
-        _label('Tavsif'),
-        TextField(
-          controller: _desc,
-          decoration: const InputDecoration(
-            hintText: 'Kofe va kruassan',
-          ),
-        ),
-        const SizedBox(height: 12),
-        _label('Turkum'),
-        DropdownButtonFormField<int>(
-          initialValue: _categoryId,
-          hint: const Text('Turkum tanlang'),
-          items: [
-            for (final c in categories)
-              DropdownMenuItem(
-                value: c.id,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 6,
-                      backgroundColor: colorFromHex(c.colorHex),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(c.name),
-                  ],
-                ),
-              ),
-          ],
-          onChanged: (v) => setState(() => _categoryId = v),
-        ),
-        const SizedBox(height: 12),
-        _label('Sana'),
-        InkWell(
-          onTap: _pickDate,
-          child: InputDecorator(
-            decoration: const InputDecoration(),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${uzDayMonth(_date)} ${_date.year}'),
-                Icon(
-                  Icons.calendar_today,
-                  size: 18,
-                  color: context.colors.muted,
+                Text('Summa', style: t.labelMedium),
+                TextField(
+                  controller: _amount,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: t.displaySmall,
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: t.displaySmall!.copyWith(color: c.border),
+                    suffixText: 'UZS',
+                    suffixStyle: t.titleMedium!.copyWith(color: c.muted),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpace.gap),
+        _label('Tavsif'),
+        TextField(
+          controller: _desc,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'Kofe va kruassan'),
+        ),
+        const SizedBox(height: AppSpace.gap),
+        _label('Turkum'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final cat in categories)
+              ChoiceChip(
+                avatar: CircleAvatar(
+                  radius: 5,
+                  backgroundColor: colorFromHex(cat.colorHex),
+                ),
+                label: Text(cat.name),
+                selected: _categoryId == cat.id,
+                onSelected: (_) => setState(() => _categoryId = cat.id),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.gap),
+        _label('Sana'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            ChoiceChip(
+              label: const Text('Bugun'),
+              selected: isToday,
+              onSelected: (_) => setState(() => _date = now),
+            ),
+            ChoiceChip(
+              label: const Text('Kecha'),
+              selected: isYesterday,
+              onSelected: (_) => setState(
+                () => _date = now.subtract(const Duration(days: 1)),
+              ),
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.calendar_today, size: 16),
+              label: Text(
+                isToday || isYesterday
+                    ? 'Boshqa sana'
+                    : '${uzDayMonth(_date)} ${_date.year}',
+              ),
+              selected: !isToday && !isYesterday,
+              onSelected: (_) => _pickDate(),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.section),
         FilledButton.icon(
           onPressed: _saving ? null : _save,
           icon: const Icon(Icons.check),
@@ -268,9 +303,8 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           OutlinedButton.icon(
             onPressed: _saving ? null : _delete,
             style: OutlinedButton.styleFrom(
-              foregroundColor: context.colors.danger,
-              side: BorderSide(color: context.colors.danger),
-              minimumSize: const Size(0, 48),
+              foregroundColor: c.danger,
+              side: BorderSide(color: c.danger, width: 1.5),
             ),
             icon: const Icon(Icons.delete_outline),
             label: const Text('O\'chirish'),
@@ -280,9 +314,9 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
     );
   }
 
-  Widget _label(String t) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Text(t, style: TextStyle(fontSize: 12, color: context.colors.muted)),
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(left: 4, bottom: 8),
+    child: Text(text, style: Theme.of(context).textTheme.labelMedium),
   );
 }
 
@@ -395,42 +429,53 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final p = _parsed;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.voice) ...[
+          const SizedBox(height: 8),
           Center(
-            child: Column(
-              children: [
-                IconButton.filled(
-                  onPressed: _busy ? null : _toggleMic,
-                  iconSize: 32,
-                  padding: const EdgeInsets.all(18),
-                  style: IconButton.styleFrom(
-                    backgroundColor: _listening
-                        ? context.colors.danger
-                        : context.colors.accent,
-                  ),
-                  tooltip: _listening ? 'To\'xtatish' : 'Gapirish',
-                  icon: Icon(_listening ? Icons.stop : Icons.mic),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (_listening ? c.danger : c.accent).withValues(
+                  alpha: _listening ? 0.18 : 0.10,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  _listening
-                      ? 'Tinglanmoqda… to\'xtatish uchun bosing'
-                      : 'Mikrofonni bosing va nima olganingizni ayting',
-                  style: TextStyle(fontSize: 12.5, color: context.colors.muted),
+              ),
+              child: IconButton.filled(
+                onPressed: _busy ? null : _toggleMic,
+                iconSize: 36,
+                padding: const EdgeInsets.all(24),
+                style: IconButton.styleFrom(
+                  backgroundColor: _listening ? c.danger : c.accent,
+                  foregroundColor: c.onAccent,
                 ),
-              ],
+                tooltip: _listening ? 'To\'xtatish' : 'Gapirish',
+                icon: Icon(_listening ? Icons.stop : Icons.mic),
+              ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          Text(
+            _listening
+                ? 'Tinglanmoqda… to\'xtatish uchun bosing'
+                : 'Mikrofonni bosing va nima olganingizni ayting',
+            style: t.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpace.gap),
         ],
         TextField(
           controller: _input,
-          minLines: 2,
-          maxLines: 4,
+          minLines: 3,
+          maxLines: 5,
+          style: t.bodyLarge,
+          textCapitalization: TextCapitalization.sentences,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             hintText: widget.voice
@@ -438,22 +483,25 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                 : 'masalan: kofe va kruassan 45000',
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.gap),
         FilledButton.icon(
           onPressed: _busy ? null : _parse,
           icon: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: c.muted,
+                  ),
                 )
               : const Icon(Icons.auto_awesome),
           label: const Text('AI bilan tahlil qilish'),
         ),
         if (p != null) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpace.section),
           _ParsedCard(parsed: p, categoryId: _parsedCategoryId!),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.gap),
           Row(
             children: [
               Expanded(
@@ -485,7 +533,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
   }
 }
 
-/// AI result preview: item, amount, category chip + "AI" tag.
+/// AI result preview: category badge, item, big amount, "AI" tag.
 class _ParsedCard extends ConsumerWidget {
   const _ParsedCard({required this.parsed, required this.categoryId});
   final ParsedExpense parsed;
@@ -493,87 +541,61 @@ class _ParsedCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final cats =
         ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
-    final cat = cats.where((c) => c.id == categoryId).firstOrNull;
-    final color = cat != null
-        ? colorFromHex(cat.colorHex)
-        : context.colors.accent;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.colors.card,
-        borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: context.colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  parsed.item,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: context.colors.text,
+    final cat = cats.where((x) => x.id == categoryId).firstOrNull;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CategoryBadge(category: cat),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(parsed.item, style: t.titleMedium),
+                      Text(cat?.name ?? parsed.category, style: t.bodySmall),
+                    ],
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: context.colors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'AI',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: context.colors.accent,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadii.chip),
+                  ),
+                  child: Text(
+                    'AI',
+                    style: t.labelSmall!.copyWith(
+                      color: c.accent,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                formatMoney(parsed.amount),
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.text,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'UZS',
-                style: TextStyle(fontSize: 13, color: context.colors.muted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              CircleAvatar(radius: 5, backgroundColor: color),
-              const SizedBox(width: 6),
-              Text(
-                cat?.name ?? parsed.category,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(formatMoney(parsed.amount), style: t.displaySmall),
+                const SizedBox(width: 6),
+                Text('UZS', style: t.labelLarge!.copyWith(color: c.muted)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
