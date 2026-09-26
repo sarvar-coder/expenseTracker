@@ -50,7 +50,9 @@ class _AddScreenState extends ConsumerState<AddScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.editing == null ? 'Xarajat qo\'shish' : 'Xarajatni tahrirlash'),
+        title: Text(
+          widget.editing == null ? 'Xarajat qo\'shish' : 'Xarajatni tahrirlash',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.close),
@@ -61,9 +63,27 @@ class _AddScreenState extends ConsumerState<AddScreen> {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
-          _ModeSegment(
-            mode: _mode,
-            onChanged: (m) => setState(() => _mode = m),
+          SegmentedButton<AddMode>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: AddMode.type,
+                icon: Icon(Icons.edit_outlined),
+                label: Text('Yozish'),
+              ),
+              ButtonSegment(
+                value: AddMode.speak,
+                icon: Icon(Icons.mic_none),
+                label: Text('Aytish'),
+              ),
+              ButtonSegment(
+                value: AddMode.manual,
+                icon: Icon(Icons.list_alt),
+                label: Text('Qo\'lda'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           const SizedBox(height: 16),
           switch (_mode) {
@@ -77,68 +97,6 @@ class _AddScreenState extends ConsumerState<AddScreen> {
             AddMode.type => _TypeForm(onEdit: _toManual),
             AddMode.speak => _TypeForm(onEdit: _toManual, voice: true),
           },
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeSegment extends StatelessWidget {
-  const _ModeSegment({required this.mode, required this.onChanged});
-  final AddMode mode;
-  final ValueChanged<AddMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget btn(AddMode m, IconData icon, String label) {
-      final on = m == mode;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => onChanged(m),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: on ? AppColors.card : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: on
-                  ? [const BoxShadow(color: Colors.black12, blurRadius: 3)]
-                  : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: on ? AppColors.text : AppColors.muted,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: on ? AppColors.text : AppColors.muted,
-                    fontWeight: on ? FontWeight.w500 : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAE7E0),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          btn(AddMode.type, Icons.edit_outlined, 'Yozish'),
-          btn(AddMode.speak, Icons.mic_none, 'Aytish'),
-          btn(AddMode.manual, Icons.list_alt, 'Qo\'lda'),
         ],
       ),
     );
@@ -294,10 +252,10 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('${uzDayMonth(_date)} ${_date.year}'),
-                const Icon(
+                Icon(
                   Icons.calendar_today,
                   size: 18,
-                  color: AppColors.muted,
+                  color: context.colors.muted,
                 ),
               ],
             ),
@@ -315,10 +273,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
 
   Widget _label(String t) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
-    child: Text(
-      t,
-      style: const TextStyle(fontSize: 12, color: AppColors.muted),
-    ),
+    child: Text(t, style: TextStyle(fontSize: 12, color: context.colors.muted)),
   );
 }
 
@@ -384,7 +339,9 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
     if (parser == null) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _toast('Sozlamalarda Gemini kalitini qo\'shing — qo\'lda to\'ldirilmoqda');
+      _toast(
+        'Sozlamalarda Gemini kalitini qo\'shing — qo\'lda to\'ldirilmoqda',
+      );
       widget.onEdit(desc: raw);
       return;
     }
@@ -444,7 +401,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                   style: IconButton.styleFrom(
                     backgroundColor: _listening
                         ? Colors.redAccent
-                        : AppColors.accent,
+                        : context.colors.accent,
                   ),
                   icon: Icon(_listening ? Icons.stop : Icons.mic),
                 ),
@@ -453,10 +410,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                   _listening
                       ? 'Tinglanmoqda… to\'xtatish uchun bosing'
                       : 'Mikrofonni bosing va nima olganingizni ayting',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: AppColors.muted,
-                  ),
+                  style: TextStyle(fontSize: 12.5, color: context.colors.muted),
                 ),
               ],
             ),
@@ -533,13 +487,15 @@ class _ParsedCard extends ConsumerWidget {
     final cats =
         ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
     final cat = cats.where((c) => c.id == categoryId).firstOrNull;
-    final color = cat != null ? colorFromHex(cat.colorHex) : AppColors.accent;
+    final color = cat != null
+        ? colorFromHex(cat.colorHex)
+        : context.colors.accent;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: context.colors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,25 +505,25 @@ class _ParsedCard extends ConsumerWidget {
               Expanded(
                 child: Text(
                   parsed.item,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.text,
+                    color: context.colors.text,
                   ),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.12),
+                  color: context.colors.accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text(
+                child: Text(
                   'AI',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.accent,
+                    color: context.colors.accent,
                   ),
                 ),
               ),
@@ -580,16 +536,16 @@ class _ParsedCard extends ConsumerWidget {
             children: [
               Text(
                 formatMoney(parsed.amount),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.text,
+                  color: context.colors.text,
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
+              Text(
                 'UZS',
-                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                style: TextStyle(fontSize: 13, color: context.colors.muted),
               ),
             ],
           ),

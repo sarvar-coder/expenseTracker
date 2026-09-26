@@ -8,8 +8,18 @@ String formatMoney(int amount) => _grouping.format(amount).replaceAll(',', ' ');
 
 /// Uzbek month names (hardcoded — avoids intl locale-data init).
 const uzMonths = [
-  'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
-  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'Iyun',
+  'Iyul',
+  'Avgust',
+  'Sentabr',
+  'Oktabr',
+  'Noyabr',
+  'Dekabr',
 ];
 
 /// "Iyul 2026"

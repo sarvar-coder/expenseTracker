@@ -66,8 +66,10 @@ HomeSummary summarize(
 
 /// Recomputes whenever an expense or the budget changes.
 final homeSummaryProvider = Provider<HomeSummary>((ref) {
-  final expenses = ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
-  final categories = ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+  final expenses =
+      ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
+  final categories =
+      ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
   final budget = ref.watch(settingsProvider).monthlyBudget;
   return summarize(expenses, categories, budget, DateTime.now());
 });

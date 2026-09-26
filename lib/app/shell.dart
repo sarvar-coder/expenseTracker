@@ -26,12 +26,18 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final index = ref.watch(tabIndexProvider);
     return Scaffold(
-      body: SafeArea(bottom: false, child: IndexedStack(index: index, children: _pages)),
+      body: SafeArea(
+        bottom: false,
+        child: IndexedStack(index: index, children: _pages),
+      ),
       bottomNavigationBar: _NavBar(
         index: index,
         onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
         onAdd: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddScreen(), fullscreenDialog: true),
+          MaterialPageRoute(
+            builder: (_) => const AddScreen(),
+            fullscreenDialog: true,
+          ),
         ),
       ),
     );
@@ -39,7 +45,11 @@ class AppShell extends ConsumerWidget {
 }
 
 class _NavBar extends StatelessWidget {
-  const _NavBar({required this.index, required this.onTap, required this.onAdd});
+  const _NavBar({
+    required this.index,
+    required this.onTap,
+    required this.onAdd,
+  });
 
   final int index;
   final ValueChanged<int> onTap;
@@ -50,18 +60,38 @@ class _NavBar extends StatelessWidget {
     return Container(
       height: 70 + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: context.colors.card,
+        border: Border(top: BorderSide(color: context.colors.border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavItem(icon: Icons.home_outlined, label: 'Asosiy', selected: index == 0, onTap: () => onTap(0)),
-          _NavItem(icon: Icons.receipt_long_outlined, label: 'Tarix', selected: index == 1, onTap: () => onTap(1)),
+          _NavItem(
+            icon: Icons.home_outlined,
+            label: 'Asosiy',
+            selected: index == 0,
+            onTap: () => onTap(0),
+          ),
+          _NavItem(
+            icon: Icons.receipt_long_outlined,
+            label: 'Tarix',
+            selected: index == 1,
+            onTap: () => onTap(1),
+          ),
           _Fab(onTap: onAdd),
-          _NavItem(icon: Icons.donut_large_outlined, label: 'Tahlil', selected: index == 2, onTap: () => onTap(2)),
-          _NavItem(icon: Icons.settings_outlined, label: 'Sozlamalar', selected: index == 3, onTap: () => onTap(3)),
+          _NavItem(
+            icon: Icons.donut_large_outlined,
+            label: 'Tahlil',
+            selected: index == 2,
+            onTap: () => onTap(2),
+          ),
+          _NavItem(
+            icon: Icons.settings_outlined,
+            label: 'Sozlamalar',
+            selected: index == 3,
+            onTap: () => onTap(3),
+          ),
         ],
       ),
     );
@@ -69,7 +99,12 @@ class _NavBar extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -78,7 +113,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.accent : const Color(0xFFB0ACA2);
+    final color = selected ? context.colors.accent : const Color(0xFFB0ACA2);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -106,10 +141,10 @@ class _Fab extends StatelessWidget {
     return Transform.translate(
       offset: const Offset(0, -12),
       child: Material(
-        color: AppColors.accent,
+        color: context.colors.accent,
         borderRadius: BorderRadius.circular(18),
         elevation: 6,
-        shadowColor: AppColors.accent.withValues(alpha: 0.4),
+        shadowColor: context.colors.accent.withValues(alpha: 0.4),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),

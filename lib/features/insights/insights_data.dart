@@ -24,7 +24,10 @@ class InsightsData {
       final start = today.subtract(Duration(days: now.weekday - 1));
       return (start, start.add(const Duration(days: 7)));
     case InsightPeriod.month:
-      return (DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 1));
+      return (
+        DateTime(now.year, now.month, 1),
+        DateTime(now.year, now.month + 1, 1),
+      );
     case InsightPeriod.year:
       return (DateTime(now.year, 1, 1), DateTime(now.year + 1, 1, 1));
   }
