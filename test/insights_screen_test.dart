@@ -37,9 +37,23 @@ void main() {
 
     expect(find.bySemanticsLabel('Jami 45 000 UZS'), findsOneWidget);
     expect(find.text('Food & dining'), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
 
     await tester.tap(find.text('Yil'));
     await tester.pump();
     expect(find.text('Food & dining'), findsOneWidget);
+  });
+
+  testWidgets('empty period shows empty state', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        categoriesProvider.overrideWith((ref) => Stream.value(const [])),
+        expensesProvider.overrideWith((ref) => Stream.value(const [])),
+      ],
+      child: const MaterialApp(home: Scaffold(body: InsightsScreen())),
+    ));
+    await tester.pump();
+
+    expect(find.text('Bu davrda xarajat yo\'q'), findsOneWidget);
   });
 }
