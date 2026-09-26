@@ -6,10 +6,11 @@ import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
+import '../common/widgets.dart';
 import 'insights_data.dart';
 
-/// Category-share donut with a center total + legend, over a Week/Month/Year
-/// window. Filtering/aggregation lives in the pure `insightsFor`.
+/// Tahlil: category-share donut with a center total + ranked legend, over a
+/// Hafta/Oy/Yil window. Filtering/aggregation lives in the pure `insightsFor`.
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
@@ -22,6 +23,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
     final expenses =
         ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
     final categories =
@@ -29,17 +32,15 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     final data = insightsFor(expenses, categories, _period, DateTime.now());
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.page,
+        8,
+        AppSpace.page,
+        AppSpace.section,
+      ),
       children: [
-        Text(
-          'Tahlil',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: context.colors.text,
-          ),
-        ),
-        const SizedBox(height: 14),
+        Text('Tahlil', style: t.headlineMedium),
+        const SizedBox(height: AppSpace.gap),
         SegmentedButton<InsightPeriod>(
           showSelectedIcon: false,
           segments: const [
@@ -50,72 +51,60 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
           selected: {_period},
           onSelectionChanged: (s) => setState(() => _period = s.first),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpace.gap),
         if (data.slices.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 60),
-            child: Center(
-              child: Text(
-                'Bu davrda xarajat yo\'q',
-                style: TextStyle(color: context.colors.muted),
-              ),
-            ),
+          const EmptyState(
+            icon: Icons.donut_large_outlined,
+            title: 'Bu davrda xarajat yo\'q',
+            hint: 'Boshqa davrni tanlang yoki xarajat qo\'shing',
           )
         else ...[
           Card(
-            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.hero),
+            ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 28),
               child: Semantics(
                 label: 'Jami ${formatMoney(data.total)} UZS',
                 excludeSemantics: true,
                 child: SizedBox(
-                  height: 220,
+                  height: 232,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       PieChart(
                         PieChartData(
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 70,
+                          sectionsSpace: 3,
+                          centerSpaceRadius: 78,
                           sections: [
                             for (final s in data.slices)
                               PieChartSectionData(
                                 value: s.amount.toDouble(),
                                 color: colorFromHex(s.category.colorHex),
-                                radius: 26,
+                                radius: 30,
                                 showTitle: false,
                               ),
                           ],
                         ),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Jami',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.colors.muted,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 96),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Jami', style: t.labelMedium),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                formatMoney(data.total),
+                                style: t.displaySmall,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            formatMoney(data.total),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              color: context.colors.text,
-                            ),
-                          ),
-                          Text(
-                            'UZS',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.colors.muted,
-                            ),
-                          ),
-                        ],
+                            Text('UZS', style: t.labelSmall),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -123,15 +112,22 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpace.section),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text('Turkumlar', style: t.titleMedium),
+          ),
           const SizedBox(height: 12),
           Card(
-            margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Column(
                 children: [
-                  for (final s in data.slices)
+                  for (final (i, s) in data.slices.indexed) ...[
+                    if (i > 0)
+                      Divider(indent: 74, endIndent: 16, color: c.border),
                     _LegendRow(slice: s, fraction: data.fraction(s.amount)),
+                  ],
                 ],
               ),
             ),
@@ -142,6 +138,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   }
 }
 
+/// Badge; name + amount over a share bar in the category color + percent.
 class _LegendRow extends StatelessWidget {
   const _LegendRow({required this.slice, required this.fraction});
   final Slice slice;
@@ -149,32 +146,54 @@ class _LegendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = colorFromHex(slice.category.colorHex);
+    final t = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          CircleAvatar(radius: 6, backgroundColor: color),
-          const SizedBox(width: 10),
+          CategoryBadge(category: slice.category),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              slice.category.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, color: context.colors.text),
-            ),
-          ),
-          Text(
-            '${(fraction * 100).round()}%',
-            style: TextStyle(fontSize: 12, color: context.colors.muted),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            formatMoney(slice.amount),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: context.colors.text,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        slice.category.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.titleSmall,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(formatMoney(slice.amount), style: t.titleSmall),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadii.chip),
+                        child: LinearProgressIndicator(
+                          value: fraction,
+                          minHeight: 6,
+                          color: colorFromHex(slice.category.colorHex),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${(fraction * 100).round()}%',
+                        textAlign: TextAlign.end,
+                        style: t.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
