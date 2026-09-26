@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../data/db/database.dart';
-import '../../data/db/tables.dart';
 import '../../providers/providers.dart';
-import '../add/add_screen.dart';
-import '../common/ui_utils.dart';
+import '../common/widgets.dart';
 import 'activity_filter.dart';
 
 /// Transactions: search + category-chip filter over the full expense stream,
@@ -98,7 +95,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               child: Column(
                 children: [
                   for (final e in section.items)
-                    _TxnRow(expense: e, category: catById[e.categoryId]),
+                    ExpenseTile(expense: e, category: catById[e.categoryId]),
                 ],
               ),
             ),
@@ -147,133 +144,6 @@ class _ChipBar extends StatelessWidget {
           chip('Hammasi', null),
           for (final c in categories) chip(c.name, c.id),
         ],
-      ),
-    );
-  }
-}
-
-/// Source label + glyph for the row subtitle.
-({String label, IconData icon}) _sourceMeta(ExpenseSource s) => switch (s) {
-  ExpenseSource.typed => (label: 'Yozilgan', icon: Icons.edit_outlined),
-  ExpenseSource.voice => (label: 'Ovozli', icon: Icons.mic_none),
-  ExpenseSource.manual => (label: 'Qo\'lda', icon: Icons.list_alt),
-};
-
-class _TxnRow extends ConsumerWidget {
-  const _TxnRow({required this.expense, required this.category});
-  final Expense expense;
-  final Category? category;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final color = category != null
-        ? colorFromHex(category!.colorHex)
-        : context.colors.muted;
-    final src = _sourceMeta(expense.source);
-    return Dismissible(
-      key: ValueKey(expense.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        color: context.colors.danger,
-        child: Icon(
-          Icons.delete_outline,
-          color: Theme.of(context).colorScheme.onError,
-        ),
-      ),
-      confirmDismiss: (_) => confirmDeleteExpense(context, expense.description),
-      onDismissed: (_) async {
-        await ref.read(databaseProvider).deleteExpense(expense.id);
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Xarajat o\'chirildi')));
-        }
-      },
-      child: InkWell(
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => AddScreen(editing: expense))),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadii.md),
-                ),
-                child: Center(
-                  child: CircleAvatar(radius: 6, backgroundColor: color),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      expense.description,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: context.colors.text,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '${category?.name ?? 'Turkumsiz'} · ',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.colors.muted,
-                            ),
-                          ),
-                        ),
-                        Icon(src.icon, size: 12, color: context.colors.muted),
-                        const SizedBox(width: 3),
-                        Text(
-                          src.label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.colors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    formatMoney(expense.amount),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: context.colors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    DateFormat('HH:mm').format(expense.date),
-                    style: TextStyle(fontSize: 11, color: context.colors.muted),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -121,17 +121,49 @@ extension AppColorsX on BuildContext {
   }
 }
 
-/// Corner radii. Same in light and dark, so plain consts.
+/// Corner radii. Hierarchy: bigger surface, rounder corner.
 class AppRadii {
-  static const sm = 9.0;
-  static const md = 12.0;
-  static const field = 13.0;
-  static const card = 18.0;
-  static const chip = 20.0;
+  static const sm = 12.0; // small badges
+  static const md = 16.0; // tiles, fields, buttons
+  static const field = 16.0;
+  static const card = 24.0; // content cards
+  static const hero = 32.0; // the one hero card per screen
+  static const chip = 999.0; // pills
 }
 
+/// Page gutter and vertical rhythm (8pt grid).
+class AppSpace {
+  static const page = 20.0;
+  static const gap = 16.0;
+  static const section = 28.0;
+}
+
+const _font = 'Manrope';
+const _tabular = [FontFeature.tabularFigures()];
+
+/// Type scale (Manrope). Amounts use display/headline styles with tabular
+/// figures so digits line up in lists.
+TextTheme _textTheme(AppColors c) => TextTheme(
+  // hero amount
+  displayLarge: TextStyle(fontSize: 44, height: 1.05, fontWeight: FontWeight.w800, letterSpacing: -1.6, color: c.text, fontFeatures: _tabular),
+  // secondary big amount (donut center, preview card)
+  displaySmall: TextStyle(fontSize: 30, height: 1.1, fontWeight: FontWeight.w800, letterSpacing: -1, color: c.text, fontFeatures: _tabular),
+  // screen titles
+  headlineMedium: TextStyle(fontSize: 28, height: 1.15, fontWeight: FontWeight.w800, letterSpacing: -0.8, color: c.text),
+  titleLarge: TextStyle(fontSize: 20, height: 1.25, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+  titleMedium: TextStyle(fontSize: 16, height: 1.3, fontWeight: FontWeight.w700, color: c.text),
+  titleSmall: TextStyle(fontSize: 15, height: 1.3, fontWeight: FontWeight.w700, color: c.text, fontFeatures: _tabular),
+  bodyLarge: TextStyle(fontSize: 16, height: 1.45, fontWeight: FontWeight.w500, color: c.text),
+  bodyMedium: TextStyle(fontSize: 14, height: 1.45, fontWeight: FontWeight.w500, color: c.text),
+  bodySmall: TextStyle(fontSize: 13, height: 1.35, fontWeight: FontWeight.w500, color: c.muted),
+  labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+  labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted),
+  labelSmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.muted),
+);
+
 ThemeData buildTheme(Brightness brightness) {
-  final c = brightness == Brightness.dark ? AppColors.dark : AppColors.light;
+  final dark = brightness == Brightness.dark;
+  final c = dark ? AppColors.dark : AppColors.light;
   final scheme = ColorScheme.fromSeed(
     seedColor: c.accent,
     brightness: brightness,
@@ -144,44 +176,58 @@ ThemeData buildTheme(Brightness brightness) {
     outlineVariant: c.border,
     error: c.danger,
   );
+  final text = _textTheme(c);
+  final md = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md));
   final fieldBorder = OutlineInputBorder(
     borderRadius: BorderRadius.circular(AppRadii.field),
     borderSide: BorderSide(color: c.border),
   );
 
-  final base = ThemeData(
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: c.bg,
-    useMaterial3: true,
-    fontFamily: 'Roboto',
+    fontFamily: _font,
+    textTheme: text,
     extensions: [c],
-  );
-
-  return base.copyWith(
-    textTheme: base.textTheme.apply(bodyColor: c.text, displayColor: c.text),
+    splashFactory: InkSparkle.splashFactory,
     appBarTheme: AppBarTheme(
       backgroundColor: c.bg,
       foregroundColor: c.text,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
+      titleTextStyle: text.titleLarge,
     ),
     cardTheme: CardThemeData(
       color: c.card,
       elevation: 0,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.card),
-        side: BorderSide(color: c.border),
+        // light: tonal only; dark: hairline so cards don't melt into bg
+        side: dark ? BorderSide(color: c.border) : BorderSide.none,
       ),
+    ),
+    dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
+    listTileTheme: ListTileThemeData(
+      minVerticalPadding: 12,
+      titleTextStyle: text.titleSmall,
+      subtitleTextStyle: text.bodySmall,
+      iconColor: c.muted,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.card,
-      hintStyle: TextStyle(color: c.muted),
+      hintStyle: text.bodyLarge!.copyWith(color: c.muted),
+      labelStyle: text.bodyMedium!.copyWith(color: c.muted),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       border: fieldBorder,
       enabledBorder: fieldBorder,
       focusedBorder: fieldBorder.copyWith(
-        borderSide: BorderSide(color: c.accent, width: 1.5),
+        borderSide: BorderSide(color: c.accent, width: 2),
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
@@ -192,18 +238,60 @@ ThemeData buildTheme(Brightness brightness) {
         selectedForegroundColor: c.onAccent,
         side: BorderSide(color: c.border),
         minimumSize: const Size(0, 48),
+        textStyle: text.labelLarge,
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: c.accent,
         foregroundColor: c.onAccent,
-        minimumSize: const Size(0, 48),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.field),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        minimumSize: const Size(0, 56),
+        shape: md,
+        textStyle: text.labelLarge,
       ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: c.text,
+        minimumSize: const Size(0, 56),
+        side: BorderSide(color: c.border, width: 1.5),
+        shape: md,
+        textStyle: text.labelLarge,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: c.accent,
+        minimumSize: const Size(48, 48),
+        textStyle: text.labelLarge,
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: c.card,
+      selectedColor: c.accent,
+      labelStyle: text.labelLarge!.copyWith(fontSize: 14),
+      secondaryLabelStyle: text.labelLarge!.copyWith(fontSize: 14, color: c.onAccent),
+      side: BorderSide(color: c.border),
+      shape: const StadiumBorder(),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: c.hero,
+      contentTextStyle: text.bodyMedium!.copyWith(color: c.onHero),
+      actionTextColor: c.onHero,
+      shape: md,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: c.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.card)),
+      titleTextStyle: text.titleLarge,
+      contentTextStyle: text.bodyMedium,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: c.accent,
+      linearTrackColor: c.border,
     ),
   );
 }
