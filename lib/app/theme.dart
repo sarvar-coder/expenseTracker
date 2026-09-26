@@ -15,7 +15,6 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.text,
     required this.muted,
     required this.danger,
-    required this.success,
     required this.navInactive,
   });
 
@@ -29,7 +28,6 @@ class AppColors extends ThemeExtension<AppColors> {
       text,
       muted,
       danger,
-      success,
       navInactive;
 
   static const light = AppColors(
@@ -43,7 +41,6 @@ class AppColors extends ThemeExtension<AppColors> {
     text: Color(0xFF1B1A17),
     muted: Color(0xFF6F6B64), // darker than old #8C8880 for AA contrast on bg
     danger: Color(0xFFC6443A),
-    success: Color(0xFF2E8B57),
     navInactive: Color(0xFF6F6B64), // = muted; lighter failed AA on card
   );
 
@@ -58,7 +55,6 @@ class AppColors extends ThemeExtension<AppColors> {
     text: Color(0xFFECEAE5),
     muted: Color(0xFF9A968E),
     danger: Color(0xFFE57368),
-    success: Color(0xFF5CC08A),
     navInactive: Color(0xFF9A968E), // = muted; darker failed AA on card
   );
 
@@ -74,7 +70,6 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? text,
     Color? muted,
     Color? danger,
-    Color? success,
     Color? navInactive,
   }) => AppColors(
     accent: accent ?? this.accent,
@@ -87,7 +82,6 @@ class AppColors extends ThemeExtension<AppColors> {
     text: text ?? this.text,
     muted: muted ?? this.muted,
     danger: danger ?? this.danger,
-    success: success ?? this.success,
     navInactive: navInactive ?? this.navInactive,
   );
 
@@ -106,7 +100,6 @@ class AppColors extends ThemeExtension<AppColors> {
       text: l(text, other.text),
       muted: l(muted, other.muted),
       danger: l(danger, other.danger),
-      success: l(success, other.success),
       navInactive: l(navInactive, other.navInactive),
     );
   }
@@ -125,7 +118,6 @@ extension AppColorsX on BuildContext {
 class AppRadii {
   static const sm = 12.0; // small badges
   static const md = 16.0; // tiles, fields, buttons
-  static const field = 16.0;
   static const card = 24.0; // content cards
   static const hero = 32.0; // the one hero card per screen
   static const chip = 999.0; // pills
@@ -180,7 +172,7 @@ ThemeData buildTheme(Brightness brightness) {
   final text = _textTheme(c).apply(fontFamily: _font);
   final md = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md));
   final fieldBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(AppRadii.field),
+    borderRadius: BorderRadius.circular(AppRadii.md),
     borderSide: BorderSide(color: c.border),
   );
 

@@ -22,9 +22,6 @@ const uzMonths = [
   'Dekabr',
 ];
 
-/// "Iyul 2026"
-String uzMonthYear(DateTime d) => '${uzMonths[d.month - 1]} ${d.year}';
-
 /// "5 Iyul"
 String uzDayMonth(DateTime d) => '${d.day} ${uzMonths[d.month - 1]}';
 
