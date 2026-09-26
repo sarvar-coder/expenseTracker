@@ -26,7 +26,9 @@ class ExpenseTrackerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Xarajatlar',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       locale: const Locale('uz'),
       supportedLocales: const [Locale('uz'), Locale('en')],
       localizationsDelegates: const [

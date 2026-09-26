@@ -10,7 +10,11 @@ import '../../services/csv_export.dart';
 import '../common/ui_utils.dart';
 
 const _currencies = ['UZS', 'USD', 'EUR'];
-const _locales = {'en_US': 'Inglizcha', 'uz_UZ': 'O\'zbekcha', 'ru_RU': 'Ruscha'};
+const _locales = {
+  'en_US': 'Inglizcha',
+  'uz_UZ': 'O\'zbekcha',
+  'ru_RU': 'Ruscha',
+};
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -42,8 +46,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 32),
       children: [
-        const Text('Sozlamalar',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppColors.text)),
+        Text(
+          'Sozlamalar',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: context.colors.text,
+          ),
+        ),
         const SizedBox(height: 8),
 
         _sectionHeader('Umumiy'),
@@ -61,16 +71,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _row(
           icon: Icons.account_balance_wallet_outlined,
           title: 'Oylik byudjet',
-          subtitle: s.monthlyBudget > 0 ? '${formatMoney(s.monthlyBudget)} ${s.currencyCode}' : 'Belgilanmagan',
+          subtitle: s.monthlyBudget > 0
+              ? '${formatMoney(s.monthlyBudget)} ${s.currencyCode}'
+              : 'Belgilanmagan',
           onTap: () => _editBudget(s.monthlyBudget, ctrl.setBudget),
         ),
         _row(
           icon: Icons.category_outlined,
           title: 'Turkumlar',
           subtitle: 'Nomini o\'zgartirish yoki arxivlash',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const _CategoriesScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const _CategoriesScreen())),
         ),
 
         _sectionHeader('AI va ovoz'),
@@ -80,11 +92,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           subtitle: _hasKey ? 'Kalit o\'rnatilgan' : 'O\'rnatilmagan',
           onTap: _editApiKey,
         ),
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(52, 0, 4, 8),
           child: Text(
             'Bepul tarif so\'rovlari Google tomonidan modellarini yaxshilash uchun ishlatilishi mumkin.',
-            style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+            style: TextStyle(fontSize: 11.5, color: context.colors.muted),
           ),
         ),
         _row(
@@ -129,7 +141,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Icon(
                     e.key == current ? Icons.check : null,
                     size: 18,
-                    color: AppColors.accent,
+                    color: context.colors.accent,
                   ),
                   const SizedBox(width: 10),
                   Text(e.value),
@@ -142,8 +154,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (picked != null) await onPick(picked);
   }
 
-  Future<void> _editBudget(int current, Future<void> Function(int) onSave) async {
-    final ctl = TextEditingController(text: current > 0 ? current.toString() : '');
+  Future<void> _editBudget(
+    int current,
+    Future<void> Function(int) onSave,
+  ) async {
+    final ctl = TextEditingController(
+      text: current > 0 ? current.toString() : '',
+    );
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -153,11 +170,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           autofocus: true,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(hintText: '4000000', suffixText: 'UZS'),
+          decoration: const InputDecoration(
+            hintText: '4000000',
+            suffixText: 'UZS',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor qilish')),
-          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text), child: const Text('Saqlash')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: const Text('Saqlash'),
+          ),
         ],
       ),
     );
@@ -183,8 +209,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           decoration: const InputDecoration(hintText: 'Kalitni joylashtiring'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor qilish')),
-          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text), child: const Text('Saqlash')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: const Text('Saqlash'),
+          ),
         ],
       ),
     );
@@ -210,33 +242,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _sectionHeader(String label) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 22, 4, 6),
-        child: Text(label,
-            style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 22, 4, 6),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: context.colors.muted,
+      ),
+    ),
+  );
 
   Widget _row({
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-  }) =>
-      Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadii.field),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: ListTile(
-          onTap: onTap,
-          leading: Icon(icon, color: AppColors.accent),
-          title: Text(title, style: const TextStyle(fontSize: 15, color: AppColors.text)),
-          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-          trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
-        ),
-      );
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: ListTile(
+      onTap: onTap,
+      tileColor: context.colors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.field),
+        side: BorderSide(color: context.colors.border),
+      ),
+      leading: Icon(icon, color: context.colors.accent),
+      title: Text(
+        title,
+        style: TextStyle(fontSize: 15, color: context.colors.text),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(fontSize: 12.5, color: context.colors.muted),
+      ),
+      trailing: Icon(Icons.chevron_right, color: context.colors.muted),
+    ),
+  );
 }
 
 /// Manage categories: add (name only, color auto-assigned), rename,
@@ -257,8 +299,14 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
         title: const Text('Turkum nomini o\'zgartirish'),
         content: TextField(controller: ctl, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor qilish')),
-          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Saqlash')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
+            child: const Text('Saqlash'),
+          ),
         ],
       ),
     );
@@ -278,8 +326,14 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
           decoration: const InputDecoration(hintText: 'Turkum nomi'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Bekor qilish')),
-          TextButton(onPressed: () => Navigator.pop(ctx, ctl.text.trim()), child: const Text('Qo\'shish')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
+            child: const Text('Qo\'shish'),
+          ),
         ],
       ),
     );
@@ -288,7 +342,9 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
   }
 
   Future<void> _toggleArchive(Category c) async {
-    await ref.read(databaseProvider).updateCategory(c.copyWith(isArchived: !c.isArchived));
+    await ref
+        .read(databaseProvider)
+        .updateCategory(c.copyWith(isArchived: !c.isArchived));
   }
 
   @override
@@ -298,41 +354,54 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
         title: const Text('Turkumlar'),
         actions: [IconButton(icon: const Icon(Icons.add), onPressed: _add)],
       ),
-      body: ref.watch(allCategoriesProvider).when(
-        // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
-        loading: () => const SizedBox.shrink(),
-        error: (e, _) => Center(child: Text('Xatolik: $e')),
-        data: (cats) => ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              for (final c in cats)
-                ListTile(
-                  leading: CircleAvatar(
+      body: ref
+          .watch(allCategoriesProvider)
+          .when(
+            // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
+            loading: () => const SizedBox.shrink(),
+            error: (e, _) => Center(child: Text('Xatolik: $e')),
+            data: (cats) => ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                for (final c in cats)
+                  ListTile(
+                    leading: CircleAvatar(
                       radius: 8,
-                      backgroundColor: c.isArchived ? AppColors.muted : colorFromHex(c.colorHex)),
-                  title: Text(
-                    c.name,
-                    style: TextStyle(color: c.isArchived ? AppColors.muted : AppColors.text),
-                  ),
-                  subtitle: c.isArchived ? const Text('Arxivlangan') : null,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20),
-                        onPressed: () => _rename(c),
+                      backgroundColor: c.isArchived
+                          ? context.colors.muted
+                          : colorFromHex(c.colorHex),
+                    ),
+                    title: Text(
+                      c.name,
+                      style: TextStyle(
+                        color: c.isArchived
+                            ? context.colors.muted
+                            : context.colors.text,
                       ),
-                      IconButton(
-                        icon: Icon(c.isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
-                            size: 20),
-                        onPressed: () => _toggleArchive(c),
-                      ),
-                    ],
+                    ),
+                    subtitle: c.isArchived ? const Text('Arxivlangan') : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          onPressed: () => _rename(c),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            c.isArchived
+                                ? Icons.unarchive_outlined
+                                : Icons.archive_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () => _toggleArchive(c),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-      ),
     );
   }
 }

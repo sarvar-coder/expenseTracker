@@ -40,12 +40,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
       children: [
-        const Text(
+        Text(
           'Tranzaksiyalar',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: AppColors.text,
+            color: context.colors.text,
           ),
         ),
         const SizedBox(height: 12),
@@ -53,16 +53,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           onChanged: (v) => setState(() => _query = v),
           decoration: InputDecoration(
             hintText: 'Xarajatlarni qidirish',
-            prefixIcon: const Icon(
+            prefixIcon: Icon(
               Icons.search,
               size: 20,
-              color: AppColors.muted,
+              color: context.colors.muted,
             ),
             filled: true,
-            fillColor: AppColors.card,
+            fillColor: context.colors.card,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: context.colors.border),
             ),
           ),
         ),
@@ -78,8 +78,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             padding: const EdgeInsets.symmetric(vertical: 40),
             child: Center(
               child: Text(
-                expenses.isEmpty ? 'Hali xarajat yo\'q' : 'Mos keladigani yo\'q',
-                style: const TextStyle(color: AppColors.muted),
+                expenses.isEmpty
+                    ? 'Hali xarajat yo\'q'
+                    : 'Mos keladigani yo\'q',
+                style: TextStyle(color: context.colors.muted),
               ),
             ),
           )
@@ -89,10 +91,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               padding: const EdgeInsets.only(top: 14, bottom: 4),
               child: Text(
                 section.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.muted,
+                  color: context.colors.muted,
                 ),
               ),
             ),
@@ -125,17 +127,17 @@ class _ChipBar extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: on ? AppColors.accent : AppColors.card,
+              color: on ? context.colors.accent : context.colors.card,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: on ? AppColors.accent : AppColors.border,
+                color: on ? context.colors.accent : context.colors.border,
               ),
             ),
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: on ? Colors.white : AppColors.text,
+                color: on ? Colors.white : context.colors.text,
               ),
             ),
           ),
@@ -172,7 +174,7 @@ class _TxnRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final color = category != null
         ? colorFromHex(category!.colorHex)
-        : AppColors.muted;
+        : context.colors.muted;
     final src = _sourceMeta(expense.source);
     return Dismissible(
       key: ValueKey(expense.id),
@@ -238,9 +240,9 @@ class _TxnRow extends ConsumerWidget {
                       expense.description,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.text,
+                        color: context.colors.text,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -248,18 +250,18 @@ class _TxnRow extends ConsumerWidget {
                       children: [
                         Text(
                           '${category?.name ?? 'Turkumsiz'} · ',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.muted,
+                            color: context.colors.muted,
                           ),
                         ),
-                        Icon(src.icon, size: 12, color: AppColors.muted),
+                        Icon(src.icon, size: 12, color: context.colors.muted),
                         const SizedBox(width: 3),
                         Text(
                           src.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.muted,
+                            color: context.colors.muted,
                           ),
                         ),
                       ],
@@ -273,19 +275,16 @@ class _TxnRow extends ConsumerWidget {
                 children: [
                   Text(
                     formatMoney(expense.amount),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: AppColors.text,
+                      color: context.colors.text,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     DateFormat('HH:mm').format(expense.date),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11, color: context.colors.muted),
                   ),
                 ],
               ),

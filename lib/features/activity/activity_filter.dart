@@ -35,5 +35,7 @@ List<DaySection> groupExpenses(
     if (q.isNotEmpty && !e.description.toLowerCase().contains(q)) continue;
     groups.putIfAbsent(labelFor(e.date), () => []).add(e);
   }
-  return [for (final entry in groups.entries) DaySection(entry.key, entry.value)];
+  return [
+    for (final entry in groups.entries) DaySection(entry.key, entry.value),
+  ];
 }
