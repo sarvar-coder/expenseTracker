@@ -6,7 +6,8 @@ declare
   a uuid := gen_random_uuid(); b uuid := gen_random_uuid();
   ca uuid := gen_random_uuid(); cb1 uuid := gen_random_uuid(); cb2 uuid := gen_random_uuid();
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
-  fid uuid; inv uuid; req uuid; newcat uuid; n int; r record; ok boolean;
+  eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid();
+  fid uuid; inv uuid; req uuid; newcat uuid; bq uuid; n int; r record; ok boolean;
 begin
   insert into auth.users (id, email, aud, role, raw_user_meta_data) values
     (a, 'A@test.uz', 'authenticated', 'authenticated', '{"name":"Ali"}'),
@@ -40,6 +41,16 @@ begin
     ok := false;
   exception when insufficient_privilege then ok := true; end;
   assert ok, 'member blocked from creating category';
+  -- step 7: expense synced with pending_category files the request itself
+  select id into bq from public.categories where family_id = fid and name = 'Boshqa';
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source, pending_category) values
+    (eb5, fid, bq, 'taxi', 10, now(), 'typed', ' Taxi '),
+    (eb6, fid, bq, 'soup', 10, now(), 'typed', 'FOOD');
+  select count(*) into n from public.category_requests where name = 'Taxi' and requested_by = b; assert n = 1, 'offline request filed on sync';
+  select count(*) into n from public.expenses where id = eb6 and category_id = ca and pending_category is null;
+  assert n = 1, 'existing category used instead of a request';
+  update public.expenses set description = 'taxi2', updated_at = now() + interval '1 second' where id = eb5;
+  select count(*) into n from public.category_requests where name = 'Taxi'; assert n = 1, 'no duplicate request';
   update public.expenses set family_id = null, updated_at = now() + interval '1 second' where id = eb1;
   select count(*) into n from public.expenses where id = eb1 and family_id = fid; assert n = 1, 'family_id immutable';
   update public.expenses set description = 'stale', updated_at = now() - interval '1 day' where id = eb1;
@@ -52,13 +63,19 @@ begin
   select amount, description into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount is null and r.description is null, 'private row is a tombstone';
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
-  assert r.shared_total = 120, 'B shared total 120, got ' || r.shared_total;
+  assert r.shared_total = 140, 'B shared total 140, got ' || r.shared_total;
   assert r.contribution = 970, 'B contribution 970, got ' || r.contribution;
   select id into req from public.category_requests where name = 'Gym';
   newcat := public.approve_category_request(req, '5B8DB8', null);
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   select count(*) into n from public.expenses where id = eb2 and category_id = newcat and pending_category is null;
   assert n = 1, 'approval moved Gym expense';
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  select id into req from public.category_requests where name = 'Taxi' and status = 'pending';
+  perform public.reject_category_request(req);
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from public.expenses where id = eb5 and category_id = bq and pending_category is null;
+  assert n = 1, 'rejection leaves expense in Boshqa';
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   begin perform public.leave_family(); ok := false;
   exception when others then ok := sqlerrm = 'transfer_admin_first'; end;

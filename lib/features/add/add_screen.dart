@@ -9,6 +9,7 @@ import '../../data/db/tables.dart';
 import '../../providers/providers.dart';
 import '../../services/ai_parser.dart';
 import '../../services/category_matcher.dart';
+import '../../services/sync_service.dart' show canCreateCategories;
 import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 
@@ -156,6 +157,10 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           amount: amount,
           categoryId: _categoryId!,
           date: _date,
+          // picked another category: no longer waiting for the requested one
+          pendingCategory: _categoryId == editing.categoryId
+              ? Value(editing.pendingCategory)
+              : const Value(null),
         ),
       );
     } else {
@@ -339,6 +344,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
   bool _listening = false;
   ParsedExpense? _parsed;
   String? _parsedCategoryId;
+  String? _parsedPending; // requested category name while it sits in Boshqa
 
   @override
   void dispose() {
@@ -386,15 +392,17 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
       widget.onEdit(desc: raw);
       return;
     }
-    final catId = await matchOrCreateCategory(
+    final cat = await resolveCategory(
       ref.read(databaseProvider),
       p.category,
+      canCreate: canCreateCategories(ref.read(sharedPrefsProvider)),
     );
     if (!mounted) return;
     setState(() {
       _busy = false;
       _parsed = p;
-      _parsedCategoryId = catId;
+      _parsedCategoryId = cat.id;
+      _parsedPending = cat.pending;
     });
   }
 
@@ -411,6 +419,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
             date: DateTime.now(),
             source: widget.voice ? ExpenseSource.voice : ExpenseSource.typed,
             rawInput: Value(_input.text.trim()),
+            pendingCategory: Value(_parsedPending),
           ),
         );
     if (!mounted) return;
@@ -490,7 +499,11 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
         ),
         if (p != null) ...[
           const SizedBox(height: AppSpace.section),
-          _ParsedCard(parsed: p, categoryId: _parsedCategoryId!),
+          _ParsedCard(
+            parsed: p,
+            categoryId: _parsedCategoryId!,
+            pending: _parsedPending,
+          ),
           const SizedBox(height: AppSpace.gap),
           Row(
             children: [
@@ -525,9 +538,14 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
 
 /// AI result preview: category badge, item, big amount, "AI" tag.
 class _ParsedCard extends ConsumerWidget {
-  const _ParsedCard({required this.parsed, required this.categoryId});
+  const _ParsedCard({
+    required this.parsed,
+    required this.categoryId,
+    this.pending,
+  });
   final ParsedExpense parsed;
   final String categoryId;
+  final String? pending;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -551,7 +569,12 @@ class _ParsedCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(parsed.item, style: t.titleMedium),
-                      Text(cat?.name ?? parsed.category, style: t.bodySmall),
+                      Text(
+                        pending == null
+                            ? cat?.name ?? parsed.category
+                            : '${cat?.name ?? 'Boshqa'} · "$pending" admin tasdig\'ida',
+                        style: t.bodySmall,
+                      ),
                     ],
                   ),
                 ),

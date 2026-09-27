@@ -13,7 +13,7 @@ String _norm(String s) => s.trim().toLowerCase();
 
 /// First palette color not taken by any category (archived included, so
 /// unarchiving can't clash); past the palette, golden-angle hues.
-String _uniqueColor(Set<String> used) {
+String uniqueColor(Set<String> used) {
   for (final c in _palette) {
     if (!used.contains(c)) return c;
   }
@@ -28,11 +28,28 @@ String _uniqueColor(Set<String> used) {
 /// insensitive) and returns its id; otherwise creates one and returns the new id.
 /// Keeps categories unique — the AI never spawns duplicates.
 Future<String> matchOrCreateCategory(AppDatabase db, String rawName) async {
-  final name = rawName.trim();
-  final target = _norm(rawName);
-  for (final c in await db.getCategories()) {
-    if (_norm(c.name) == target) return c.id;
-  }
+  final hit = _find(await db.getCategories(), rawName);
+  if (hit != null) return hit;
   final used = {for (final c in await db.getAllCategories()) c.colorHex.toUpperCase()};
-  return db.insertCategory(CategoriesCompanion.insert(name: name, colorHex: _uniqueColor(used)));
+  return db.insertCategory(
+      CategoriesCompanion.insert(name: rawName.trim(), colorHex: uniqueColor(used)));
 }
+
+/// Like [matchOrCreateCategory], but a family member (not admin) can't create:
+/// an unknown name lands in Boshqa with [pending] set, and the server files a
+/// request to the admin when the expense syncs.
+Future<({String id, String? pending})> resolveCategory(
+  AppDatabase db,
+  String rawName, {
+  required bool canCreate,
+}) async {
+  final boshqa = canCreate ? null : _find(await db.getAllCategories(), 'Boshqa');
+  // ponytail: no Boshqa yet (family not synced) — create locally; the next
+  // sync's adoptLocal turns it into Boshqa + request.
+  if (boshqa == null) return (id: await matchOrCreateCategory(db, rawName), pending: null);
+  final hit = _find(await db.getCategories(), rawName);
+  return hit != null ? (id: hit, pending: null) : (id: boshqa, pending: rawName.trim());
+}
+
+String? _find(List<Category> cats, String name) =>
+    cats.where((c) => _norm(c.name) == _norm(name)).firstOrNull?.id;

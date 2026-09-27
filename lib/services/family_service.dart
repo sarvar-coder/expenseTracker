@@ -1,9 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'category_matcher.dart' show uniqueColor;
 import 'sync_service.dart';
 
 /// A pending invite addressed to the signed-in user.
 typedef FamilyInvite = ({String id, String familyName, String invitedBy});
+
+/// A member's request for a new family category (admin sees all pending).
+typedef CategoryRequest = ({String id, String name});
 
 /// Thrown by [FamilyService] with a message ready to show (Uzbek).
 class FamilyException implements Exception {
@@ -69,6 +73,35 @@ class FamilyService {
 
   Future<void> deleteFamily() => _change(() => client.rpc('delete_family'));
 
+  /// Pending category requests: all of them for the admin, own for a member (RLS).
+  Future<List<CategoryRequest>> categoryRequests() async {
+    final rows = await _call(() => client
+        .from('category_requests')
+        .select('id, name')
+        .eq('status', 'pending')
+        .order('created_at')) as List;
+    return [
+      for (final r in rows.cast<Map<String, dynamic>>())
+        (id: r['id'] as String, name: r['name'] as String),
+    ];
+  }
+
+  /// Creates the category (unused color) and moves waiting expenses into it.
+  Future<void> approveRequest(String id) async {
+    final used = {
+      for (final c in await sync.db.select(sync.db.categories).get()) c.colorHex.toUpperCase(),
+    };
+    await _change(() => client.rpc('approve_category_request', params: {
+          'p_id': id,
+          'p_color_hex': uniqueColor(used),
+          'p_icon_key': null,
+        }));
+  }
+
+  /// Waiting expenses stay in Boshqa.
+  Future<void> rejectRequest(String id) =>
+      _change(() => client.rpc('reject_category_request', params: {'p_id': id}));
+
   Future<Object?> _change(Future<Object?> Function() rpc) async {
     await sync.run();
     final r = await _call(rpc);
@@ -96,6 +129,7 @@ String familyErrorText(String message, [String? code]) => switch (message) {
       'transfer_admin_first' => 'Avval adminlikni boshqa a\'zoga bering',
       'cannot_remove_self' => 'O\'zingizni chiqarib bo\'lmaydi',
       'not_a_member' => 'Bu foydalanuvchi oila a\'zosi emas',
+      'request_not_found' => 'So\'rov topilmadi',
       _ when code == '23505' => 'Bu email allaqachon taklif qilingan',
       _ => 'Xatolik yuz berdi. Qayta urinib ko\'ring',
     };
