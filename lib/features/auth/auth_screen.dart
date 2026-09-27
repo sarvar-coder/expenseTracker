@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,7 +19,14 @@ String authErrorText(Object e) {
       'Bu email allaqachon ro\'yxatdan o\'tgan',
     'otp_expired' => 'Kod noto\'g\'ri yoki eskirgan',
     'weak_password' => 'Parol juda oddiy (kamida 6 belgi)',
-    'over_email_send_rate_limit' ||
+    // Per-address cooldown says "...only request this after N seconds";
+    // the project-wide hourly cap says "email rate limit exceeded".
+    'over_email_send_rate_limit' => switch (
+          RegExp(r'after (\d+) seconds').firstMatch(e.message)?.group(1)) {
+        final s? => 'Juda tez. $s soniyadan so\'ng qayta urining',
+        null =>
+          'Soatlik email limiti tugadi. 1 soatgacha kuting, so\'ng qayta urining',
+      },
     'over_request_rate_limit' =>
       'Juda ko\'p urinish. Birozdan so\'ng qayta urining',
     _ => e.message,
@@ -41,6 +49,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _code = TextEditingController();
   var _mode = _Mode.signIn;
   var _busy = false;
+  var _obscure = true;
   String? _error;
 
   GoTrueClient get _auth => ref.read(authProvider);
@@ -57,6 +66,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   void _go(_Mode m) => setState(() {
         _mode = m;
         _error = null;
+        _obscure = true;
         _code.clear();
         if (m != _Mode.verify) _password.clear();
       });
@@ -90,6 +100,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           case _Mode.signUp:
             final res =
                 await _auth.signUp(email: _mail, password: _password.text);
+            // Already-confirmed email: Supabase sends nothing and returns a
+            // fake user with no identities (anti-enumeration).
+            if (res.user?.identities?.isEmpty ?? false) {
+              throw const AuthException('', code: 'user_already_exists');
+            }
             if (res.session == null) _go(_Mode.verify);
           case _Mode.verify:
             await _auth.verifyOTP(
@@ -179,31 +194,30 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 const SizedBox(height: 12),
               ],
               if (needsCode) ...[
-                TextFormField(
-                  controller: _code,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  decoration:
-                      const InputDecoration(labelText: '6 xonali kod'),
-                  validator: (v) => RegExp(r'^\d{6}$').hasMatch(v?.trim() ?? '')
-                      ? null
-                      : '6 ta raqam kiriting',
-                ),
+                _CodeBoxes(controller: _code),
                 const SizedBox(height: 12),
               ],
               if (needsPassword) ...[
                 TextFormField(
                   controller: _password,
-                  obscureText: true,
+                  obscureText: _obscure,
                   autofillHints: [
                     _mode == _Mode.signIn
                         ? AutofillHints.password
                         : AutofillHints.newPassword
                   ],
                   decoration: InputDecoration(
-                      labelText:
-                          _mode == _Mode.reset ? 'Yangi parol' : 'Parol'),
+                    labelText: _mode == _Mode.reset ? 'Yangi parol' : 'Parol',
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      tooltip: _obscure
+                          ? 'Parolni ko\'rsatish'
+                          : 'Parolni yashirish',
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
                   validator: (v) => (v ?? '').length >= 6
                       ? null
                       : 'Kamida 6 belgi',
@@ -257,6 +271,75 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Six digit boxes. ponytail: one invisible field on top of painted boxes, so
+/// paste, SMS/email autofill, backspace and the form validator just work.
+class _CodeBoxes extends StatelessWidget {
+  const _CodeBoxes({required this.controller});
+
+  final TextEditingController controller;
+
+  static const _len = 6, _size = 52.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return Stack(
+      children: [
+        ValueListenableBuilder(
+          valueListenable: controller,
+          builder: (_, v, _) => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (var i = 0; i < _len; i++)
+                Container(
+                  width: _size,
+                  height: _size,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: c.card,
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                    border: Border.all(
+                      color: i == v.text.length ? c.accent : c.border,
+                      width: i == v.text.length ? 2 : 1,
+                    ),
+                  ),
+                  child: Text(i < v.text.length ? v.text[i] : '',
+                      style: t.headlineSmall),
+                ),
+            ],
+          ),
+        ),
+        TextFormField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(_len),
+          ],
+          autofillHints: const [AutofillHints.oneTimeCode],
+          showCursor: false,
+          enableInteractiveSelection: false,
+          style: const TextStyle(color: Colors.transparent),
+          decoration: const InputDecoration(
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: _size / 2 - 8),
+          ),
+          validator: (v) => RegExp(r'^\d{6}$').hasMatch(v?.trim() ?? '')
+              ? null
+              : '6 ta raqam kiriting',
+        ),
+      ],
     );
   }
 }

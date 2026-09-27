@@ -14,6 +14,15 @@ void main() {
         'Email yoki parol noto\'g\'ri');
     expect(authErrorText(const AuthApiException('x', code: 'otp_expired')),
         'Kod noto\'g\'ri yoki eskirgan');
+    expect(
+        authErrorText(const AuthApiException(
+            'For security purposes, you can only request this after 42 seconds.',
+            code: 'over_email_send_rate_limit')),
+        'Juda tez. 42 soniyadan so\'ng qayta urining');
+    expect(
+        authErrorText(const AuthApiException('email rate limit exceeded',
+            code: 'over_email_send_rate_limit')),
+        'Soatlik email limiti tugadi. 1 soatgacha kuting, so\'ng qayta urining');
     expect(authErrorText(AuthRetryableFetchException()),
         'Internet aloqasini tekshiring');
     expect(authErrorText(const AuthApiException('Server said no')), 'Server said no');
