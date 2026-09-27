@@ -1,0 +1,17 @@
+{
+  "indexes": [
+    { "collectionGroup": "categories", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "syncedAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "categories", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "familyId", "order": "ASCENDING" }, { "fieldPath": "syncedAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "expenses", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "syncedAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "categoryRequests", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "familyId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "categoryRequests", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "requestedBy", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "ASCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

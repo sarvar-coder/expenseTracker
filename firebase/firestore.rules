@@ -1,0 +1,141 @@
+rules_version = '2';
+
+// Port of the Supabase RLS (supabase/migrations/*_family_schema.sql).
+// Clients read/write their own rows; anything touching other people's rows
+// (join, leave, approve, summary) goes through Cloud Functions, which use the
+// Admin SDK and bypass these rules. Raw budgets and private amounts never
+// leave a user's own docs.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function uid() { return request.auth.uid; }
+    function memberPath() { return /databases/$(database)/documents/members/$(uid()); }
+    function inFamily() { return request.auth != null && exists(memberPath()); }
+    function myFamily() { return inFamily() ? get(memberPath()).data.familyId : null; }
+    function isAdmin() { return inFamily() && get(memberPath()).data.role == 'admin'; }
+    function myEmail() { return request.auth.token.email.lower(); }
+
+    function data() { return request.resource.data; }
+    function changed() { return data().diff(resource.data).affectedKeys(); }
+    // Sync cursor: client sends serverTimestamp(); pulls order by it.
+    function stamped() { return data().syncedAt == request.time; }
+    // Newest updatedAt wins: an older write is refused and stays dirty locally.
+    // ponytail: client clock; a badly skewed device can lose edits.
+    function notStale() { return data().updatedAt >= resource.data.updatedAt; }
+    function optTime(v) { return v == null || v is timestamp; }
+    function optString(v, max) { return v == null || (v is string && v.size() <= max); }
+
+    // ---------------------------------------------------------- profiles
+    // Own doc only (budget stays private; family sees contribution via Functions).
+    match /profiles/{id} {
+      function validProfile() {
+        return data().keys().hasOnly(['email', 'displayName', 'budget', 'defaultPrivate', 'updatedAt'])
+          && data().email == myEmail()
+          && data().displayName is string && data().displayName.size() <= 60
+          && data().budget is int && data().budget >= 0
+          && data().defaultPrivate is bool
+          && data().updatedAt is timestamp;
+      }
+      allow read: if uid() == id;
+      allow create: if uid() == id && validProfile();
+      allow update: if uid() == id && validProfile()
+        && changed().hasOnly(['displayName', 'budget', 'defaultPrivate', 'updatedAt']);
+    }
+
+    // ---------------------------------------------------------- families
+    // Doc id of members/ = uid, so one family per user. Writes: Functions only.
+    match /members/{id} {
+      allow read: if request.auth != null
+        && (id == uid() || resource.data.familyId == myFamily());
+    }
+
+    match /families/{fid} {
+      allow read: if fid == myFamily();
+      allow update: if fid == myFamily() && isAdmin()
+        && changed().hasOnly(['name'])
+        && data().name is string && data().name.size() >= 1 && data().name.size() <= 60;
+    }
+
+    // Doc id `${familyId}_${email}` keeps invites unique; a repeat invite is
+    // an update, which is refused.
+    match /invites/{id} {
+      allow read: if request.auth != null
+        && (resource.data.familyId == myFamily() || resource.data.email == myEmail());
+      allow create: if isAdmin()
+        && data().keys().hasOnly(['familyId', 'email', 'invitedBy', 'createdAt'])
+        && data().familyId == myFamily()
+        && data().invitedBy == uid()
+        && data().email is string && data().email == data().email.lower()
+        && id == data().familyId + '_' + data().email
+        && data().createdAt == request.time;
+      allow delete: if request.auth != null
+        && ((resource.data.familyId == myFamily() && isAdmin()) || resource.data.email == myEmail());
+    }
+
+    // Admin sees the family's, a member their own. Writes: Functions only.
+    match /categoryRequests/{id} {
+      allow read: if resource.data.familyId == myFamily()
+        && (isAdmin() || resource.data.requestedBy == uid());
+    }
+
+    // ---------------------------------------------------------- synced rows
+    // Personal (ownerId) outside a family, family-wide (familyId) inside one.
+    // ponytail: case-insensitive name uniqueness is kept by the client matcher
+    // and Functions; Firestore has no unique index.
+    match /categories/{id} {
+      function validCategory() {
+        return data().keys().hasOnly(['ownerId', 'familyId', 'name', 'nameLower', 'iconKey',
+            'colorHex', 'isArchived', 'updatedAt', 'deletedAt', 'syncedAt'])
+          && data().name is string && data().name.size() >= 1 && data().name.size() <= 60
+          && data().nameLower == data().name.trim().lower()
+          && data().iconKey is string && data().iconKey.size() <= 40
+          && data().colorHex is string && data().colorHex.matches('^[0-9A-Fa-f]{6}$')
+          && data().isArchived is bool
+          && data().updatedAt is timestamp && optTime(data().deletedAt)
+          && stamped();
+      }
+      allow read: if request.auth != null
+        && (resource.data.ownerId == uid()
+          || (resource.data.familyId != null && resource.data.familyId == myFamily()));
+      // Personal categories only outside a family; family ones admin-only.
+      allow create: if request.auth != null && validCategory()
+        && ((data().ownerId == uid() && data().familyId == null && !inFamily())
+          || (data().ownerId == null && data().familyId == myFamily() && isAdmin()));
+      allow update: if request.auth != null && validCategory() && notStale()
+        && !changed().hasAny(['ownerId', 'familyId'])
+        && (resource.data.ownerId == uid()
+          || (resource.data.familyId != null && resource.data.familyId == myFamily() && isAdmin()));
+    }
+
+    // Own rows only; the family reads shared rows through Functions.
+    match /expenses/{id} {
+      function validExpense() {
+        return data().keys().hasOnly(['ownerId', 'familyId', 'categoryId', 'description',
+            'amount', 'date', 'source', 'rawInput', 'isPrivate', 'pendingCategory', 'frozen',
+            'createdAt', 'updatedAt', 'deletedAt', 'syncedAt'])
+          && data().categoryId is string
+          && data().description is string && data().description.size() <= 500
+          && data().amount is int && data().amount >= 0
+          && data().date is timestamp
+          && data().source in ['typed', 'voice', 'manual']
+          && optString(data().rawInput, 1000)
+          && data().isPrivate is bool
+          && optString(data().pendingCategory, 60)
+          && data().createdAt is timestamp && data().updatedAt is timestamp
+          && optTime(data().deletedAt)
+          && stamped();
+      }
+      allow read: if request.auth != null && resource.data.ownerId == uid();
+      // Queued offline after leaving the family: the client must clear familyId.
+      allow create: if request.auth != null && validExpense()
+        && data().ownerId == uid()
+        && data().frozen == false
+        && (data().familyId == null || data().familyId == myFamily());
+      // Frozen = ex-member history, read-only.
+      allow update: if request.auth != null && validExpense() && notStale()
+        && resource.data.ownerId == uid()
+        && resource.data.frozen == false
+        && !changed().hasAny(['ownerId', 'familyId', 'frozen', 'createdAt']);
+    }
+  }
+}
