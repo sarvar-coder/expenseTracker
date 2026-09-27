@@ -38,7 +38,7 @@ search, category filters, and the **Oila** (family) tab.
   `budget − own private spending this month` (may go negative; no budget → 0).
   Family budget = sum of contributions, computed server-side
   (`family_summary` RPC) so raw budgets and private amounts never leave.
-- **AI parsing**: Google Gemini free tier, model `gemini-2.0-flash`, called from
+- **AI parsing**: Google Gemini free tier, model `gemini-3.6-flash`, called from
   the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
   users only). Free-tier prompts may be used by Google for training (note in Settings).
 - **Voice**: on-device STT (`speech_to_text`), transcript fed to the AI parser.

@@ -2,7 +2,7 @@
 // the app validates the reply (parseGeminiJson). Signed-in users only: the
 // gateway verifies the JWT, and we reject non-user (anon) tokens here.
 
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-3.6-flash"; // 2.0-flash shut down 2026-06-01
 const KEY = Deno.env.get("GEMINI_API_KEY");
 
 const json = (body: unknown, status = 200) =>
