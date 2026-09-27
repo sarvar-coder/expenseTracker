@@ -26,7 +26,7 @@ class AddScreen extends ConsumerStatefulWidget {
   ConsumerState<AddScreen> createState() => _AddScreenState();
 }
 
-typedef _Prefill = ({String amount, String desc, int? categoryId});
+typedef _Prefill = ({String amount, String desc, String? categoryId});
 
 class _AddScreenState extends ConsumerState<AddScreen> {
   // Editing forces Manual; otherwise reopen in the last picked mode.
@@ -44,7 +44,7 @@ class _AddScreenState extends ConsumerState<AddScreen> {
 
   /// Drop into the Manual form with fields prefilled (from Type "Edit" or a
   /// parse failure). A fresh ValueKey rebuilds the form state with the values.
-  void _toManual({String amount = '', String desc = '', int? categoryId}) {
+  void _toManual({String amount = '', String desc = '', String? categoryId}) {
     setState(() {
       _prefill = (amount: amount, desc: desc, categoryId: categoryId);
       _mode = AddMode.manual;
@@ -111,7 +111,7 @@ class _ManualForm extends ConsumerStatefulWidget {
   final Expense? editing;
   final String initialAmount;
   final String initialDescription;
-  final int? initialCategoryId;
+  final String? initialCategoryId;
 
   @override
   ConsumerState<_ManualForm> createState() => _ManualFormState();
@@ -120,7 +120,7 @@ class _ManualForm extends ConsumerStatefulWidget {
 class _ManualFormState extends ConsumerState<_ManualForm> {
   late final _amount = TextEditingController(text: widget.initialAmount);
   late final _desc = TextEditingController(text: widget.initialDescription);
-  late int? _categoryId = widget.initialCategoryId;
+  late String? _categoryId = widget.initialCategoryId;
   late DateTime _date = widget.editing?.date ?? DateTime.now();
   bool _saving = false;
 
@@ -326,7 +326,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
 /// [onEdit] drops the (optionally prefilled) values into the Manual form.
 class _TypeForm extends ConsumerStatefulWidget {
   const _TypeForm({required this.onEdit, this.voice = false});
-  final void Function({String amount, String desc, int? categoryId}) onEdit;
+  final void Function({String amount, String desc, String? categoryId}) onEdit;
   final bool voice;
 
   @override
@@ -338,7 +338,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
   bool _busy = false;
   bool _listening = false;
   ParsedExpense? _parsed;
-  int? _parsedCategoryId;
+  String? _parsedCategoryId;
 
   @override
   void dispose() {
@@ -537,7 +537,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
 class _ParsedCard extends ConsumerWidget {
   const _ParsedCard({required this.parsed, required this.categoryId});
   final ParsedExpense parsed;
-  final int categoryId;
+  final String categoryId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

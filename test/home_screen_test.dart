@@ -9,13 +9,17 @@ import 'package:expense_tracker/features/home/home_screen.dart';
 import 'package:expense_tracker/providers/providers.dart';
 
 Expense _exp(int id, String d, int amount, DateTime date) => Expense(
-      id: id,
+      id: '$id',
       description: d,
       amount: amount,
-      categoryId: 1,
+      categoryId: '1',
       date: date,
       source: ExpenseSource.manual,
       createdAt: date,
+      updatedAt: date,
+      isPrivate: false,
+      frozen: false,
+      dirty: false,
     );
 
 void main() {
@@ -27,8 +31,8 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
-        categoriesProvider.overrideWith((ref) => Stream.value(const [
-              Category(id: 1, name: 'Food', iconKey: 'x', colorHex: 'E08A5B', isArchived: false),
+        categoriesProvider.overrideWith((ref) => Stream.value([
+              Category(id: '1', name: 'Food', iconKey: 'x', colorHex: 'E08A5B', isArchived: false, updatedAt: DateTime(2026), dirty: false),
             ])),
         expensesProvider.overrideWith((ref) => Stream.value(expenses)),
       ],

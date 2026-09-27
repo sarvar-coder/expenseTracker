@@ -8,7 +8,7 @@ import '../data/db/database.dart';
 
 /// Builds an expenses CSV. Pure — directly unit-testable. The `csv` package
 /// handles quoting/escaping of commas, quotes and newlines.
-String expensesCsv(List<Expense> rows, Map<int, String> catNames) {
+String expensesCsv(List<Expense> rows, Map<String, String> catNames) {
   final df = DateFormat('yyyy-MM-dd');
   final data = <List<dynamic>>[
     ['date', 'description', 'category', 'amount', 'source'],

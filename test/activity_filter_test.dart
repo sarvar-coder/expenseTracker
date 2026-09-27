@@ -5,14 +5,18 @@ import 'package:expense_tracker/data/db/tables.dart';
 import 'package:expense_tracker/features/activity/activity_filter.dart';
 
 Expense _exp(int id, String desc, int catId, DateTime date) => Expense(
-      id: id,
+      id: '$id',
       description: desc,
       amount: 1000 * id,
-      categoryId: catId,
+      categoryId: '$catId',
       date: date,
       source: ExpenseSource.manual,
       rawInput: null,
       createdAt: date,
+      updatedAt: date,
+      isPrivate: false,
+      frozen: false,
+      dirty: false,
     );
 
 void main() {
@@ -38,7 +42,7 @@ void main() {
   });
 
   test('categoryId narrows to one category', () {
-    final sections = groupExpenses(expenses, categoryId: 10, now: now);
+    final sections = groupExpenses(expenses, categoryId: '10', now: now);
     final all = [for (final s in sections) ...s.items];
     expect(all.map((e) => e.description), ['Bon Cafe', 'Korzinka']);
   });
