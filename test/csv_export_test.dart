@@ -5,13 +5,17 @@ import 'package:expense_tracker/data/db/tables.dart';
 import 'package:expense_tracker/services/csv_export.dart';
 
 Expense _exp(int id, String desc, int amount, int catId, DateTime date) => Expense(
-      id: id,
+      id: '$id',
       description: desc,
       amount: amount,
-      categoryId: catId,
+      categoryId: '$catId',
       date: date,
       source: ExpenseSource.manual,
       createdAt: date,
+      updatedAt: date,
+      isPrivate: false,
+      frozen: false,
+      dirty: false,
     );
 
 void main() {
@@ -21,7 +25,7 @@ void main() {
         _exp(1, 'Coffee', 45000, 1, DateTime(2026, 7, 2)),
         _exp(2, 'Lunch, with "tip"', 90000, 2, DateTime(2026, 7, 3)),
       ],
-      {1: 'Food', 2: 'Transport'},
+      {'1': 'Food', '2': 'Transport'},
     );
     final lines = const LineSplitter().split(csv).toList();
 

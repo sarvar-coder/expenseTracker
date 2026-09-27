@@ -5,13 +5,17 @@ import 'package:expense_tracker/data/db/tables.dart';
 import 'package:expense_tracker/features/home/home_summary.dart';
 
 Expense _exp(int id, int amount, int catId, DateTime date) => Expense(
-      id: id,
+      id: '$id',
       description: 'x',
       amount: amount,
-      categoryId: catId,
+      categoryId: '$catId',
       date: date,
       source: ExpenseSource.manual,
       createdAt: date,
+      updatedAt: date,
+      isPrivate: false,
+      frozen: false,
+      dirty: false,
     );
 
 void main() {
@@ -44,6 +48,6 @@ void main() {
       _exp(3, 1, 1, DateTime(2026, 9, 26, 12)),
       _exp(4, 1, 1, DateTime(2026, 9, 27, 0, 0)), // tomorrow: out
     ], now);
-    expect(t.map((e) => e.id), [3, 1]);
+    expect(t.map((e) => e.id), ['3', '1']);
   });
 }

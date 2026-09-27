@@ -39,11 +39,13 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     Category cat(int id, String name, {bool archived = false}) => Category(
-      id: id,
+      id: '$id',
       name: name,
       iconKey: 'x',
       colorHex: '5B8DB8',
       isArchived: archived,
+      updatedAt: DateTime(2026),
+      dirty: false,
     );
 
     await tester.pumpWidget(ProviderScope(

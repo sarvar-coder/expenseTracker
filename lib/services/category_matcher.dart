@@ -27,7 +27,7 @@ String _uniqueColor(Set<String> used) {
 /// Finds an existing category whose name matches [rawName] (trim + case
 /// insensitive) and returns its id; otherwise creates one and returns the new id.
 /// Keeps categories unique — the AI never spawns duplicates.
-Future<int> matchOrCreateCategory(AppDatabase db, String rawName) async {
+Future<String> matchOrCreateCategory(AppDatabase db, String rawName) async {
   final name = rawName.trim();
   final target = _norm(rawName);
   for (final c in await db.getCategories()) {
