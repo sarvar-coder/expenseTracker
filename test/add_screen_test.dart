@@ -31,6 +31,13 @@ void main() {
         child: MaterialApp(home: home),
       );
 
+  // The Manual form (with Maxfiy) is taller than the default 800x600 surface.
+  void tall(WidgetTester tester) {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
+
   bool selected(WidgetTester tester, String label) => tester
       .widget<SegmentedButton<AddMode>>(find.byType(SegmentedButton<AddMode>))
       .selected
@@ -52,6 +59,7 @@ void main() {
   });
 
   testWidgets('edit screen deletes after confirm', (tester) async {
+    tall(tester);
     final food = (await db.getCategories()).first;
     await db.insertExpense(ExpensesCompanion.insert(
       description: 'Coffee',
@@ -78,6 +86,7 @@ void main() {
   });
 
   testWidgets('Qo\'lda validates, then saves amount/desc/chip category/Kecha', (tester) async {
+    tall(tester);
     cats = (await tester.runAsync(db.getCategories))!;
     await prefs.setString('lastAddMode', 'manual');
     await tester.pumpWidget(app(const AddScreen()));
@@ -110,5 +119,44 @@ void main() {
     expect(row.source, ExpenseSource.manual);
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
     expect(DateUtils.isSameDay(row.date, yesterday), isTrue);
+  });
+
+  testWidgets('Maxfiy starts from the Settings default and is saved', (tester) async {
+    tall(tester);
+    cats = (await tester.runAsync(db.getCategories))!;
+    await prefs.setString('lastAddMode', 'manual');
+    await prefs.setBool('defaultPrivate', true);
+    await tester.pumpWidget(app(const AddScreen()));
+    await tester.pump();
+
+    Future<Expense> save(String desc) async {
+      await tester.enterText(find.byType(TextField).first, '1000');
+      await tester.enterText(find.byType(TextField).last, desc);
+      await tester.tap(find.widgetWithText(ChoiceChip, cats[0].name));
+      await tester.ensureVisible(find.text('Saqlash'));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Saqlash'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      return (await tester.runAsync(db.getExpenses))!
+          .firstWhere((e) => e.description == desc);
+    }
+
+    bool switchOn() =>
+        tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Maxfiy')).value;
+    expect(switchOn(), isTrue);
+    expect((await save('Secret')).isPrivate, isTrue);
+
+    // Editing keeps the row's own flag; flip it off and save.
+    await tester.pumpWidget(app(const SizedBox()));
+    final secret = (await tester.runAsync(db.getExpenses))!.single;
+    await tester.pumpWidget(app(AddScreen(editing: secret)));
+    await tester.pump();
+    expect(switchOn(), isTrue);
+    await tester.ensureVisible(find.text('Maxfiy'));
+    await tester.tap(find.text('Maxfiy'));
+    await tester.pump();
+    expect((await save('Secret')).isPrivate, isFalse);
   });
 }

@@ -59,6 +59,8 @@ void main() {
     expect(find.text('45 000'), findsOneWidget);
 
     // Save persists as a typed expense against the reused seeded category.
+    await tester.ensureVisible(find.text('Saqlash'));
+    await tester.pump();
     await tester.runAsync(() async {
       await tester.tap(find.text('Saqlash'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
