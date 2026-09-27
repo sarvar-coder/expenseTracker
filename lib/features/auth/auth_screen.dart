@@ -1,32 +1,33 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../providers/providers.dart';
 
-enum _Mode { signIn, signUp, verify, forgot, reset }
+enum _Mode { signIn, signUp, verify, forgot }
 
-/// Uzbek text for an auth failure. Supabase error codes first, then network.
+/// Uzbek text for an auth failure (FirebaseAuthException codes).
 String authErrorText(Object e) {
-  if (e is AuthRetryableFetchException) return 'Internet aloqasini tekshiring';
-  if (e is! AuthException) return 'Xatolik yuz berdi. Qayta urining';
+  if (e is! FirebaseAuthException) return 'Xatolik yuz berdi. Qayta urining';
   return switch (e.code) {
-    'invalid_credentials' => 'Email yoki parol noto\'g\'ri',
-    'user_already_exists' ||
-    'email_exists' =>
-      'Bu email allaqachon ro\'yxatdan o\'tgan',
-    'otp_expired' => 'Kod noto\'g\'ri yoki eskirgan',
-    'weak_password' => 'Parol juda oddiy (kamida 6 belgi)',
-    'over_email_send_rate_limit' ||
-    'over_request_rate_limit' =>
-      'Juda ko\'p urinish. Birozdan so\'ng qayta urining',
-    _ => e.message,
+    'invalid-credential' ||
+    'wrong-password' ||
+    'user-not-found' =>
+      'Email yoki parol noto\'g\'ri',
+    'email-already-in-use' => 'Bu email allaqachon ro\'yxatdan o\'tgan',
+    'invalid-email' => 'To\'g\'ri email kiriting',
+    'weak-password' => 'Parol juda oddiy (kamida 6 belgi)',
+    'too-many-requests' => 'Juda ko\'p urinish. Birozdan so\'ng qayta urining',
+    'network-request-failed' => 'Internet aloqasini tekshiring',
+    'user-disabled' => 'Bu hisob o\'chirilgan',
+    _ => e.message ?? 'Xatolik yuz berdi. Qayta urining',
   };
 }
 
-/// Sign in / sign up / 6-digit code confirm / password reset. Shown by
-/// [AuthGate] while there is no session; a successful sign-in flips the gate.
+/// Sign in / sign up / verify email / password reset. Shown by [AuthGate]
+/// until there's a verified user. Confirm and reset go through Firebase's
+/// emailed links; a signed-in, unverified user always lands on "verify".
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
@@ -38,28 +39,29 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _code = TextEditingController();
   var _mode = _Mode.signIn;
   var _busy = false;
   String? _error;
 
-  GoTrueClient get _auth => ref.read(authProvider);
+  FirebaseAuth get _auth => ref.read(authProvider);
   String get _mail => _email.text.trim();
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _code.dispose();
     super.dispose();
   }
 
   void _go(_Mode m) => setState(() {
         _mode = m;
         _error = null;
-        _code.clear();
-        if (m != _Mode.verify) _password.clear();
+        _password.clear();
       });
+
+  void _toast(String text) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     if (!_form.currentState!.validate()) return;
@@ -76,54 +78,49 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  Future<void> _submit() => _run(() async {
-        switch (_mode) {
+  // Unverified sign-in / sign-up keeps the user signed in; the verify view
+  // (from unverifiedEmailProvider) takes over until the link is opened.
+  Future<void> _submit(_Mode mode) => _run(() async {
+        switch (mode) {
           case _Mode.signIn:
-            try {
-              await _auth.signInWithPassword(
-                  email: _mail, password: _password.text);
-            } on AuthException catch (e) {
-              if (e.code != 'email_not_confirmed') rethrow;
-              await _auth.resend(type: OtpType.signup, email: _mail);
-              _go(_Mode.verify);
-            }
+            await _auth.signInWithEmailAndPassword(email: _mail, password: _password.text);
           case _Mode.signUp:
-            final res =
-                await _auth.signUp(email: _mail, password: _password.text);
-            if (res.session == null) _go(_Mode.verify);
+            final cred = await _auth.createUserWithEmailAndPassword(
+                email: _mail, password: _password.text);
+            await cred.user!.sendEmailVerification();
           case _Mode.verify:
-            await _auth.verifyOTP(
-                type: OtpType.signup, email: _mail, token: _code.text.trim());
+            await _auth.currentUser?.reload(); // userChanges fires; gate flips
+            if (!(_auth.currentUser?.emailVerified ?? false)) {
+              if (mounted) setState(() => _error = 'Email hali tasdiqlanmagan');
+            }
           case _Mode.forgot:
-            await _auth.resetPasswordForEmail(_mail);
-            _go(_Mode.reset);
-          case _Mode.reset:
-            // verifyOTP signs in and the gate unmounts this screen, so read
-            // the new password before awaiting.
-            final password = _password.text;
-            await _auth.verifyOTP(
-                type: OtpType.recovery, email: _mail, token: _code.text.trim());
-            await _auth.updateUser(UserAttributes(password: password));
+            await _auth.sendPasswordResetEmail(email: _mail);
+            _go(_Mode.signIn);
+            _toast('Parolni tiklash havolasi emailingizga yuborildi');
         }
       });
 
   Future<void> _resend() async {
     try {
-      await _auth.resend(type: OtpType.signup, email: _mail);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kod qayta yuborildi')));
-      }
+      await _auth.currentUser?.sendEmailVerification();
+      _toast('Havola qayta yuborildi');
     } catch (e) {
       if (mounted) setState(() => _error = authErrorText(e));
     }
+  }
+
+  Future<void> _back() async {
+    await _auth.signOut();
+    _go(_Mode.signIn);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final (title, hint, action) = switch (_mode) {
+    final pending = ref.watch(unverifiedEmailProvider).value;
+    final mode = pending != null ? _Mode.verify : _mode;
+    final (title, hint, action) = switch (mode) {
       _Mode.signIn => ('Kirish', 'Hisobingizga kiring', 'Kirish'),
       _Mode.signUp => (
           'Ro\'yxatdan o\'tish',
@@ -132,24 +129,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         ),
       _Mode.verify => (
           'Emailni tasdiqlang',
-          '$_mail manziliga 6 xonali kod yuborildi',
-          'Tasdiqlash'
+          '$pending manziliga havola yuborildi. Uni oching, so\'ng shu yerga qayting',
+          'Tasdiqladim'
         ),
       _Mode.forgot => (
           'Parolni tiklash',
-          'Emailingizga 6 xonali kod yuboramiz',
-          'Kod yuborish'
-        ),
-      _Mode.reset => (
-          'Yangi parol',
-          '$_mail manziliga yuborilgan kodni va yangi parolni kiriting',
-          'Saqlash'
+          'Emailingizga parolni tiklash havolasini yuboramiz',
+          'Havola yuborish'
         ),
     };
-    final needsEmail = {_Mode.signIn, _Mode.signUp, _Mode.forgot}.contains(_mode);
-    final needsPassword =
-        {_Mode.signIn, _Mode.signUp, _Mode.reset}.contains(_mode);
-    final needsCode = {_Mode.verify, _Mode.reset}.contains(_mode);
+    final needsEmail = mode != _Mode.verify;
+    final needsPassword = {_Mode.signIn, _Mode.signUp}.contains(mode);
 
     return Scaffold(
       body: SafeArea(
@@ -178,32 +168,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
                 const SizedBox(height: 12),
               ],
-              if (needsCode) ...[
-                TextFormField(
-                  controller: _code,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  decoration:
-                      const InputDecoration(labelText: '6 xonali kod'),
-                  validator: (v) => RegExp(r'^\d{6}$').hasMatch(v?.trim() ?? '')
-                      ? null
-                      : '6 ta raqam kiriting',
-                ),
-                const SizedBox(height: 12),
-              ],
               if (needsPassword) ...[
                 TextFormField(
                   controller: _password,
                   obscureText: true,
                   autofillHints: [
-                    _mode == _Mode.signIn
+                    mode == _Mode.signIn
                         ? AutofillHints.password
                         : AutofillHints.newPassword
                   ],
-                  decoration: InputDecoration(
-                      labelText:
-                          _mode == _Mode.reset ? 'Yangi parol' : 'Parol'),
+                  decoration: const InputDecoration(labelText: 'Parol'),
                   validator: (v) => (v ?? '').length >= 6
                       ? null
                       : 'Kamida 6 belgi',
@@ -217,7 +191,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       style: t.bodyMedium?.copyWith(color: c.danger)),
                 ),
               FilledButton(
-                onPressed: _busy ? null : _submit,
+                onPressed: _busy ? null : () => _submit(mode),
                 child: _busy
                     ? const SizedBox.square(
                         dimension: 20,
@@ -225,7 +199,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     : Text(action),
               ),
               const SizedBox(height: 8),
-              ...switch (_mode) {
+              ...switch (mode) {
                 _Mode.signIn => [
                     TextButton(
                       onPressed: () => _go(_Mode.signUp),
@@ -239,10 +213,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 _Mode.verify => [
                     TextButton(
                       onPressed: _busy ? null : _resend,
-                      child: const Text('Kodni qayta yuborish'),
+                      child: const Text('Havolani qayta yuborish'),
                     ),
                     TextButton(
-                      onPressed: () => _go(_Mode.signIn),
+                      onPressed: _back,
                       child: const Text('Orqaga'),
                     ),
                   ],

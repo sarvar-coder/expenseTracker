@@ -9,7 +9,7 @@ const _uuid = Uuid();
 /// Client-generated UUID, so rows made offline keep their id on the server.
 String newId() => _uuid.v4();
 
-/// Sync bookkeeping shared by synced tables. Mirrors the Supabase columns;
+/// Sync bookkeeping shared by synced tables. Mirrors the Firestore fields;
 /// [dirty] is local-only (row changed since last push).
 mixin Synced on Table {
   TextColumn get id => text().clientDefault(newId)();
