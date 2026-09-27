@@ -1,4 +1,5 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'category_matcher.dart' show uniqueColor;
 import 'sync_service.dart';
@@ -68,137 +69,135 @@ class FamilyException implements Exception {
   String toString() => message;
 }
 
-/// Family lifecycle over the Supabase RPCs (rules live server-side). Each
+/// Family lifecycle over the Cloud Functions (rules live server-side). Each
 /// change is bracketed by syncs: push local edits first so the server moves
 /// them too, then pull what the change did (sync re-pulls on family change).
 class FamilyService {
-  FamilyService(this.client, this.sync);
+  FamilyService(this.functions, this.sync);
 
-  final SupabaseClient client;
+  final FirebaseFunctions functions;
   final SyncService sync;
+
+  FirebaseFirestore get _fs => sync.fs;
+  String get _uid => sync.auth.currentUser!.uid;
 
   /// Null when not in a family. Syncs first so the server has our latest
   /// budget and expenses. Online only: the summary is computed server-side.
   Future<FamilyOverview?> overview(DateTime from, DateTime to) async {
     await sync.run();
-    final uid = client.auth.currentUser!.id;
-    final me = await _call(() => client
-        .from('family_members')
-        .select('family_id, role, families(name)')
-        .eq('user_id', uid)
-        .maybeSingle()) as Map<String, dynamic>?;
-    if (me == null) return null;
-    final fid = me['family_id'] as String;
-    final isAdmin = me['role'] == 'admin';
-    final (summary, rows, invites, requests) = await (
-      _call(() => client.rpc('family_summary', params: {
-            'p_from': from.toUtc().toIso8601String(),
-            'p_to': to.toUtc().toIso8601String(),
-          })),
-      // ponytail: fetches the family's whole history and filters here; add a
-      // dated RPC if families ever get big enough for that to be slow.
-      _call(() => client.rpc('family_expenses_since',
-          params: {'p_since': '1970-01-01T00:00:00Z'})),
-      isAdmin
-          ? _call(() => client.from('invites').select('id, email').eq('family_id', fid))
-          : Future<Object?>.value(const []),
-      isAdmin ? categoryRequests() : Future.value(const <CategoryRequest>[]),
+    final s = await _call(() => _fn('familySummary', {
+          'from': from.millisecondsSinceEpoch,
+          'to': to.millisecondsSinceEpoch,
+        })) as Map?;
+    if (s == null) return null;
+    final fid = s['id'] as String;
+    final isAdmin = s['isAdmin'] == true;
+    final (invites, requests) = await (
+      isAdmin ? _invites(fid) : Future.value(const <({String id, String email})>[]),
+      isAdmin ? _requests(fid) : Future.value(const <CategoryRequest>[]),
     ).wait;
     return FamilyOverview(
       id: fid,
-      name: (me['families'] as Map<String, dynamic>)['name'] as String,
-      myId: uid,
+      name: s['name'] as String,
+      myId: _uid,
       isAdmin: isAdmin,
       members: [
-        for (final m in (summary as List).cast<Map<String, dynamic>>())
+        for (final m in (s['members'] as List).cast<Map>())
           (
-            userId: m['user_id'] as String,
-            name: m['display_name'] as String,
+            userId: m['userId'] as String,
+            name: m['displayName'] as String,
             isAdmin: m['role'] == 'admin',
-            shared: (m['shared_total'] as num).toInt(),
+            shared: (m['shared'] as num).toInt(),
             contribution: (m['contribution'] as num).toInt(),
           ),
       ],
       others: [
-        for (final e in (rows as List).cast<Map<String, dynamic>>())
-          if (e['is_private'] != true && e['deleted_at'] == null)
-            if (DateTime.parse(e['date'] as String).toLocal() case final d
-                when !d.isBefore(from) && d.isBefore(to))
-              (
-                id: e['id'] as String,
-                ownerName: e['owner_name'] as String,
-                categoryId: e['category_id'] as String,
-                description: e['description'] as String,
-                amount: (e['amount'] as num).toInt(),
-                date: d,
-              ),
+        for (final e in (s['others'] as List).cast<Map>())
+          (
+            id: e['id'] as String,
+            ownerName: e['ownerName'] as String,
+            categoryId: e['categoryId'] as String,
+            description: e['description'] as String,
+            amount: (e['amount'] as num).toInt(),
+            date: DateTime.fromMillisecondsSinceEpoch((e['date'] as num).toInt()),
+          ),
       ],
-      invites: [
-        for (final i in (invites as List).cast<Map<String, dynamic>>())
-          (id: i['id'] as String, email: i['email'] as String),
-      ],
+      invites: invites,
       requests: requests,
     );
   }
 
   Future<String> create(String name, {required bool includeHistory}) async =>
-      await _change(() => client.rpc('create_family', params: {
-            'p_name': name.trim(),
-            'p_include_history': includeHistory,
+      await _change(() => _fn('createFamily', {
+            'name': name.trim(),
+            'includeHistory': includeHistory,
           })) as String;
 
-  /// Admin only (RLS). The invitee sees it after signing in; no email is sent.
-  Future<void> invite(String familyId, String email) => _call(() => client
-      .from('invites')
-      .insert({
-        'family_id': familyId,
-        'email': email.trim().toLowerCase(),
-        'invited_by': client.auth.currentUser!.id,
-      }));
+  /// Admin only (rules). The invitee sees it after signing in; no email is
+  /// sent. Doc id `familyId_email` keeps it unique: a repeat is refused.
+  Future<void> invite(String familyId, String email) async {
+    final mail = email.trim().toLowerCase();
+    final doc = _fs.doc('invites/${familyId}_$mail');
+    try {
+      await _call(() => doc.set({
+            'familyId': familyId,
+            'email': mail,
+            'invitedBy': _uid,
+            'createdAt': FieldValue.serverTimestamp(),
+          }).timeout(_write));
+    } on FamilyException {
+      final dup = await doc.get().then((d) => d.exists, onError: (_) => false);
+      if (dup) throw FamilyException(familyErrorText('already_invited'));
+      rethrow;
+    }
+  }
 
   /// Admin cancels an invite, or the invitee declines it.
-  Future<void> deleteInvite(String id) =>
-      _call(() => client.from('invites').delete().eq('id', id));
+  Future<void> deleteInvite(String id) => _call(() => _fs.doc('invites/$id').delete().timeout(_write));
 
   Future<List<FamilyInvite>> myInvites() async {
-    final rows = await _call(() => client.rpc('my_invites')) as List;
+    final rows = await _call(() => _fn('myInvites')) as List;
     return [
-      for (final r in rows.cast<Map<String, dynamic>>())
+      for (final r in rows.cast<Map>())
         (
           id: r['id'] as String,
-          familyName: r['family_name'] as String,
-          invitedBy: r['invited_by_name'] as String,
+          familyName: r['familyName'] as String,
+          invitedBy: r['invitedByName'] as String,
         ),
     ];
   }
 
   Future<void> accept(String inviteId, {required bool includeHistory}) =>
-      _change(() => client.rpc('accept_invite', params: {
-            'p_invite_id': inviteId,
-            'p_include_history': includeHistory,
+      _change(() => _fn('acceptInvite', {
+            'inviteId': inviteId,
+            'includeHistory': includeHistory,
           }));
 
-  Future<void> leave() => _change(() => client.rpc('leave_family'));
+  Future<void> leave() => _change(() => _fn('leaveFamily'));
 
   Future<void> removeMember(String userId) =>
-      _change(() => client.rpc('remove_member', params: {'p_user': userId}));
+      _change(() => _fn('removeMember', {'userId': userId}));
 
   Future<void> transferAdmin(String userId) =>
-      _call(() => client.rpc('transfer_admin', params: {'p_user': userId}));
+      _call(() => _fn('transferAdmin', {'userId': userId}));
 
-  Future<void> deleteFamily() => _change(() => client.rpc('delete_family'));
+  Future<void> deleteFamily() => _change(() => _fn('deleteFamily'));
 
-  /// Pending category requests: all of them for the admin, own for a member (RLS).
-  Future<List<CategoryRequest>> categoryRequests() async {
-    final rows = await _call(() => client
-        .from('category_requests')
-        .select('id, name')
-        .eq('status', 'pending')
-        .order('created_at')) as List;
-    return [
-      for (final r in rows.cast<Map<String, dynamic>>())
-        (id: r['id'] as String, name: r['name'] as String),
-    ];
+  Future<List<({String id, String email})>> _invites(String fid) async {
+    final q = await _call(() => _fs.collection('invites').where('familyId', isEqualTo: fid).get())
+        as QuerySnapshot<Map<String, dynamic>>;
+    return [for (final d in q.docs) (id: d.id, email: d['email'] as String)];
+  }
+
+  /// Admin: the family's pending category requests, oldest first.
+  Future<List<CategoryRequest>> _requests(String fid) async {
+    final q = await _call(() => _fs
+        .collection('categoryRequests')
+        .where('familyId', isEqualTo: fid)
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt')
+        .get()) as QuerySnapshot<Map<String, dynamic>>;
+    return [for (final d in q.docs) (id: d.id, name: d['name'] as String)];
   }
 
   /// Creates the category (unused color) and moves waiting expenses into it.
@@ -206,20 +205,23 @@ class FamilyService {
     final used = {
       for (final c in await sync.db.select(sync.db.categories).get()) c.colorHex.toUpperCase(),
     };
-    await _change(() => client.rpc('approve_category_request', params: {
-          'p_id': id,
-          'p_color_hex': uniqueColor(used),
-          'p_icon_key': null,
+    await _change(() => _fn('approveCategoryRequest', {
+          'id': id,
+          'colorHex': uniqueColor(used),
+          'iconKey': null,
         }));
   }
 
   /// Waiting expenses stay in Boshqa.
   Future<void> rejectRequest(String id) =>
-      _change(() => client.rpc('reject_category_request', params: {'p_id': id}));
+      _change(() => _fn('rejectCategoryRequest', {'id': id}));
 
-  Future<Object?> _change(Future<Object?> Function() rpc) async {
+  Future<Object?> _fn(String name, [Map<String, Object?>? data]) async =>
+      (await functions.httpsCallable(name).call<Object?>(data)).data;
+
+  Future<Object?> _change(Future<Object?> Function() call) async {
     await sync.run();
-    final r = await _call(rpc);
+    final r = await _call(call);
     await sync.run();
     return r;
   }
@@ -227,16 +229,24 @@ class FamilyService {
   Future<Object?> _call(Future<Object?> Function() f) async {
     try {
       return await f();
-    } on PostgrestException catch (e) {
-      throw FamilyException(familyErrorText(e.message, e.code));
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') throw _offline;
+      throw FamilyException(familyErrorText(e.message ?? ''));
+    } on FirebaseException catch (e) {
+      if (e.code == 'unavailable') throw _offline;
+      throw FamilyException(familyErrorText(e.code));
     } on Exception {
-      throw FamilyException('Internet aloqasini tekshiring'); // offline, timeout
+      throw _offline; // timeout, socket
     }
   }
+
+  /// Firestore writes wait silently while offline; give up instead.
+  static const _write = Duration(seconds: 15);
+  static final _offline = FamilyException('Internet aloqasini tekshiring');
 }
 
-/// Server error codes (raised by the RPCs) to Uzbek text.
-String familyErrorText(String message, [String? code]) => switch (message) {
+/// Server error codes (thrown by the Functions) to Uzbek text.
+String familyErrorText(String code) => switch (code) {
       'already_in_family' => 'Siz allaqachon oiladasiz',
       'invite_not_found' => 'Taklif topilmadi',
       'not_in_family' => 'Siz oilada emassiz',
@@ -245,6 +255,6 @@ String familyErrorText(String message, [String? code]) => switch (message) {
       'cannot_remove_self' => 'O\'zingizni chiqarib bo\'lmaydi',
       'not_a_member' => 'Bu foydalanuvchi oila a\'zosi emas',
       'request_not_found' => 'So\'rov topilmadi',
-      _ when code == '23505' => 'Bu email allaqachon taklif qilingan',
+      'already_invited' => 'Bu email allaqachon taklif qilingan',
       _ => 'Xatolik yuz berdi. Qayta urinib ko\'ring',
     };

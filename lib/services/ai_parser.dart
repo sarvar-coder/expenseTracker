@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart' show FunctionsClient;
+import 'package:firebase_ai/firebase_ai.dart';
 
 import '../features/common/ui_utils.dart' show parseAmount;
 
@@ -34,18 +34,34 @@ ParsedExpense? parseGeminiJson(String text) {
   }
 }
 
-/// Calls the `parse-expense` Edge Function, which holds the Gemini key.
+/// Gemini through Firebase AI Logic (the key stays in Firebase).
+/// ponytail: gemini-2.0-flash is retired; this is the Flash model the
+/// firebase_ai 4.0 example targets. Swap the name when it ages out.
+/// ponytail: no App Check yet; add before public release.
 class AiParser {
-  AiParser(this._functions);
-  final FunctionsClient _functions;
+  static const model = 'gemini-3.1-flash-lite';
 
   Future<ParsedExpense?> parse(String rawInput) async {
     // ponytail: null on any failure (network/auth/bad JSON) — callers fall back
     // to Manual entry. Logic worth testing lives in [parseGeminiJson].
+    final input = rawInput.trim();
+    if (input.isEmpty || input.length > 500) return null;
     try {
-      final res = await _functions.invoke('parse-expense', body: {'input': rawInput});
-      final text = (res.data as Map?)?['text'];
-      return text is String ? parseGeminiJson(text) : null;
+      final res = await FirebaseAI.googleAI()
+          .generativeModel(
+            model: model,
+            generationConfig: GenerationConfig(responseMimeType: 'application/json'),
+          )
+          .generateContent([
+        Content.text(
+          'Extract an expense from the user text. Reply with ONLY strict JSON: '
+          '{"item": string, "amount": integer whole UZS units, "category": string}. '
+          'Pick a concise, reusable category name. No prose, no markdown.\n\n'
+          'User text: ${jsonEncode(input)}',
+        ),
+      ]);
+      final text = res.text;
+      return text == null ? null : parseGeminiJson(text);
     } catch (_) {
       return null;
     }

@@ -40,7 +40,7 @@ void main() {
 
   test('familyErrorText maps server codes', () {
     expect(familyErrorText('transfer_admin_first'), contains('adminlik'));
-    expect(familyErrorText('duplicate key', '23505'), contains('taklif qilingan'));
+    expect(familyErrorText('already_invited'), contains('taklif qilingan'));
     expect(familyErrorText('boom'), contains('Qayta'));
   });
 

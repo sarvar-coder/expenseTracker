@@ -6,6 +6,10 @@
       { "fieldPath": "familyId", "order": "ASCENDING" }, { "fieldPath": "syncedAt", "order": "ASCENDING" } ] },
     { "collectionGroup": "expenses", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "syncedAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "expenses", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "familyId", "order": "ASCENDING" }, { "fieldPath": "date", "order": "ASCENDING" } ] },
+    { "collectionGroup": "expenses", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "pendingCategory", "order": "ASCENDING" } ] },
     { "collectionGroup": "categoryRequests", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "familyId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" },
       { "fieldPath": "createdAt", "order": "ASCENDING" } ] },
