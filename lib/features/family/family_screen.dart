@@ -137,7 +137,8 @@ Future<String?> _askText(
       ],
     ),
   );
-  ctl.dispose();
+  // ponytail: no ctl.dispose() — the dialog's TextField is still mounted during
+  // its exit animation, and disposing then trips '_dependents.isEmpty'. GC frees it.
   return text == null || text.isEmpty ? null : text;
 }
 
