@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "202052687935",
+    "project_id": "xarajatlar-app",
+    "storage_bucket": "xarajatlar-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202052687935:android:ac1b21f03cbe1d575ec08a",
+        "android_client_info": {
+          "package_name": "com.sarvarbek.expense_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOabdky3c2P_TMSp1dOyTZrzqQEaNEPes"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
