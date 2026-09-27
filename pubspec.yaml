@@ -50,6 +50,7 @@ dependencies:
   fl_chart: ^1.2.0
   csv: ^8.0.0
   share_plus: ^13.2.0
+  supabase_flutter: ^2.17.2
 
 dev_dependencies:
   flutter_test:
