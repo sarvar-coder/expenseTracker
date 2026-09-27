@@ -17,9 +17,13 @@ void main() async {
     url: 'https://xgxygopxnchdobuooyzw.supabase.co',
     publishableKey: 'sb_publishable_0-lm1ze8Nz93QSuvegf3kA_jkH1EHn0',
   );
+  final container = ProviderContainer(
+    overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+  );
+  container.read(syncProvider); // starts background sync
   runApp(
-    ProviderScope(
-      overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+    UncontrolledProviderScope(
+      container: container,
       child: const ExpenseTrackerApp(),
     ),
   );

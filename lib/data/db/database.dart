@@ -81,6 +81,13 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Another account signed in on this device: drop the previous one's rows.
+  Future<void> resetLocal() => transaction(() async {
+        await delete(expenses).go();
+        await delete(categories).go();
+        await _seedCategories();
+      });
+
   // --- Categories ---
   // Every read skips soft-deleted rows (deletedAt set, kept for sync).
   Future<List<Category>> getCategories() => (select(categories)

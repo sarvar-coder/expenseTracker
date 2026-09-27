@@ -7,6 +7,7 @@ import '../data/db/database.dart';
 import '../data/settings_store.dart';
 import '../services/ai_parser.dart';
 import '../services/speech_service.dart';
+import '../services/sync_service.dart';
 
 /// Overridden in main() with the resolved instance so downstream reads are sync.
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -26,6 +27,17 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);
   return db;
+});
+
+/// Background Supabase sync; started in main(), read by sign-out to flush.
+final syncProvider = Provider<SyncService>((ref) {
+  final sync = SyncService(
+    ref.watch(databaseProvider),
+    Supabase.instance.client,
+    ref.watch(sharedPrefsProvider),
+  )..start();
+  ref.onDispose(sync.dispose);
+  return sync;
 });
 
 final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(
