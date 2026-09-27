@@ -92,6 +92,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           case _Mode.signUp:
             final res =
                 await _auth.signUp(email: _mail, password: _password.text);
+            // Already-confirmed email: Supabase sends nothing and returns a
+            // fake user with no identities (anti-enumeration).
+            if (res.user?.identities?.isEmpty ?? false) {
+              throw const AuthException('', code: 'user_already_exists');
+            }
             if (res.session == null) _go(_Mode.verify);
           case _Mode.verify:
             await _auth.verifyOTP(
