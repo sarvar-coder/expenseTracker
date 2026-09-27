@@ -1,8 +1,10 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:expense_tracker/data/db/database.dart';
 import 'package:expense_tracker/data/db/tables.dart';
+import 'package:expense_tracker/data/settings_store.dart';
 import 'package:expense_tracker/services/sync_service.dart';
 
 void main() {
@@ -108,5 +110,25 @@ void main() {
     await db.resetLocal();
     expect(await db.getExpenses(), isEmpty);
     expect((await db.getCategories()).length, 5);
+  });
+
+  test('shouldPushProfile: local edits and unsynced budgets win, else server', () {
+    expect(shouldPushProfile(dirty: true, serverBudget: null, localBudget: 0), isTrue);
+    expect(shouldPushProfile(dirty: false, serverBudget: 0, localBudget: 900000), isTrue);
+    expect(shouldPushProfile(dirty: false, serverBudget: 500000, localBudget: 900000), isFalse);
+    expect(shouldPushProfile(dirty: false, serverBudget: 0, localBudget: 0), isFalse);
+  });
+
+  test('settings edits mark the profile for push; pulled values do not', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SettingsStore(await SharedPreferences.getInstance());
+    await store.applyProfile(budget: 500000, defaultPrivate: true);
+    expect(store.profileDirty, isFalse);
+    expect(store.load().monthlyBudget, 500000);
+    await store.setBudget(700000);
+    expect(store.profileDirty, isTrue);
+    await store.markProfileClean();
+    await store.setDefaultPrivate(false);
+    expect(store.profileDirty, isTrue);
   });
 }

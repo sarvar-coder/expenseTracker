@@ -34,6 +34,8 @@ class SettingsStore {
   static const _kLocale = 'sttLocale';
   static const _kAddMode = 'lastAddMode';
   static const _kPrivate = 'defaultPrivate';
+  // 'sync.' prefix: wiped with the other sync keys when the account changes.
+  static const _kProfileDirty = 'sync.profileDirty';
 
   Settings load() => Settings(
     monthlyBudget: _prefs.getInt(_kBudget) ?? 0,
@@ -41,9 +43,28 @@ class SettingsStore {
     defaultPrivate: _prefs.getBool(_kPrivate) ?? false,
   );
 
-  Future<void> setBudget(int v) => _prefs.setInt(_kBudget, v);
+  // Budget and private default also live on the server profile (the family
+  // contribution needs the budget), so edits wait there for the next sync.
+  Future<void> setBudget(int v) async {
+    await _prefs.setInt(_kBudget, v);
+    await _prefs.setBool(_kProfileDirty, true);
+  }
+
+  Future<void> setDefaultPrivate(bool v) async {
+    await _prefs.setBool(_kPrivate, v);
+    await _prefs.setBool(_kProfileDirty, true);
+  }
+
   Future<void> setLocale(String v) => _prefs.setString(_kLocale, v);
-  Future<void> setDefaultPrivate(bool v) => _prefs.setBool(_kPrivate, v);
+
+  bool get profileDirty => _prefs.getBool(_kProfileDirty) ?? false;
+  Future<void> markProfileClean() => _prefs.remove(_kProfileDirty);
+
+  /// Server values pulled by sync; not marked for push.
+  Future<void> applyProfile({required int budget, required bool defaultPrivate}) async {
+    await _prefs.setInt(_kBudget, budget);
+    await _prefs.setBool(_kPrivate, defaultPrivate);
+  }
 
   /// Last Add mode the user picked (enum name), so Add reopens in it.
   String? get lastAddMode => _prefs.getString(_kAddMode);

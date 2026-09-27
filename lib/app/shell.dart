@@ -3,18 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/activity/activity_screen.dart';
 import '../features/add/add_screen.dart';
+import '../features/family/family_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/insights/insights_screen.dart';
 import '../providers/providers.dart';
 import 'theme.dart';
 
-/// Bottom-nav shell: 3 tabs in an IndexedStack + a bottom-right FAB that
+/// Bottom-nav shell: 4 tabs in an IndexedStack + a bottom-right FAB that
 /// pushes the Add screen as a full route. Settings opens from the Home header. Tab index
 /// lives in [tabIndexProvider] so other screens can switch tabs.
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
-  static const _pages = [HomeScreen(), ActivityScreen(), InsightsScreen()];
+  static const _pages = [
+    HomeScreen(),
+    ActivityScreen(),
+    InsightsScreen(),
+    FamilyScreen(),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,6 +97,13 @@ class _NavBar extends StatelessWidget {
                   label: 'Tahlil',
                   selected: index == 2,
                   onTap: () => onTap(2),
+                ),
+                _NavItem(
+                  icon: Icons.family_restroom_outlined,
+                  selectedIcon: Icons.family_restroom_rounded,
+                  label: 'Oila',
+                  selected: index == FamilyScreen.tab,
+                  onTap: () => onTap(FamilyScreen.tab),
                 ),
               ],
             ),
