@@ -17,7 +17,7 @@ class _FakeParser extends AiParser {
   _FakeParser(this.result) : super(FunctionsClient('http://localhost', {}));
   final ParsedExpense? result;
   @override
-  Future<ParsedExpense?> parse(String rawInput) async => result;
+  Future<ParsedExpense?> parse(String rawInput, {List<String> categories = const []}) async => result;
 }
 
 /// Fake STT: `listen` immediately emits a canned transcript, no microphone.
@@ -34,7 +34,7 @@ class _FakeSpeech extends SpeechService {
 }
 
 void main() {
-  testWidgets('Speak mode transcribes, parses, and saves with source=voice', (tester) async {
+  testWidgets('Speak mode transcribes, parses, and saves right away with source=voice', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final food = (await db.getCategories()).firstWhere((c) => c.name == 'Food & dining');
@@ -50,7 +50,7 @@ void main() {
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
         expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
         speechServiceProvider.overrideWithValue(_FakeSpeech('coffee 45000')),
-        aiParserProvider.overrideWithValue(_FakeParser(const ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining'))),
+        aiParserProvider.overrideWithValue(_FakeParser(ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining', date: DateTime(2026, 9, 26)))),
       ],
       child: const MaterialApp(home: AddScreen()),
     ));
@@ -64,21 +64,15 @@ void main() {
     });
     await tester.pump();
 
-    // Parse, then Save.
+    // Parse → saved.
     await tester.runAsync(() async {
-      await tester.tap(find.text('AI bilan tahlil qilish'));
+      await tester.tap(find.text('AI bilan qo\'shish'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await tester.pump();
-    expect(find.text('Coffee'), findsOneWidget);
-    expect(find.text('45 000'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Saqlash'));
-    await tester.pump();
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Saqlash'));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
+    // Saved straight away, no preview step; snackbar offers undo.
+    expect(find.text('Qo\'shildi: Coffee — 45 000 UZS'), findsOneWidget);
 
     final rows = (await tester.runAsync(() => db.watchExpenses().first))!;
     final cats = (await tester.runAsync(() => db.getCategories()))!;
@@ -88,6 +82,7 @@ void main() {
     expect(rows.first.amount, 45000);
     expect(rows.first.categoryId, food.id);
     expect(rows.first.rawInput, 'coffee 45000');
+    expect(rows.first.date, DateTime(2026, 9, 26)); // AI date, not now
     expect(cats.length, 5); // no new category
   });
 }

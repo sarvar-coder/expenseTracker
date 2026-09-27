@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionsClient;
 
 import '../features/common/ui_utils.dart' show parseAmount;
@@ -9,14 +10,21 @@ class ParsedExpense {
   final String item;
   final int amount;
   final String category;
-  const ParsedExpense({required this.item, required this.amount, required this.category});
+  final DateTime date;
+  const ParsedExpense({
+    required this.item,
+    required this.amount,
+    required this.category,
+    required this.date,
+  });
 }
 
 /// Validates a Gemini reply into a [ParsedExpense]. Tolerates markdown fences /
 /// surrounding prose (extracts the first `{...}` block) and amount as number or
-/// separator-formatted string. Returns null on anything invalid so callers fall
-/// back to Manual entry.
-ParsedExpense? parseGeminiJson(String text) {
+/// separator-formatted string. A missing, invalid or future `date` becomes
+/// [today]. Returns null on anything else invalid so callers fall back to
+/// Manual entry.
+ParsedExpense? parseGeminiJson(String text, {required DateTime today}) {
   final start = text.indexOf('{');
   final end = text.lastIndexOf('}');
   if (start < 0 || end <= start) return null;
@@ -28,7 +36,10 @@ ParsedExpense? parseGeminiJson(String text) {
     final amount =
         rawAmount is num ? rawAmount.toInt() : parseAmount(rawAmount?.toString() ?? '');
     if (item.isEmpty || category.isEmpty || amount == null || amount <= 0) return null;
-    return ParsedExpense(item: item, amount: amount, category: category);
+    final d = DateTime.tryParse(m['date']?.toString() ?? '');
+    final day = d == null ? null : DateTime(d.year, d.month, d.day);
+    final date = day == null || day.isAfter(today) ? today : day;
+    return ParsedExpense(item: item, amount: amount, category: category, date: date);
   } catch (_) {
     return null;
   }
@@ -39,14 +50,24 @@ class AiParser {
   AiParser(this._functions);
   final FunctionsClient _functions;
 
-  Future<ParsedExpense?> parse(String rawInput) async {
+  /// [categories] are existing names the model should reuse.
+  Future<ParsedExpense?> parse(String rawInput, {List<String> categories = const []}) async {
     // ponytail: null on any failure (network/auth/bad JSON) — callers fall back
     // to Manual entry. Logic worth testing lives in [parseGeminiJson].
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     try {
-      final res = await _functions.invoke('parse-expense', body: {'input': rawInput});
+      final res = await _functions.invoke('parse-expense', body: {
+        'input': rawInput,
+        'today': today.toIso8601String().substring(0, 10),
+        'categories': categories,
+      });
       final text = (res.data as Map?)?['text'];
-      return text is String ? parseGeminiJson(text) : null;
-    } catch (_) {
+      final p = text is String ? parseGeminiJson(text, today: today) : null;
+      if (p == null) debugPrint('parse-expense: unusable reply ${res.data}');
+      return p;
+    } catch (e) {
+      debugPrint('parse-expense failed: $e');
       return null;
     }
   }

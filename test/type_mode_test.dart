@@ -16,11 +16,11 @@ class _FakeParser extends AiParser {
   _FakeParser(this.result) : super(FunctionsClient('http://localhost', {}));
   final ParsedExpense? result;
   @override
-  Future<ParsedExpense?> parse(String rawInput) async => result;
+  Future<ParsedExpense?> parse(String rawInput, {List<String> categories = const []}) async => result;
 }
 
 void main() {
-  testWidgets('Type mode parses, previews, and saves with source=typed', (tester) async {
+  testWidgets('Type mode parses and saves right away with source=typed', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final food = (await db.getCategories()).firstWhere((c) => c.name == 'Food & dining');
@@ -36,7 +36,7 @@ void main() {
         // Closing streams: no drift stream timers pending at teardown.
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
         expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
-        aiParserProvider.overrideWithValue(_FakeParser(const ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining'))),
+        aiParserProvider.overrideWithValue(_FakeParser(ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining', date: DateTime(2026, 9, 26)))),
       ],
       child: const MaterialApp(home: AddScreen()),
     ));
@@ -50,21 +50,13 @@ void main() {
     // Parse. runAsync lets the real drift/async work complete; the busy spinner
     // rules out pumpAndSettle (it would spin forever).
     await tester.runAsync(() async {
-      await tester.tap(find.text('AI bilan tahlil qilish'));
+      await tester.tap(find.text('AI bilan qo\'shish'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
-    await tester.pump(); // rebuild with the preview
-
-    expect(find.text('Coffee'), findsOneWidget);
-    expect(find.text('45 000'), findsOneWidget);
-
-    // Save persists as a typed expense against the reused seeded category.
-    await tester.ensureVisible(find.text('Saqlash'));
     await tester.pump();
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Saqlash'));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
+
+    // Saved straight away, no preview step; snackbar offers undo.
+    expect(find.text('Qo\'shildi: Coffee — 45 000 UZS'), findsOneWidget);
 
     // Drift reads via runAsync (real clock) — streams need a timer the fake
     // testWidgets clock won't advance.
@@ -76,6 +68,7 @@ void main() {
     expect(rows.first.amount, 45000);
     expect(rows.first.categoryId, food.id); // matcher reused, no duplicate
     expect(rows.first.rawInput, 'coffee 45000');
+    expect(rows.first.date, DateTime(2026, 9, 26)); // AI date, not now
     expect(cats.length, 5); // no new category created
   });
 }

@@ -7,11 +7,9 @@ import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../data/db/tables.dart';
 import '../../providers/providers.dart';
-import '../../services/ai_parser.dart';
 import '../../services/category_matcher.dart';
 import '../../services/sync_service.dart' show canCreateCategories;
 import '../common/ui_utils.dart';
-import '../common/widgets.dart';
 
 enum AddMode { type, speak, manual }
 
@@ -354,9 +352,9 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
 }
 
 /// Type / Speak mode: text (typed or transcribed) → Gemini → {item, amount,
-/// category} preview → Save/Edit. When [voice] is set, a mic toggle streams
-/// on-device STT into the text field; otherwise the field is typed by hand.
-/// [onEdit] drops the (optionally prefilled) values into the Manual form.
+/// category, date} → saved straight away. When [voice] is set, a mic toggle
+/// streams on-device STT into the text field; otherwise the field is typed by
+/// hand. [onEdit] drops the raw text into the Manual form when parsing fails.
 class _TypeForm extends ConsumerStatefulWidget {
   const _TypeForm({required this.onEdit, this.voice = false});
   final void Function({
@@ -376,10 +374,6 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
   final _input = TextEditingController();
   bool _busy = false;
   bool _listening = false;
-  ParsedExpense? _parsed;
-  String? _parsedCategoryId;
-  String? _parsedPending; // requested category name while it sits in Boshqa
-  late bool _private = ref.read(settingsProvider).defaultPrivate;
 
   @override
   void dispose() {
@@ -412,14 +406,20 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
     if (mounted) setState(() => _listening = true);
   }
 
+  /// Text → AI → saved expense (amount, category, date from the AI). Pops with
+  /// an Undo snackbar; on parse failure drops into Manual with the raw text.
   Future<void> _parse() async {
     final raw = _input.text.trim();
     if (raw.isEmpty) {
       _toast('Nima olganingiz va qanchaligini yozing');
       return;
     }
+    if (_listening) await _toggleMic();
+    if (!mounted) return;
     setState(() => _busy = true);
-    final p = await ref.read(aiParserProvider).parse(raw);
+    final db = ref.read(databaseProvider);
+    final names = [for (final c in await db.getCategories()) c.name];
+    final p = await ref.read(aiParserProvider).parse(raw, categories: names);
     if (!mounted) return;
     if (p == null) {
       setState(() => _busy = false);
@@ -428,45 +428,41 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
       return;
     }
     final cat = await resolveCategory(
-      ref.read(databaseProvider),
+      db,
       p.category,
       canCreate: canCreateCategories(ref.read(sharedPrefsProvider)),
     );
+    final id = await db.insertExpense(
+      ExpensesCompanion.insert(
+        description: p.item,
+        amount: p.amount,
+        categoryId: cat.id,
+        date: p.date,
+        source: widget.voice ? ExpenseSource.voice : ExpenseSource.typed,
+        rawInput: Value(raw),
+        pendingCategory: Value(cat.pending),
+        isPrivate: Value(ref.read(settingsProvider).defaultPrivate),
+      ),
+    );
     if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _parsed = p;
-      _parsedCategoryId = cat.id;
-      _parsedPending = cat.pending;
-    });
-  }
-
-  Future<void> _save() async {
-    final p = _parsed!;
-    setState(() => _busy = true);
-    await ref
-        .read(databaseProvider)
-        .insertExpense(
-          ExpensesCompanion.insert(
-            description: p.item,
-            amount: p.amount,
-            categoryId: _parsedCategoryId!,
-            date: DateTime.now(),
-            source: widget.voice ? ExpenseSource.voice : ExpenseSource.typed,
-            rawInput: Value(_input.text.trim()),
-            pendingCategory: Value(_parsedPending),
-            isPrivate: Value(_private),
-          ),
-        );
-    if (!mounted) return;
+    // Captured before pop: the shell's messenger outlives this screen.
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).maybePop();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Qo\'shildi: ${p.item} — ${formatMoney(p.amount)} UZS'),
+        action: SnackBarAction(
+          label: 'Bekor qilish',
+          onPressed: () => db.deleteExpense(id),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final p = _parsed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -531,127 +527,9 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                   ),
                 )
               : const Icon(Icons.auto_awesome),
-          label: const Text('AI bilan tahlil qilish'),
+          label: const Text('AI bilan qo\'shish'),
         ),
-        if (p != null) ...[
-          const SizedBox(height: AppSpace.section),
-          _ParsedCard(
-            parsed: p,
-            categoryId: _parsedCategoryId!,
-            pending: _parsedPending,
-          ),
-          const SizedBox(height: AppSpace.gap),
-          _PrivateSwitch(
-            value: _private,
-            onChanged: (v) => setState(() => _private = v),
-          ),
-          const SizedBox(height: AppSpace.gap),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => widget.onEdit(
-                          amount: p.amount.toString(),
-                          desc: p.item,
-                          categoryId: _parsedCategoryId,
-                          private: _private,
-                        ),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Tahrirlash'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _save,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Saqlash'),
-                ),
-              ),
-            ],
-          ),
-        ],
       ],
-    );
-  }
-}
-
-/// AI result preview: category badge, item, big amount, "AI" tag.
-class _ParsedCard extends ConsumerWidget {
-  const _ParsedCard({
-    required this.parsed,
-    required this.categoryId,
-    this.pending,
-  });
-  final ParsedExpense parsed;
-  final String categoryId;
-  final String? pending;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.colors;
-    final t = Theme.of(context).textTheme;
-    final cats =
-        ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
-    final cat = cats.where((x) => x.id == categoryId).firstOrNull;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CategoryBadge(category: cat),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(parsed.item, style: t.titleMedium),
-                      Text(
-                        pending == null
-                            ? cat?.name ?? parsed.category
-                            : '${cat?.name ?? 'Boshqa'} · "$pending" admin tasdig\'ida',
-                        style: t.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: c.accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadii.chip),
-                  ),
-                  child: Text(
-                    'AI',
-                    style: t.labelSmall!.copyWith(
-                      color: c.accent,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(formatMoney(parsed.amount), style: t.displaySmall),
-                const SizedBox(width: 6),
-                Text('UZS', style: t.labelLarge!.copyWith(color: c.muted)),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
