@@ -128,6 +128,11 @@ class AppSpace {
   static const page = 20.0;
   static const gap = 16.0;
   static const section = 28.0;
+
+  /// List bottom padding that clears the system nav bar (Android edge-to-edge).
+  /// Inside the shell Scaffold the inset is already consumed, so it adds 0 there.
+  static double bottom(BuildContext context, {double extra = 0}) =>
+      MediaQuery.paddingOf(context).bottom + section + extra;
 }
 
 const _font = 'Manrope';

@@ -75,11 +75,11 @@ class _AddScreenState extends ConsumerState<AddScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           AppSpace.page,
           8,
           AppSpace.page,
-          AppSpace.section,
+          AppSpace.bottom(context),
         ),
         children: [
           SegmentedButton<AddMode>(
