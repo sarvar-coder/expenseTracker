@@ -8,13 +8,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/db/database.dart';
 import '../data/db/tables.dart' show ExpenseSource;
+import '../data/settings_store.dart';
 
 /// Background two-way sync between Drift (source of truth) and Supabase.
 /// Push dirty rows, pull rows changed since a per-table `synced_at` cursor.
 /// Conflicts: newest `updatedAt` wins (server trigger + [applyCategories]).
 ///
-/// ponytail: only own expenses are pulled; other members' family rows wait
-/// for the Oila tab (step 9), which also needs owner names stored locally.
+/// Only own expenses are pulled; the Oila tab reads other members' rows live.
 class SyncService {
   SyncService(this.db, this.client, this.prefs);
 
@@ -82,6 +82,7 @@ class SyncService {
     if (prev != null && prev != uid) {
       // Another account on this device: its rows are not ours to show or push.
       await db.resetLocal();
+      await SettingsStore(prefs).applyProfile(budget: 0, defaultPrivate: false);
       for (final k in prefs.getKeys().where((k) => k.startsWith('sync.'))) {
         await prefs.remove(k);
       }
@@ -104,6 +105,7 @@ class SyncService {
     }
     await prefs.setString(_familyKey, familyId ?? '');
     await prefs.setBool(_adminKey, member?['role'] == 'admin');
+    await _syncProfile(uid);
 
     // Categories first: merge local ones into same-name server ones before
     // pushing (a fresh device seeds defaults that already exist remotely).
@@ -118,6 +120,40 @@ class SyncService {
     await _push('expenses',
         await (db.select(db.expenses)..where((e) => e.dirty)).get(), _expenseJson);
     await _pull('expenses', (rows) => applyExpenses(db, rows));
+  }
+
+  /// Budget + private default: push a local edit, otherwise take the server's
+  /// (another device may have changed them).
+  /// ponytail: a pulled value shows in Settings/Home after the next launch;
+  /// SettingsController doesn't watch prefs.
+  Future<void> _syncProfile(String uid) async {
+    final store = SettingsStore(prefs);
+    final server = store.profileDirty
+        ? null
+        : await client
+            .from('profiles')
+            .select('budget, default_private')
+            .eq('id', uid)
+            .single();
+    final push = shouldPushProfile(
+      dirty: store.profileDirty,
+      serverBudget: (server?['budget'] as num?)?.toInt(),
+      localBudget: store.load().monthlyBudget,
+    );
+    if (push) {
+      final s = store.load();
+      await client.from('profiles').update({
+        'budget': s.monthlyBudget,
+        'default_private': s.defaultPrivate,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', uid);
+      await store.markProfileClean();
+    } else {
+      await store.applyProfile(
+        budget: (server!['budget'] as num).toInt(),
+        defaultPrivate: server['default_private'] as bool,
+      );
+    }
   }
 
   Future<void> _push<D extends DataClass>(
@@ -189,6 +225,17 @@ class SyncService {
       .watchSingle()
       .map((r) => r.read<int>('n'));
 }
+
+/// Push this device's budget/private default, or take the server's? Push
+/// when edited here, or when the server has no budget but this device does
+/// (set before sign-in or before profiles synced; 0 = unset) so it isn't wiped.
+@visibleForTesting
+bool shouldPushProfile({
+  required bool dirty,
+  required int? serverBudget,
+  required int localBudget,
+}) =>
+    dirty || (serverBudget == 0 && localBudget > 0);
 
 /// Outside a family, or as its admin, the user may create categories. As of
 /// the last sync; true before the first one.

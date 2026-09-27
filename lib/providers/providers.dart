@@ -44,6 +44,21 @@ final familyServiceProvider = Provider<FamilyService>(
   (ref) => FamilyService(Supabase.instance.client, ref.watch(syncProvider)),
 );
 
+/// Oila tab: the user's family for this month, null when not in one.
+/// Invalidate to refetch (tab opened, pull to refresh, after an action).
+final familyOverviewProvider = FutureProvider<FamilyOverview?>((ref) {
+  final now = DateTime.now();
+  return ref.watch(familyServiceProvider).overview(
+        DateTime(now.year, now.month),
+        DateTime(now.year, now.month + 1),
+      );
+});
+
+/// Invites addressed to the signed-in user (shown when not in a family).
+final myInvitesProvider = FutureProvider<List<FamilyInvite>>(
+  (ref) => ref.watch(familyServiceProvider).myInvites(),
+);
+
 final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(ref.watch(sharedPrefsProvider)));
 
 /// Reactive settings (budget / locale). Home watches this so budget
