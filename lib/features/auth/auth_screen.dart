@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -186,17 +187,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 const SizedBox(height: 12),
               ],
               if (needsCode) ...[
-                TextFormField(
-                  controller: _code,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  decoration:
-                      const InputDecoration(labelText: '6 xonali kod'),
-                  validator: (v) => RegExp(r'^\d{6}$').hasMatch(v?.trim() ?? '')
-                      ? null
-                      : '6 ta raqam kiriting',
-                ),
+                _CodeBoxes(controller: _code),
                 const SizedBox(height: 12),
               ],
               if (needsPassword) ...[
@@ -273,6 +264,75 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Six digit boxes. ponytail: one invisible field on top of painted boxes, so
+/// paste, SMS/email autofill, backspace and the form validator just work.
+class _CodeBoxes extends StatelessWidget {
+  const _CodeBoxes({required this.controller});
+
+  final TextEditingController controller;
+
+  static const _len = 6, _size = 52.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = Theme.of(context).textTheme;
+    return Stack(
+      children: [
+        ValueListenableBuilder(
+          valueListenable: controller,
+          builder: (_, v, _) => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (var i = 0; i < _len; i++)
+                Container(
+                  width: _size,
+                  height: _size,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: c.card,
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                    border: Border.all(
+                      color: i == v.text.length ? c.accent : c.border,
+                      width: i == v.text.length ? 2 : 1,
+                    ),
+                  ),
+                  child: Text(i < v.text.length ? v.text[i] : '',
+                      style: t.headlineSmall),
+                ),
+            ],
+          ),
+        ),
+        TextFormField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(_len),
+          ],
+          autofillHints: const [AutofillHints.oneTimeCode],
+          showCursor: false,
+          enableInteractiveSelection: false,
+          style: const TextStyle(color: Colors.transparent),
+          decoration: const InputDecoration(
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: _size / 2 - 8),
+          ),
+          validator: (v) => RegExp(r'^\d{6}$').hasMatch(v?.trim() ?? '')
+              ? null
+              : '6 ta raqam kiriting',
+        ),
+      ],
     );
   }
 }
