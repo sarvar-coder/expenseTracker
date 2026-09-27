@@ -18,11 +18,13 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
+        sessionEmailProvider.overrideWith((ref) => Stream.value('me@oila.uz')),
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
         expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
       ],
       child: const ExpenseTrackerApp(),
     ));
+    await tester.pump(); // auth gate resolves the session stream
 
     await tester.tap(find.byTooltip('Sozlamalar'));
     await tester.pumpAndSettle();
@@ -49,6 +51,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
+        sessionEmailProvider.overrideWith((ref) => Stream.value('me@oila.uz')),
         allCategoriesProvider.overrideWith(
           (ref) => Stream.value([cat(1, 'Transport'), cat(2, 'Kitob', archived: true)]),
         ),

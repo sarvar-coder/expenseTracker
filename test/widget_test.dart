@@ -15,11 +15,13 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
+        sessionEmailProvider.overrideWith((ref) => Stream.value('me@oila.uz')),
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
         expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
       ],
       child: const ExpenseTrackerApp(),
     ));
+    await tester.pump(); // auth gate resolves the session stream
 
     // Nav labels present; Home tab active by default.
     expect(find.text('Asosiy'), findsWidgets); // nav label

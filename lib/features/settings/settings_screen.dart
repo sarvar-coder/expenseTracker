@@ -98,6 +98,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+          _section('Hisob', [
+            _row(
+              icon: Icons.logout,
+              title: 'Chiqish',
+              subtitle: ref.watch(sessionEmailProvider).value ?? '',
+              onTap: _signOut,
+            ),
+          ]),
           _section('Ma\'lumotlar', [
             _row(
               icon: Icons.ios_share,
@@ -109,6 +117,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _signOut() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hisobdan chiqasizmi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Chiqish'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // Pop back to the gate first; it then shows the sign-in screen.
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    await ref.read(authProvider).signOut();
   }
 
   Future<void> _pickOption({

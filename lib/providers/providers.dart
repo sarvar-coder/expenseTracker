@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/db/database.dart';
 import '../data/settings_store.dart';
@@ -11,6 +12,15 @@ import '../services/speech_service.dart';
 final sharedPrefsProvider = Provider<SharedPreferences>(
   (_) => throw UnimplementedError('sharedPrefsProvider must be overridden in main()'),
 );
+
+final authProvider = Provider<GoTrueClient>((_) => Supabase.instance.client.auth);
+
+/// Signed-in user's email, null when signed out. Drives [AuthGate].
+final sessionEmailProvider = StreamProvider<String?>((ref) async* {
+  final auth = ref.watch(authProvider);
+  yield auth.currentUser?.email;
+  yield* auth.onAuthStateChange.map((s) => s.session?.user.email);
+});
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();

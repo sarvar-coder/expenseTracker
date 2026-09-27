@@ -68,6 +68,7 @@ void main() {
         await tester.pumpWidget(ProviderScope(
           overrides: [
             sharedPrefsProvider.overrideWithValue(prefs),
+        sessionEmailProvider.overrideWith((ref) => Stream.value('me@oila.uz')),
             categoriesProvider.overrideWith((ref) => Stream.value(cats)),
             allCategoriesProvider.overrideWith((ref) => Stream.value(cats)),
             expensesProvider.overrideWith((ref) => Stream.value(expenses)),
