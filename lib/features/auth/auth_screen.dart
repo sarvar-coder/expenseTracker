@@ -41,6 +41,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _password = TextEditingController();
   var _mode = _Mode.signIn;
   var _busy = false;
+  var _obscure = true;
   String? _error;
 
   FirebaseAuth get _auth => ref.read(authProvider);
@@ -56,6 +57,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   void _go(_Mode m) => setState(() {
         _mode = m;
         _error = null;
+        _obscure = true;
         _password.clear();
       });
 
@@ -171,13 +173,24 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               if (needsPassword) ...[
                 TextFormField(
                   controller: _password,
-                  obscureText: true,
+                  obscureText: _obscure,
                   autofillHints: [
                     mode == _Mode.signIn
                         ? AutofillHints.password
                         : AutofillHints.newPassword
                   ],
-                  decoration: const InputDecoration(labelText: 'Parol'),
+                  decoration: InputDecoration(
+                    labelText: 'Parol',
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      tooltip: _obscure
+                          ? 'Parolni ko\'rsatish'
+                          : 'Parolni yashirish',
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
                   validator: (v) => (v ?? '').length >= 6
                       ? null
                       : 'Kamida 6 belgi',
