@@ -205,8 +205,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
     if (result == null) return;
-    final amount = parseAmount(result);
-    if (amount == null || amount <= 0) {
+    // 0 or empty clears the budget ("Belgilanmagan").
+    final amount = result.isEmpty ? 0 : parseAmount(result);
+    if (amount == null) {
       _toast('To\'g\'ri summa kiriting');
       return;
     }
