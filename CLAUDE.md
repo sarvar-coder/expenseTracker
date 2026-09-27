@@ -1,7 +1,7 @@
 # CLAUDE.md — Expense Tracker
 
 Personal + family expense tracker (Flutter, mobile). Offline-first: Drift is the
-local source of truth, synced in the background to Supabase. Sign-in required.
+local source of truth, synced in the background to Firebase (Firestore). Sign-in required.
 
 ## Core idea
 
@@ -16,14 +16,18 @@ search, category filters, and the **Oila** (family) tab.
 
 ## Locked decisions
 
-- **Backend**: Supabase project `xgxygopxnchdobuooyzw` (Postgres + RLS). Chosen
-  over Firebase: relational data, family rules fit RLS, SQL aggregates.
-- **Auth**: email + password, email confirmation ON with **6-digit codes** (no
-  deep links) for confirm and reset. Whole app is locked behind the session.
+- **Backend**: Firebase project `xarajatlar-app` (Blaze plan), Firestore and
+  Cloud Functions in `europe-west3`. Migrated from Supabase (2026-09-27, fresh
+  start, no data export). Client access rules in `firebase/firestore.rules`;
+  anything touching other members' docs is a Cloud Function (Admin SDK).
+- **Auth**: Firebase email + password. Confirm and reset via Firebase's emailed
+  **links** (no codes). App is locked until signed in **and** email verified.
   On first sign-in the owner's local data is uploaded.
-- **Sync**: each member writes only their own rows; newest `updatedAt` wins.
-  Push dirty rows, pull by `updated_at`; runs on start, after writes, and
-  every 30s after a failure. Multi-device per user allowed.
+- **Sync**: each member writes only their own docs; newest `updatedAt` wins
+  (rules refuse stale writes). Push dirty rows in batches, pull by the
+  server-stamped `syncedAt`; runs on start, after writes, and every 30s after
+  a failure. Firestore's offline cache is off (Drift is the offline store).
+  Multi-device per user allowed.
 - **Family**: one family per user, one admin. Admin invites by email (in-app
   Accept/Decline, no email sent), removes members, approves/rejects category
   requests, renames/archives categories, transfers admin, deletes the family.
@@ -37,10 +41,11 @@ search, category filters, and the **Oila** (family) tab.
 - **Budget**: personal budget per member. Family contribution =
   `budget − own private spending this month` (may go negative; no budget → 0).
   Family budget = sum of contributions, computed server-side
-  (`family_summary` RPC) so raw budgets and private amounts never leave.
-- **AI parsing**: Google Gemini free tier, model `gemini-2.0-flash`, called from
-  the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
-  users only). Free-tier prompts may be used by Google for training (note in Settings).
+  (`familySummary` function) so raw budgets and private amounts never leave.
+- **AI parsing**: Firebase AI Logic (Gemini Developer API, free tier), model
+  `gemini-3.1-flash-lite`, called from the app (`firebase_ai`). No App Check
+  yet: add before public release. Free-tier prompts may be used by Google for
+  training (note in Settings).
 - **Voice**: on-device STT (`speech_to_text`), transcript fed to the AI parser.
 - **Database**: Drift (SQLite) — typed queries for filters/search/insights.
 - **State**: Riverpod (`flutter_riverpod`).
@@ -51,7 +56,7 @@ search, category filters, and the **Oila** (family) tab.
 |---|---|
 | State | `flutter_riverpod` |
 | DB | `drift`, `sqlite3_flutter_libs`, `drift_flutter`, `uuid` (dev: `drift_dev`, `build_runner`) |
-| Backend / auth / AI | `supabase_flutter` (Edge Function `supabase/functions/parse-expense`) |
+| Backend / auth / AI | `firebase_core`, `firebase_auth`, `cloud_firestore`, `cloud_functions`, `firebase_ai` |
 | Voice | `speech_to_text`, `permission_handler` |
 | Prefs | `shared_preferences` |
 | Formatting | `intl` |
@@ -72,25 +77,28 @@ Four tabs (Asosiy, Tarix, Tahlil, Oila) + FAB; Settings opens from the Home gear
 
 ```
 lib/
-  main.dart               // Supabase init + ProviderScope + auth gate
+  main.dart               // Firebase init + ProviderScope + auth gate
+  firebase_options.dart   // flutterfire configure output
   app/theme.dart          // colors, text styles, ThemeData
   app/shell.dart          // bottom nav + FAB + IndexedStack
   data/db/database.dart   // Drift @DriftDatabase + DAOs
   data/db/tables.dart     // Categories, Expenses (Synced mixin: UUID, owner/family, dirty)
   data/settings_store.dart
-  services/ai_parser.dart      // parse-expense fn -> {item, amount, category}
+  services/ai_parser.dart      // Firebase AI Logic -> {item, amount, category}
   services/speech_service.dart
   services/category_matcher.dart  // reuse / create / Boshqa + request
-  services/sync_service.dart      // Drift <-> Supabase
-  services/family_service.dart    // family RPCs
+  services/sync_service.dart      // Drift <-> Firestore
+  services/family_service.dart    // family Cloud Functions + invites
   services/csv_export.dart
   providers/providers.dart
   features/home|add|activity|insights|settings|auth|family/
   features/common/        // shared widgets
-supabase/
-  migrations/             // schema, RLS, RPCs
-  functions/parse-expense/
-  tests/family_rls_check.sql
+firebase/
+  firestore.rules         // client access (own docs; family via Functions)
+  firestore.indexes.json
+functions/src/            // TypeScript v2 callables + onExpenseWritten trigger
+  index.ts                // Firestore I/O, transactions, HttpsError codes
+  logic.ts                // pure family rules (join/freeze/summary), `npm test`
 ```
 
 ## Data model
@@ -104,7 +112,9 @@ deletedAt (soft delete), dirty (local only).
   (awaiting admin approval), frozen (ex-member history), createdAt.
 - **Settings** (local prefs): monthlyBudget + defaultPrivate (synced to
   `profiles`), sttLocale, lastAddMode.
-- **Server only**: families, family_members(role), invites(email), category_requests.
+- **Server only** (Firestore): profiles, families, members (doc id = uid,
+  role), invites (id `familyId_email`), categoryRequests. Synced docs carry a
+  server-stamped `syncedAt` for the pull cursor.
 
 ## Conventions
 
@@ -112,7 +122,9 @@ deletedAt (soft delete), dirty (local only).
 - Category match is name-normalized (trim+lowercase) → reuse or create; no dupes.
 - AI returns strict JSON; validate, fall back to Manual on failure.
 - Queries filter `deletedAt IS NULL`; writes set `dirty` + `updatedAt`.
-- Family access rules live in RLS / SECURITY DEFINER RPCs, not client code.
+- Family access rules live in `firestore.rules` and Cloud Functions, not client code.
+- No emulators (memory-constrained machine): test Functions logic with
+  `npm --prefix functions test`, rules against the real project.
 - Lazy: no one-impl interfaces, no codegen beyond Drift, reuse `fl_chart`.
 
 ## Commands
@@ -121,8 +133,11 @@ deletedAt (soft delete), dirty (local only).
 - Run: `flutter run`
 - Analyze: `flutter analyze`
 - Test: `flutter test`
+- Functions: `npm --prefix functions test`; deploy `firebase deploy --only functions`
+  (rules: `--only firestore`)
 
 ## Workflow
 
 One branch + PR to `main` per plan step. Plans live in `~/.claude/plans/`
-(family plan: `tell-me-the-advantages-curried-cerf.md`, done).
+(family plan: `tell-me-the-advantages-curried-cerf.md`, done; Firebase
+migration: `firebase-migration.md`, done).

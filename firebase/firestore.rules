@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Port of the Supabase RLS (supabase/migrations/*_family_schema.sql).
+// Port of the former Supabase RLS (see git history before supabase/ was removed).
 // Clients read/write their own rows; anything touching other people's rows
 // (join, leave, approve, summary) goes through Cloud Functions, which use the
 // Admin SDK and bypass these rules. Raw budgets and private amounts never

@@ -1,4 +1,4 @@
-// Pure family rules (ported from supabase/migrations), kept free of Firestore
+// Pure family rules (ported from the former Supabase SQL), kept free of Firestore
 // so `npm test` can check them without an emulator.
 
 export type Cat = { id: string; name: string; iconKey?: string; colorHex?: string; isArchived?: boolean };
