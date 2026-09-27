@@ -1,30 +1,25 @@
 import 'dart:async';
-import 'dart:math' show max;
 
-import 'package:cloud_firestore/cloud_firestore.dart' hide Constant;
-
-import 'package:drift/drift.dart' hide Query;
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/db/database.dart';
 import '../data/db/tables.dart' show ExpenseSource;
 import '../data/settings_store.dart';
 
-/// Background two-way sync between Drift (source of truth) and Firestore.
-/// Push dirty rows, pull docs changed since a per-query `syncedAt` cursor.
-/// Conflicts: newest `updatedAt` wins (firestore.rules + [applyCategories]).
-/// Firestore's own offline cache is off (main.dart): Drift is the cache.
+/// Background two-way sync between Drift (source of truth) and Supabase.
+/// Push dirty rows, pull rows changed since a per-table `synced_at` cursor.
+/// Conflicts: newest `updatedAt` wins (server trigger + [applyCategories]).
 ///
 /// Only own expenses are pulled; the Oila tab reads other members' rows live.
 class SyncService {
-  SyncService(this.db, this.fs, this.auth, this.prefs);
+  SyncService(this.db, this.client, this.prefs);
 
   final AppDatabase db;
-  final FirebaseFirestore fs;
-  final FirebaseAuth auth;
+  final SupabaseClient client;
   final SharedPreferences prefs;
 
   static const _uidKey = 'sync.uid';
@@ -32,20 +27,21 @@ class SyncService {
   static const _adminKey = 'sync.admin';
   static const _retry = Duration(seconds: 30);
   static const _page = 1000;
-  static const _timeout = Duration(seconds: 30);
-  static const _server = GetOptions(source: Source.server);
 
   final _subs = <StreamSubscription<Object?>>[];
   AppLifecycleListener? _lifecycle;
   Timer? _timer;
   Future<void>? _inFlight;
 
-  /// Triggers: sign-in / app start / email verified, local writes, resume.
+  /// Triggers: sign-in / app start (initial session), local writes, resume.
   /// ponytail: "reconnect" = retry every 30s after a failed run; add
   /// connectivity_plus if that lag ever matters.
   void start() {
-    _subs.add(auth.userChanges().listen((u) {
-      if (u?.emailVerified ?? false) schedule();
+    _subs.add(client.auth.onAuthStateChange.listen((s) {
+      if (s.event == AuthChangeEvent.initialSession ||
+          s.event == AuthChangeEvent.signedIn) {
+        schedule();
+      }
     }));
     // distinct: a row the server keeps refusing mustn't re-trigger forever.
     _subs.add(_dirtyCount().distinct().where((n) => n > 0).listen(
@@ -71,17 +67,17 @@ class SyncService {
   Future<void> run() => _inFlight ??= _guarded().whenComplete(() => _inFlight = null);
 
   Future<void> _guarded() async {
-    final user = auth.currentUser;
-    if (user == null || !user.emailVerified) return; // app is locked until then
+    final uid = client.auth.currentUser?.id;
+    if (uid == null) return;
     try {
-      await _sync(user.uid, user.email!.toLowerCase());
+      await _sync(uid);
     } catch (e) {
       debugPrint('sync failed: $e');
       schedule(_retry);
     }
   }
 
-  Future<void> _sync(String uid, String email) async {
+  Future<void> _sync(String uid) async {
     final prev = prefs.getString(_uidKey);
     if (prev != null && prev != uid) {
       // Another account on this device: its rows are not ours to show or push.
@@ -93,146 +89,130 @@ class SyncService {
     }
     await prefs.setString(_uidKey, uid);
 
-    final member = (await fs.doc('members/$uid').get(_server).timeout(_timeout)).data();
-    final familyId = member?['familyId'] as String?;
+    final member = await client
+        .from('family_members')
+        .select('family_id, role')
+        .eq('user_id', uid)
+        .maybeSingle();
+    final familyId = member?['family_id'] as String?;
 
     // Joined, left, or was removed (maybe on another device): re-pull from
     // scratch, the new family's categories are older than our cursor.
     final prevFamily = prefs.getString(_familyKey);
     if (prevFamily != null && prevFamily != (familyId ?? '')) {
-      for (final k in prefs.getKeys().where((k) => k.startsWith('sync.pull.'))) {
-        await prefs.remove(k);
-      }
+      await prefs.remove('sync.categories');
+      await prefs.remove('sync.expenses');
     }
     await prefs.setString(_familyKey, familyId ?? '');
     await prefs.setBool(_adminKey, member?['role'] == 'admin');
-    await _syncProfile(uid, email);
+    await _syncProfile(uid);
 
     // Categories first: merge local ones into same-name server ones before
     // pushing (a fresh device seeds defaults that already exist remotely).
-    // Rules only allow queries they can prove: own and family ones separately.
-    final cats = fs.collection('categories');
-    Future<void> applyCats(List<Map<String, dynamic>> rows) => db.transaction(() async {
+    await _pull('categories', (rows) => db.transaction(() async {
           await applyCategories(db, rows);
           await hideForeignCategories(db, familyId);
-        });
-    await _pull('sync.pull.catOwn', cats.where('ownerId', isEqualTo: uid), applyCats);
-    if (familyId != null) {
-      await _pull('sync.pull.catFamily', cats.where('familyId', isEqualTo: familyId), applyCats);
-    }
+        }));
     await hideForeignCategories(db, familyId); // no rows pulled after leaving
     await adoptLocal(db, uid, familyId, canCreate: canCreateCategories(prefs));
-    await detachForeignExpenses(db, familyId);
     await _push('categories',
-        await (db.select(db.categories)..where((c) => c.dirty)).get(), categoryDoc);
+        await (db.select(db.categories)..where((c) => c.dirty)).get(), _categoryJson);
     await _push('expenses',
-        await (db.select(db.expenses)..where((e) => e.dirty)).get(), expenseDoc);
-    await _pull('sync.pull.expenses',
-        fs.collection('expenses').where('ownerId', isEqualTo: uid), (rows) => applyExpenses(db, rows));
+        await (db.select(db.expenses)..where((e) => e.dirty)).get(), _expenseJson);
+    await _pull('expenses', (rows) => applyExpenses(db, rows));
   }
 
   /// Budget + private default: push a local edit, otherwise take the server's
   /// (another device may have changed them).
   /// ponytail: a pulled value shows in Settings/Home after the next launch;
   /// SettingsController doesn't watch prefs.
-  /// First sync creates the profile doc (name = email's local part).
-  Future<void> _syncProfile(String uid, String email) async {
+  Future<void> _syncProfile(String uid) async {
     final store = SettingsStore(prefs);
-    final ref = fs.doc('profiles/$uid');
-    final server = (await ref.get(_server).timeout(_timeout)).data();
-    final push = server == null ||
-        shouldPushProfile(
-          dirty: store.profileDirty,
-          serverBudget: (server['budget'] as num?)?.toInt(),
-          localBudget: store.load().monthlyBudget,
-        );
+    final server = store.profileDirty
+        ? null
+        : await client
+            .from('profiles')
+            .select('budget, default_private')
+            .eq('id', uid)
+            .single();
+    final push = shouldPushProfile(
+      dirty: store.profileDirty,
+      serverBudget: (server?['budget'] as num?)?.toInt(),
+      localBudget: store.load().monthlyBudget,
+    );
     if (push) {
       final s = store.load();
-      await ref.set({
-        'email': email,
-        'displayName': server?['displayName'] ?? email.split('@').first,
+      await client.from('profiles').update({
         'budget': s.monthlyBudget,
-        'defaultPrivate': s.defaultPrivate,
-        'updatedAt': Timestamp.now(),
-      }).timeout(_timeout);
+        'default_private': s.defaultPrivate,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', uid);
       await store.markProfileClean();
     } else {
       await store.applyProfile(
-        budget: (server['budget'] as num).toInt(),
-        defaultPrivate: server['defaultPrivate'] as bool,
+        budget: (server!['budget'] as num).toInt(),
+        defaultPrivate: server['default_private'] as bool,
       );
     }
   }
 
-  /// Writes [rows] in batches of 500. A batch the rules refuse is retried
-  /// doc by doc so one refused row (stale, frozen) doesn't block the rest; it
-  /// stays dirty. Writes wait while offline, hence the timeout (the write may
-  /// still land later; re-pushing it is harmless).
   Future<void> _push<D extends DataClass>(
-    String collection,
+    String table,
     List<D> rows,
-    Map<String, dynamic> Function(D) toDoc,
+    Map<String, dynamic> Function(D) toJson,
   ) async {
-    final col = fs.collection(collection);
     final pushed = <Map<String, dynamic>>[];
     for (var i = 0; i < rows.length; i += 500) {
-      final chunk = rows.skip(i).take(500).map(toDoc).toList();
+      final chunk = rows.skip(i).take(500).map(toJson).toList();
       try {
-        final batch = fs.batch();
-        for (final d in chunk) {
-          batch.set(col.doc(d['id'] as String), _stamped(d));
-        }
-        await batch.commit().timeout(_timeout);
+        await client.from(table).upsert(chunk);
         pushed.addAll(chunk);
-      } on FirebaseException catch (e) {
-        if (e.code != 'permission-denied') rethrow;
-        for (final d in chunk) {
+      } on PostgrestException {
+        // One refused row (RLS, frozen) mustn't block the rest; it stays dirty.
+        for (final r in chunk) {
           try {
-            await col.doc(d['id'] as String).set(_stamped(d)).timeout(_timeout);
-            pushed.add(d);
-          } on FirebaseException catch (e) {
-            if (e.code != 'permission-denied') rethrow;
-            debugPrint('sync: $collection ${d['id']} refused');
+            await client.from(table).upsert(r);
+            pushed.add(r);
+          } on PostgrestException catch (e) {
+            debugPrint('sync: $table ${r['id']} refused: ${e.message}');
           }
         }
       }
     }
     // Clean only if not edited again while the request was in flight.
-    for (final d in pushed) {
+    for (final r in pushed) {
       await db.customUpdate(
-        'UPDATE $collection SET dirty = 0 WHERE id = ? AND updated_at = ?',
+        'UPDATE $table SET dirty = 0 WHERE id = ? AND updated_at = ?',
         variables: [
-          Variable.withString(d['id'] as String),
-          Variable.withDateTime((d['updatedAt'] as Timestamp).toDate()),
+          Variable.withString(r['id'] as String),
+          Variable.withDateTime(DateTime.parse(r['updated_at'] as String)),
         ],
       );
     }
   }
 
-  static Map<String, dynamic> _stamped(Map<String, dynamic> d) =>
-      {...d, 'syncedAt': FieldValue.serverTimestamp()}..remove('id');
-
-  /// Pages [query] by `syncedAt` (then doc id, so docs stamped by one batch
-  /// aren't split across pages) from the cursor saved under [key].
   Future<void> _pull(
-    String key,
-    Query<Map<String, dynamic>> query,
+    String table,
     Future<void> Function(List<Map<String, dynamic>>) apply,
   ) async {
-    // Overlap a minute, as the SQL version did: cheap insurance against
-    // stamps becoming visible out of order. Re-applying a doc is harmless.
-    final since = max(0, (prefs.getInt(key) ?? 0) - 60000);
-    var page = query
-        .where('syncedAt', isGreaterThan: Timestamp.fromMillisecondsSinceEpoch(since))
-        .orderBy('syncedAt')
-        .limit(_page);
+    final key = 'sync.$table';
+    // Overlap a minute: rows stamped inside a still-open server transaction
+    // commit after later stamps. Re-applying a row is harmless.
+    var since = DateTime.parse(prefs.getString(key) ?? '1970-01-01T00:00:00Z')
+        .subtract(const Duration(minutes: 1))
+        .toIso8601String();
     while (true) {
-      final docs = (await page.get(_server).timeout(_timeout)).docs;
-      if (docs.isEmpty) return;
-      await apply([for (final d in docs) {...d.data(), 'id': d.id}]);
-      await prefs.setInt(key, (docs.last['syncedAt'] as Timestamp).millisecondsSinceEpoch);
-      if (docs.length < _page) return;
-      page = page.startAfterDocument(docs.last);
+      final rows = await client
+          .from(table)
+          .select()
+          .gt('synced_at', since)
+          .order('synced_at')
+          .limit(_page);
+      if (rows.isEmpty) return;
+      await apply(rows);
+      since = rows.last['synced_at'] as String;
+      await prefs.setString(key, since);
+      if (rows.length < _page) return;
     }
   }
 
@@ -316,36 +296,20 @@ Future<void> hideForeignCategories(AppDatabase db, String? familyId) {
       .write(CategoriesCompanion(deletedAt: Value(DateTime.now()), dirty: const Value(false)));
 }
 
-/// An expense queued offline in a family we've since left can't be pushed
-/// there (rules refuse a foreign familyId); it becomes personal instead.
-/// ponytail: one already on the server was frozen there and stays refused
-/// (dirty) until a newer server copy replaces it.
-@visibleForTesting
-Future<void> detachForeignExpenses(AppDatabase db, String? familyId) {
-  final e = db.expenses;
-  return (db.update(e)
-        ..where((x) =>
-            x.dirty &
-            x.frozen.not() &
-            x.familyId.isNotNull() &
-            (familyId == null ? const Constant(true) : x.familyId.equals(familyId).not())))
-      .write(const ExpensesCompanion(familyId: Value(null)));
-}
-
 String _norm(String s) => s.trim().toLowerCase();
 
 @visibleForTesting
 Future<void> applyCategories(AppDatabase db, List<Map<String, dynamic>> rows) =>
     _apply(db, db.categories, rows, (r) => CategoriesCompanion.insert(
           id: Value(r['id'] as String),
-          ownerId: Value(r['ownerId'] as String?),
-          familyId: Value(r['familyId'] as String?),
+          ownerId: Value(r['owner_id'] as String?),
+          familyId: Value(r['family_id'] as String?),
           name: r['name'] as String,
-          iconKey: Value(r['iconKey'] as String),
-          colorHex: r['colorHex'] as String,
-          isArchived: Value(r['isArchived'] as bool),
-          updatedAt: Value(_ts(r['updatedAt'])!),
-          deletedAt: Value(_ts(r['deletedAt'])),
+          iconKey: Value(r['icon_key'] as String),
+          colorHex: r['color_hex'] as String,
+          isArchived: Value(r['is_archived'] as bool),
+          updatedAt: Value(_ts(r['updated_at'])!),
+          deletedAt: Value(_ts(r['deleted_at'])),
           dirty: const Value(false),
         ));
 
@@ -353,20 +317,20 @@ Future<void> applyCategories(AppDatabase db, List<Map<String, dynamic>> rows) =>
 Future<void> applyExpenses(AppDatabase db, List<Map<String, dynamic>> rows) =>
     _apply(db, db.expenses, rows, (r) => ExpensesCompanion.insert(
           id: Value(r['id'] as String),
-          ownerId: Value(r['ownerId'] as String?),
-          familyId: Value(r['familyId'] as String?),
+          ownerId: Value(r['owner_id'] as String?),
+          familyId: Value(r['family_id'] as String?),
           description: r['description'] as String,
           amount: (r['amount'] as num).toInt(),
-          categoryId: r['categoryId'] as String,
+          categoryId: r['category_id'] as String,
           date: _ts(r['date'])!,
           source: ExpenseSource.values.byName(r['source'] as String),
-          rawInput: Value(r['rawInput'] as String?),
-          isPrivate: Value(r['isPrivate'] as bool),
-          pendingCategory: Value(r['pendingCategory'] as String?),
-          frozen: Value(r['frozen'] as bool? ?? false),
-          createdAt: Value(_ts(r['createdAt'])!),
-          updatedAt: Value(_ts(r['updatedAt'])!),
-          deletedAt: Value(_ts(r['deletedAt'])),
+          rawInput: Value(r['raw_input'] as String?),
+          isPrivate: Value(r['is_private'] as bool),
+          pendingCategory: Value(r['pending_category'] as String?),
+          frozen: Value(r['frozen'] as bool),
+          createdAt: Value(_ts(r['created_at'])!),
+          updatedAt: Value(_ts(r['updated_at'])!),
+          deletedAt: Value(_ts(r['deleted_at'])),
           dirty: const Value(false),
         ));
 
@@ -385,44 +349,39 @@ Future<void> _apply<T extends Table, D>(
   };
   final fresh = rows.where((r) {
     final mine = pending[r['id']];
-    return mine == null || _ts(r['updatedAt'])!.isAfter(mine);
+    return mine == null || _ts(r['updated_at'])!.isAfter(mine);
   }).map(fromRow);
   await db.batch((b) => b.insertAllOnConflictUpdate(table, fresh.toList()));
 }
 
-DateTime? _ts(Object? v) => (v as Timestamp?)?.toDate();
-Timestamp? _t(DateTime? d) => d == null ? null : Timestamp.fromDate(d);
+DateTime? _ts(Object? v) => v == null ? null : DateTime.parse(v as String);
+String? _iso(DateTime? d) => d?.toUtc().toIso8601String();
 
-/// Firestore doc for a category; `id` is the doc id, stripped before writing.
-@visibleForTesting
-Map<String, dynamic> categoryDoc(Category c) => {
+Map<String, dynamic> _categoryJson(Category c) => {
       'id': c.id,
-      'ownerId': c.ownerId,
-      'familyId': c.familyId,
+      'owner_id': c.ownerId,
+      'family_id': c.familyId,
       'name': c.name,
-      'nameLower': _norm(c.name),
-      'iconKey': c.iconKey,
-      'colorHex': c.colorHex,
-      'isArchived': c.isArchived,
-      'updatedAt': _t(c.updatedAt),
-      'deletedAt': _t(c.deletedAt),
+      'icon_key': c.iconKey,
+      'color_hex': c.colorHex,
+      'is_archived': c.isArchived,
+      'updated_at': _iso(c.updatedAt),
+      'deleted_at': _iso(c.deletedAt),
     };
 
-@visibleForTesting
-Map<String, dynamic> expenseDoc(Expense e) => {
+Map<String, dynamic> _expenseJson(Expense e) => {
       'id': e.id,
-      'ownerId': e.ownerId,
-      'familyId': e.familyId,
-      'categoryId': e.categoryId,
+      'owner_id': e.ownerId,
+      'family_id': e.familyId,
+      'category_id': e.categoryId,
       'description': e.description,
       'amount': e.amount,
-      'date': _t(e.date),
+      'date': _iso(e.date),
       'source': e.source.name,
-      'rawInput': e.rawInput,
-      'isPrivate': e.isPrivate,
-      'pendingCategory': e.pendingCategory,
-      'frozen': e.frozen,
-      'createdAt': _t(e.createdAt),
-      'updatedAt': _t(e.updatedAt),
-      'deletedAt': _t(e.deletedAt),
+      'raw_input': e.rawInput,
+      'is_private': e.isPrivate,
+      'pending_category': e.pendingCategory,
+      'created_at': _iso(e.createdAt),
+      'updated_at': _iso(e.updatedAt),
+      'deleted_at': _iso(e.deletedAt),
     };

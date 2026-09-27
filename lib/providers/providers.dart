@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseFirestore;
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/db/database.dart';
 import '../data/settings_store.dart';
@@ -16,20 +14,14 @@ final sharedPrefsProvider = Provider<SharedPreferences>(
   (_) => throw UnimplementedError('sharedPrefsProvider must be overridden in main()'),
 );
 
-final authProvider = Provider<FirebaseAuth>((_) => FirebaseAuth.instance);
+final authProvider = Provider<GoTrueClient>((_) => Supabase.instance.client.auth);
 
-/// Signed-in, email-verified user's email; null otherwise. Drives [AuthGate].
-/// userChanges (not authStateChanges) so a verification reload flips it.
-final sessionEmailProvider = StreamProvider<String?>((ref) => ref
-    .watch(authProvider)
-    .userChanges()
-    .map((u) => u != null && u.emailVerified ? u.email : null));
-
-/// Signed in but not verified yet: [AuthScreen] shows "check your email".
-final unverifiedEmailProvider = StreamProvider<String?>((ref) => ref
-    .watch(authProvider)
-    .userChanges()
-    .map((u) => u != null && !u.emailVerified ? u.email : null));
+/// Signed-in user's email, null when signed out. Drives [AuthGate].
+final sessionEmailProvider = StreamProvider<String?>((ref) async* {
+  final auth = ref.watch(authProvider);
+  yield auth.currentUser?.email;
+  yield* auth.onAuthStateChange.map((s) => s.session?.user.email);
+});
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -37,12 +29,11 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   return db;
 });
 
-/// Background Firestore sync; started in main(), read by sign-out to flush.
+/// Background Supabase sync; started in main(), read by sign-out to flush.
 final syncProvider = Provider<SyncService>((ref) {
   final sync = SyncService(
     ref.watch(databaseProvider),
-    FirebaseFirestore.instance,
-    ref.watch(authProvider),
+    Supabase.instance.client,
     ref.watch(sharedPrefsProvider),
   )..start();
   ref.onDispose(sync.dispose);
@@ -50,10 +41,7 @@ final syncProvider = Provider<SyncService>((ref) {
 });
 
 final familyServiceProvider = Provider<FamilyService>(
-  (ref) => FamilyService(
-    FirebaseFunctions.instanceFor(region: 'europe-west3'), // same as the Functions
-    ref.watch(syncProvider),
-  ),
+  (ref) => FamilyService(Supabase.instance.client, ref.watch(syncProvider)),
 );
 
 /// Oila tab: the user's family for this month, null when not in one.
@@ -123,8 +111,9 @@ final expensesProvider = StreamProvider<List<Expense>>(
   (ref) => ref.watch(databaseProvider).watchExpenses(),
 );
 
-/// AI parsing through Firebase AI Logic.
-final aiParserProvider = Provider<AiParser>((_) => AiParser());
+/// AI parsing through the `parse-expense` Edge Function (signed-in only).
+final aiParserProvider =
+    Provider<AiParser>((_) => AiParser(Supabase.instance.client.functions));
 
 /// On-device STT for Speak mode. Overridden in tests with a fake that drives
 /// transcripts without a microphone.
