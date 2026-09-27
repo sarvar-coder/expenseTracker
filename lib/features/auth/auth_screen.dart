@@ -56,6 +56,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   String get _mail => _email.text.trim();
 
   @override
+  void initState() {
+    super.initState();
+    // Reset reveals the password field once the code is complete.
+    _code.addListener(() {
+      if (_mode == _Mode.reset) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();
@@ -162,8 +171,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         ),
     };
     final needsEmail = {_Mode.signIn, _Mode.signUp, _Mode.forgot}.contains(_mode);
-    final needsPassword =
-        {_Mode.signIn, _Mode.signUp, _Mode.reset}.contains(_mode);
+    final needsPassword = {_Mode.signIn, _Mode.signUp}.contains(_mode) ||
+        (_mode == _Mode.reset && _code.text.length == 6);
     final needsCode = {_Mode.verify, _Mode.reset}.contains(_mode);
 
     return Scaffold(
@@ -201,6 +210,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 TextFormField(
                   controller: _password,
                   obscureText: _obscure,
+                  autofocus: _mode == _Mode.reset,
                   autofillHints: [
                     _mode == _Mode.signIn
                         ? AutofillHints.password
