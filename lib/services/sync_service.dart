@@ -23,6 +23,7 @@ class SyncService {
   final SharedPreferences prefs;
 
   static const _uidKey = 'sync.uid';
+  static const _familyKey = 'sync.family'; // '' = not in a family
   static const _retry = Duration(seconds: 30);
   static const _page = 1000;
 
@@ -91,11 +92,25 @@ class SyncService {
         .select('family_id')
         .eq('user_id', uid)
         .maybeSingle();
+    final familyId = member?['family_id'] as String?;
+
+    // Joined, left, or was removed (maybe on another device): re-pull from
+    // scratch, the new family's categories are older than our cursor.
+    final prevFamily = prefs.getString(_familyKey);
+    if (prevFamily != null && prevFamily != (familyId ?? '')) {
+      await prefs.remove('sync.categories');
+      await prefs.remove('sync.expenses');
+    }
+    await prefs.setString(_familyKey, familyId ?? '');
 
     // Categories first: merge local ones into same-name server ones before
     // pushing (a fresh device seeds defaults that already exist remotely).
-    await _pull('categories', (rows) => applyCategories(db, rows));
-    await adoptLocal(db, uid, member?['family_id'] as String?);
+    await _pull('categories', (rows) => db.transaction(() async {
+          await applyCategories(db, rows);
+          await hideForeignCategories(db, familyId);
+        }));
+    await hideForeignCategories(db, familyId); // no rows pulled after leaving
+    await adoptLocal(db, uid, familyId);
     await _push('categories',
         await (db.select(db.categories)..where((c) => c.dirty)).get(), _categoryJson);
     await _push('expenses',
@@ -206,6 +221,22 @@ Future<void> adoptLocal(AppDatabase db, String uid, String? familyId) =>
       await (db.update(db.expenses)..where((e) => e.ownerId.isNull()))
           .write(ExpensesCompanion(ownerId: Value(uid), familyId: Value(familyId)));
     });
+
+/// Categories of a family we're no longer in (left, removed, deleted) stay
+/// visible to the server for our frozen history, but the picker must show the
+/// personal copies the server made instead. Hidden locally, never pushed.
+/// ponytail: frozen history then shows a generic badge; look up categories
+/// including hidden ones if that bothers anyone.
+@visibleForTesting
+Future<void> hideForeignCategories(AppDatabase db, String? familyId) {
+  final c = db.categories;
+  return (db.update(c)
+        ..where((k) =>
+            k.familyId.isNotNull() &
+            (familyId == null ? const Constant(true) : k.familyId.equals(familyId).not()) &
+            k.deletedAt.isNull()))
+      .write(CategoriesCompanion(deletedAt: Value(DateTime.now()), dirty: const Value(false)));
+}
 
 String _norm(String s) => s.trim().toLowerCase();
 

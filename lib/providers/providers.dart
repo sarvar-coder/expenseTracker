@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/db/database.dart';
 import '../data/settings_store.dart';
 import '../services/ai_parser.dart';
+import '../services/family_service.dart';
 import '../services/speech_service.dart';
 import '../services/sync_service.dart';
 
@@ -38,6 +39,10 @@ final syncProvider = Provider<SyncService>((ref) {
   ref.onDispose(sync.dispose);
   return sync;
 });
+
+final familyServiceProvider = Provider<FamilyService>(
+  (ref) => FamilyService(Supabase.instance.client, ref.watch(syncProvider)),
+);
 
 final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(ref.watch(sharedPrefsProvider)));
 

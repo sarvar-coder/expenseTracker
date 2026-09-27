@@ -129,6 +129,7 @@ class EmptyState extends StatelessWidget {
 };
 
 /// One expense row. Tap opens edit; swipe left deletes after confirm.
+/// Frozen rows (shared history of a family you left) are read-only.
 /// Used by Home (today) and Tarix.
 class ExpenseTile extends ConsumerWidget {
   const ExpenseTile({super.key, required this.expense, required this.category});
@@ -142,7 +143,7 @@ class ExpenseTile extends ConsumerWidget {
     final src = sourceMeta(expense.source);
     return Dismissible(
       key: ValueKey(expense.id),
-      direction: DismissDirection.endToStart,
+      direction: expense.frozen ? DismissDirection.none : DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
@@ -159,9 +160,11 @@ class ExpenseTile extends ConsumerWidget {
         }
       },
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => AddScreen(editing: expense)),
-        ),
+        onTap: expense.frozen
+            ? null
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => AddScreen(editing: expense)),
+                ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
@@ -191,6 +194,11 @@ class ExpenseTile extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Icon(src.icon, size: 13, color: c.muted, semanticLabel: src.label),
+                        if (expense.frozen) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.lock_outline, size: 13, color: c.muted,
+                              semanticLabel: 'Faqat o\'qish uchun'),
+                        ],
                       ],
                     ),
                   ],
