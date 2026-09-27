@@ -2,22 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/shell.dart';
 import 'app/theme.dart';
 import 'features/auth/auth_screen.dart';
-import 'firebase_options.dart';
 import 'providers/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  // Client config is public; firestore.rules and the Functions guard the data.
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Drift is the offline store; Firestore's cache would only hide failures.
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: false);
+  // Publishable key is meant for clients; RLS guards the data.
+  await Supabase.initialize(
+    url: 'https://xgxygopxnchdobuooyzw.supabase.co',
+    publishableKey: 'sb_publishable_0-lm1ze8Nz93QSuvegf3kA_jkH1EHn0',
+  );
   final container = ProviderContainer(
     overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
   );
@@ -53,7 +52,7 @@ class ExpenseTrackerApp extends StatelessWidget {
   }
 }
 
-/// The whole app sits behind a signed-in, email-verified Firebase user.
+/// The whole app sits behind a Supabase session.
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
 

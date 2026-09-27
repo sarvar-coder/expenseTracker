@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,14 +25,14 @@ void main() {
 
   Map<String, dynamic> serverCategory(String id, String name) => {
         'id': id,
-        'ownerId': 'u1',
-        'familyId': null,
+        'owner_id': 'u1',
+        'family_id': null,
         'name': name,
-        'iconKey': 'category',
-        'colorHex': 'E08A5B',
-        'isArchived': false,
-        'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 9)),
-        'deletedAt': null,
+        'icon_key': 'category',
+        'color_hex': 'E08A5B',
+        'is_archived': false,
+        'updated_at': '2026-09-01T00:00:00Z',
+        'deleted_at': null,
       };
 
   test('adoptLocal merges seeded twins into server categories and claims the rest',
@@ -64,7 +62,7 @@ void main() {
     final gym = await db.insertCategory(CategoriesCompanion.insert(name: 'Gym', colorHex: 'AAAAAA'));
     final expenseId = await addExpense(gym);
     await applyCategories(db, [
-      {...serverCategory('srv-boshqa', 'Boshqa'), 'ownerId': null, 'familyId': 'fam'},
+      {...serverCategory('srv-boshqa', 'Boshqa'), 'owner_id': null, 'family_id': 'fam'},
     ]);
 
     await adoptLocal(db, 'u1', 'fam', canCreate: false);
@@ -82,20 +80,20 @@ void main() {
     final local = (await db.getExpenses()).single;
     Map<String, dynamic> row(String desc, DateTime updated) => {
           'id': id,
-          'ownerId': 'u1',
-          'familyId': null,
-          'categoryId': cat.id,
+          'owner_id': 'u1',
+          'family_id': null,
+          'category_id': cat.id,
           'description': desc,
           'amount': 7000,
-          'date': Timestamp.fromDate(DateTime.utc(2026, 9)),
+          'date': '2026-09-01T00:00:00Z',
           'source': 'manual',
-          'rawInput': null,
-          'isPrivate': false,
-          'pendingCategory': null,
+          'raw_input': null,
+          'is_private': false,
+          'pending_category': null,
           'frozen': false,
-          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 9)),
-          'updatedAt': Timestamp.fromDate(updated),
-          'deletedAt': null,
+          'created_at': '2026-09-01T00:00:00Z',
+          'updated_at': updated.toUtc().toIso8601String(),
+          'deleted_at': null,
         };
 
     await applyExpenses(db, [row('stale', local.updatedAt.subtract(const Duration(hours: 1)))]);
@@ -104,37 +102,6 @@ void main() {
     await applyExpenses(db, [row('server', local.updatedAt.add(const Duration(hours: 1)))]);
     final e = (await db.getExpenses()).single;
     expect((e.description, e.amount, e.dirty), ('server', 7000, false));
-  });
-
-  test('expenseDoc round-trips through applyExpenses; nameLower is normalized', () async {
-    final cat = (await db.getCategories()).first;
-    await addExpense(cat.id);
-    final local = (await db.getExpenses()).single;
-    final doc = expenseDoc(local);
-    expect(doc['date'], isA<Timestamp>());
-    expect(categoryDoc(cat.copyWith(name: ' Food & Dining '))['nameLower'], 'food & dining');
-
-    await db.resetLocal();
-    await applyExpenses(db, [{...doc, 'description': 'Qaytdi'}]);
-    final back = (await db.getExpenses()).single;
-    expect((back.id, back.date, back.amount, back.description, back.dirty),
-        (local.id, local.date, local.amount, 'Qaytdi', false));
-  });
-
-  test('detachForeignExpenses: unpushed rows of a left family become personal', () async {
-    final cat = (await db.getCategories()).first;
-    final old = await addExpense(cat.id);
-    final cur = await addExpense(cat.id);
-    final frozen = await addExpense(cat.id);
-    await (db.update(db.expenses)..where((e) => e.id.equals(old))).write(const ExpensesCompanion(familyId: Value('old')));
-    await (db.update(db.expenses)..where((e) => e.id.equals(cur))).write(const ExpensesCompanion(familyId: Value('new')));
-    await (db.update(db.expenses)..where((e) => e.id.equals(frozen)))
-        .write(const ExpensesCompanion(familyId: Value('old'), frozen: Value(true)));
-
-    await detachForeignExpenses(db, 'new');
-
-    final fam = {for (final e in await db.getExpenses()) e.id: e.familyId};
-    expect((fam[old], fam[cur], fam[frozen]), (null, 'new', 'old'));
   });
 
   test('resetLocal drops rows and reseeds defaults', () async {
