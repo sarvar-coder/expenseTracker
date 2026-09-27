@@ -32,6 +32,10 @@ void main() {
     expect(find.text('Ovoz tili'), findsOneWidget);
     expect(find.text('Voice language'), findsNothing);
     expect(find.byType(BackButton), findsOneWidget);
+
+    await tester.tap(find.text('Yangi xarajatlar maxfiy'));
+    await tester.pump();
+    expect(prefs.getBool('defaultPrivate'), isTrue);
   });
 
   testWidgets('Turkumlar splits active and archived', (tester) async {

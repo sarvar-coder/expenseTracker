@@ -61,6 +61,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 MaterialPageRoute(builder: (_) => const _CategoriesScreen()),
               ),
             ),
+            _row(
+              icon: Icons.visibility_off_outlined,
+              title: 'Yangi xarajatlar maxfiy',
+              subtitle: 'Oila maxfiy xarajatlarni ko\'rmaydi',
+              onTap: () => ctrl.setDefaultPrivate(!s.defaultPrivate),
+              trailing: Switch(
+                value: s.defaultPrivate,
+                onChanged: ctrl.setDefaultPrivate,
+              ),
+            ),
           ]),
           _section('AI va ovoz', [
             _row(
@@ -240,9 +250,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Widget? trailing,
   }) {
     final c = context.colors;
-    return ListTile(
+    // Merged so a trailing Switch reads as one labelled toggle.
+    return MergeSemantics(child: ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       leading: Container(
@@ -256,8 +268,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
       title: Text(title),
       subtitle: Text(subtitle),
-      trailing: Icon(Icons.chevron_right, color: c.muted),
-    );
+      trailing: trailing ?? Icon(Icons.chevron_right, color: c.muted),
+    ));
   }
 }
 

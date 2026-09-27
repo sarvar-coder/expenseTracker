@@ -27,7 +27,12 @@ class AddScreen extends ConsumerStatefulWidget {
   ConsumerState<AddScreen> createState() => _AddScreenState();
 }
 
-typedef _Prefill = ({String amount, String desc, String? categoryId});
+typedef _Prefill = ({
+  String amount,
+  String desc,
+  String? categoryId,
+  bool private,
+});
 
 class _AddScreenState extends ConsumerState<AddScreen> {
   // Editing forces Manual; otherwise reopen in the last picked mode.
@@ -41,13 +46,24 @@ class _AddScreenState extends ConsumerState<AddScreen> {
           amount: widget.editing!.amount.toString(),
           desc: widget.editing!.description,
           categoryId: widget.editing!.categoryId,
+          private: widget.editing!.isPrivate,
         );
 
   /// Drop into the Manual form with fields prefilled (from Type "Edit" or a
   /// parse failure). A fresh ValueKey rebuilds the form state with the values.
-  void _toManual({String amount = '', String desc = '', String? categoryId}) {
+  void _toManual({
+    String amount = '',
+    String desc = '',
+    String? categoryId,
+    bool? private,
+  }) {
     setState(() {
-      _prefill = (amount: amount, desc: desc, categoryId: categoryId);
+      _prefill = (
+        amount: amount,
+        desc: desc,
+        categoryId: categoryId,
+        private: private ?? ref.read(settingsProvider).defaultPrivate,
+      );
       _mode = AddMode.manual;
     });
   }
@@ -90,6 +106,8 @@ class _AddScreenState extends ConsumerState<AddScreen> {
               initialAmount: _prefill?.amount ?? '',
               initialDescription: _prefill?.desc ?? '',
               initialCategoryId: _prefill?.categoryId,
+              initialPrivate:
+                  _prefill?.private ?? ref.read(settingsProvider).defaultPrivate,
             ),
             AddMode.type => _TypeForm(onEdit: _toManual),
             AddMode.speak => _TypeForm(onEdit: _toManual, voice: true),
@@ -107,12 +125,14 @@ class _ManualForm extends ConsumerStatefulWidget {
     this.initialAmount = '',
     this.initialDescription = '',
     this.initialCategoryId,
+    this.initialPrivate = false,
   });
 
   final Expense? editing;
   final String initialAmount;
   final String initialDescription;
   final String? initialCategoryId;
+  final bool initialPrivate;
 
   @override
   ConsumerState<_ManualForm> createState() => _ManualFormState();
@@ -123,6 +143,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
   late final _desc = TextEditingController(text: widget.initialDescription);
   late String? _categoryId = widget.initialCategoryId;
   late DateTime _date = widget.editing?.date ?? DateTime.now();
+  late bool _private = widget.initialPrivate;
   bool _saving = false;
 
   @override
@@ -157,6 +178,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           amount: amount,
           categoryId: _categoryId!,
           date: _date,
+          isPrivate: _private,
           // picked another category: no longer waiting for the requested one
           pendingCategory: _categoryId == editing.categoryId
               ? Value(editing.pendingCategory)
@@ -172,6 +194,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           date: _date,
           source: ExpenseSource.manual,
           rawInput: const Value(null),
+          isPrivate: Value(_private),
         ),
       );
     }
@@ -297,6 +320,11 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
             ),
           ],
         ),
+        const SizedBox(height: AppSpace.gap),
+        _PrivateSwitch(
+          value: _private,
+          onChanged: (v) => setState(() => _private = v),
+        ),
         const SizedBox(height: AppSpace.section),
         FilledButton.icon(
           onPressed: _saving ? null : _save,
@@ -331,7 +359,13 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
 /// [onEdit] drops the (optionally prefilled) values into the Manual form.
 class _TypeForm extends ConsumerStatefulWidget {
   const _TypeForm({required this.onEdit, this.voice = false});
-  final void Function({String amount, String desc, String? categoryId}) onEdit;
+  final void Function({
+    String amount,
+    String desc,
+    String? categoryId,
+    bool? private,
+  })
+  onEdit;
   final bool voice;
 
   @override
@@ -345,6 +379,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
   ParsedExpense? _parsed;
   String? _parsedCategoryId;
   String? _parsedPending; // requested category name while it sits in Boshqa
+  late bool _private = ref.read(settingsProvider).defaultPrivate;
 
   @override
   void dispose() {
@@ -420,6 +455,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
             source: widget.voice ? ExpenseSource.voice : ExpenseSource.typed,
             rawInput: Value(_input.text.trim()),
             pendingCategory: Value(_parsedPending),
+            isPrivate: Value(_private),
           ),
         );
     if (!mounted) return;
@@ -505,6 +541,11 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
             pending: _parsedPending,
           ),
           const SizedBox(height: AppSpace.gap),
+          _PrivateSwitch(
+            value: _private,
+            onChanged: (v) => setState(() => _private = v),
+          ),
+          const SizedBox(height: AppSpace.gap),
           Row(
             children: [
               Expanded(
@@ -515,6 +556,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
                           amount: p.amount.toString(),
                           desc: p.item,
                           categoryId: _parsedCategoryId,
+                          private: _private,
                         ),
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Tahrirlash'),
@@ -612,4 +654,22 @@ class _ParsedCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Per-expense "hide from family" toggle; starts from the Settings default.
+class _PrivateSwitch extends StatelessWidget {
+  const _PrivateSwitch({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: SwitchListTile(
+      value: value,
+      onChanged: onChanged,
+      secondary: const Icon(Icons.visibility_off_outlined),
+      title: const Text('Maxfiy'),
+      subtitle: const Text('Oila bu xarajatni ko\'rmaydi'),
+    ),
+  );
 }

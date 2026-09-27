@@ -66,6 +66,11 @@ class SettingsController extends Notifier<Settings> {
     await _store.setLocale(v);
     state = state.copyWith(sttLocale: v);
   }
+
+  Future<void> setDefaultPrivate(bool v) async {
+    await _store.setDefaultPrivate(v);
+    state = state.copyWith(defaultPrivate: v);
+  }
 }
 
 /// Selected bottom-nav tab, so screens (e.g. Home "See all") can switch tabs.

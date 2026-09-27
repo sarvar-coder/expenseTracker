@@ -194,6 +194,11 @@ class ExpenseTile extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Icon(src.icon, size: 13, color: c.muted, semanticLabel: src.label),
+                        if (expense.isPrivate) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.visibility_off_outlined, size: 13,
+                              color: c.muted, semanticLabel: 'Maxfiy'),
+                        ],
                         if (expense.frozen) ...[
                           const SizedBox(width: 4),
                           Icon(Icons.lock_outline, size: 13, color: c.muted,
