@@ -2,7 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionsClient;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:expense_tracker/data/db/database.dart';
@@ -13,7 +13,7 @@ import 'package:expense_tracker/services/ai_parser.dart';
 
 /// Fake parser: no network, returns a canned result. `parse` is the seam.
 class _FakeParser extends AiParser {
-  _FakeParser(this.result) : super(GenerativeModel(model: 'x', apiKey: 'x'));
+  _FakeParser(this.result) : super(FunctionsClient('http://localhost', {}));
   final ParsedExpense? result;
   @override
   Future<ParsedExpense?> parse(String rawInput) async => result;
@@ -36,8 +36,7 @@ void main() {
         // Closing streams: no drift stream timers pending at teardown.
         categoriesProvider.overrideWith((ref) => Stream.value(const <Category>[])),
         expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
-        aiParserProvider.overrideWithValue(() async =>
-            _FakeParser(const ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining'))),
+        aiParserProvider.overrideWithValue(_FakeParser(const ParsedExpense(item: 'Coffee', amount: 45000, category: 'Food & dining'))),
       ],
       child: const MaterialApp(home: AddScreen()),
     ));

@@ -15,8 +15,8 @@ search, category filters.
 
 ## Locked decisions
 
-- **AI parsing**: Google Gemini free tier — `google_generative_ai`, model
-  `gemini-2.0-flash`. Free. Free-tier prompts may be used by Google for training
+- **AI parsing**: Google Gemini free tier, model `gemini-2.0-flash`, called from
+  the Supabase Edge Function `parse-expense` (key is a function secret). Free. Free-tier prompts may be used by Google for training
   (surfaced as a note in Settings).
 - **Voice**: on-device STT (`speech_to_text`), transcript fed to the AI parser.
 - **Database**: Drift (SQLite) — typed queries for filters/search/insights.
@@ -28,9 +28,8 @@ search, category filters.
 |---|---|
 | State | `flutter_riverpod` |
 | DB | `drift`, `sqlite3_flutter_libs`, `drift_flutter` (dev: `drift_dev`, `build_runner`) |
-| AI | `google_generative_ai` |
+| AI | Edge Function `supabase/functions/parse-expense` via `supabase_flutter` |
 | Voice | `speech_to_text`, `permission_handler` |
-| Secure key | `flutter_secure_storage` |
 | Prefs | `shared_preferences` |
 | Formatting | `intl` |
 | Charts | `fl_chart` |
@@ -56,7 +55,7 @@ lib/
   data/db/database.dart   // Drift @DriftDatabase + DAOs
   data/db/tables.dart     // Categories, Expenses
   data/settings_store.dart
-  services/ai_parser.dart      // Gemini -> {item, amount, category}
+  services/ai_parser.dart      // parse-expense fn -> {item, amount, category}
   services/speech_service.dart
   services/category_matcher.dart
   services/csv_export.dart
@@ -71,7 +70,7 @@ lib/
   Seed: Food & dining, Groceries, Shopping, Transport, Bills. AI adds more.
 - **Expense**: id, description, amount (int, UZS), categoryId (FK), date,
   source (`typed`/`voice`/`manual`), rawInput (nullable), createdAt.
-- **Settings**: monthlyBudget, geminiApiKey (secure), sttLocale, lastAddMode.
+- **Settings**: monthlyBudget, sttLocale, lastAddMode.
 
 ## Conventions
 

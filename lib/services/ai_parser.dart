@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionsClient;
 
 import '../features/common/ui_utils.dart' show parseAmount;
 
@@ -34,30 +34,20 @@ ParsedExpense? parseGeminiJson(String text) {
   }
 }
 
-/// Thin Gemini wrapper. The network call is intentionally untested; all logic
-/// worth testing lives in [parseGeminiJson].
+/// Calls the `parse-expense` Edge Function, which holds the Gemini key.
 class AiParser {
-  AiParser(this._model);
-  final GenerativeModel _model;
-
-  factory AiParser.gemini(String apiKey) =>
-      AiParser(GenerativeModel(model: 'gemini-2.0-flash', apiKey: apiKey));
+  AiParser(this._functions);
+  final FunctionsClient _functions;
 
   Future<ParsedExpense?> parse(String rawInput) async {
     // ponytail: null on any failure (network/auth/bad JSON) — callers fall back
-    // to Manual entry. Not unit-tested: would need to mock GenerativeModel.
+    // to Manual entry. Logic worth testing lives in [parseGeminiJson].
     try {
-      final res = await _model.generateContent([Content.text(_prompt(rawInput))]);
-      final text = res.text;
-      return text == null ? null : parseGeminiJson(text);
+      final res = await _functions.invoke('parse-expense', body: {'input': rawInput});
+      final text = (res.data as Map?)?['text'];
+      return text is String ? parseGeminiJson(text) : null;
     } catch (_) {
       return null;
     }
   }
-
-  String _prompt(String rawInput) =>
-      'Extract an expense from the user text. Reply with ONLY strict JSON: '
-      '{"item": string, "amount": integer whole UZS units, "category": string}. '
-      'Pick a concise, reusable category name. No prose, no markdown.\n\n'
-      'User text: "$rawInput"';
 }

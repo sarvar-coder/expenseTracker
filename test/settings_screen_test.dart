@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +11,6 @@ import 'package:expense_tracker/providers/providers.dart';
 void main() {
   testWidgets('Home gear opens Settings: no currency row, Uzbek labels', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
     await tester.pumpWidget(ProviderScope(
@@ -38,7 +36,6 @@ void main() {
 
   testWidgets('Turkumlar splits active and archived', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     Category cat(int id, String name, {bool archived = false}) => Category(
       id: '$id',
