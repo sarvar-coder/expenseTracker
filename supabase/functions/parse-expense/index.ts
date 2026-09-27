@@ -20,15 +20,34 @@ Deno.serve(async (req) => {
   if (role !== "authenticated") return json({ error: "sign_in_required" }, 401);
   if (!KEY) return json({ error: "not_configured" }, 500);
 
-  const input = (await req.json().catch(() => ({})))?.input;
+  const body = await req.json().catch(() => ({}));
+  const input = body?.input;
   if (typeof input !== "string" || !input.trim() || input.length > 500) {
     return json({ error: "bad_input" }, 400);
   }
+  // Device-local date, so "kecha" resolves in the user's timezone.
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(body?.today ?? "")
+    ? body.today
+    : new Date().toISOString().slice(0, 10);
+  const cats = Array.isArray(body?.categories)
+    ? body.categories.filter((c: unknown) => typeof c === "string").slice(0, 50)
+    : [];
 
   const prompt =
-    "Extract an expense from the user text. Reply with ONLY strict JSON: " +
-    '{"item": string, "amount": integer whole UZS units, "category": string}. ' +
-    "Pick a concise, reusable category name. No prose, no markdown.\n\n" +
+    "Extract one expense from the user text (usually Uzbek, maybe Russian or English). " +
+    "Reply with ONLY strict JSON: " +
+    '{"item": string, "amount": integer, "category": string, "date": "YYYY-MM-DD"}. ' +
+    "amount: whole UZS as a plain integer; \"ming\" = x1000, \"mln\"/\"million\" = x1000000, " +
+    "\"so'm\"/\"sum\" = UZS (e.g. \"10 ming so'm\" -> 10000). " +
+    "item: short noun in the user's language. " +
+    "category: pick the best fit from existing categories " +
+    `${JSON.stringify(cats)}, copied exactly; only if none fits, a new concise ` +
+    "reusable name in Uzbek. " +
+    `date: today is ${today}; resolve words like "kecha" (yesterday) or weekday names ` +
+    "to the most recent past date; if no date is mentioned use today. " +
+    'Example: "kecha 10 ming so\'mga qurt oldim" -> ' +
+    '{"item":"qurt","amount":10000,"category":"Oziq-ovqat","date":"<yesterday>"}. ' +
+    "No prose, no markdown.\n\n" +
     `User text: ${JSON.stringify(input.trim())}`;
 
   const res = await fetch(
@@ -42,8 +61,15 @@ Deno.serve(async (req) => {
       }),
     },
   );
-  if (!res.ok) return json({ error: "ai_failed", status: res.status }, 502);
+  if (!res.ok) {
+    console.error("gemini", res.status, await res.text());
+    return json({ error: "ai_failed", status: res.status }, 502);
+  }
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof text === "string" ? json({ text }) : json({ error: "ai_empty" }, 502);
+  if (typeof text !== "string") {
+    console.error("gemini empty", JSON.stringify(data));
+    return json({ error: "ai_empty" }, 502);
+  }
+  return json({ text });
 });
