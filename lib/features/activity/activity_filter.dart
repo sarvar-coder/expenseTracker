@@ -14,7 +14,7 @@ class DaySection {
 List<DaySection> groupExpenses(
   List<Expense> expenses, {
   String query = '',
-  int? categoryId,
+  String? categoryId,
   required DateTime now,
 }) {
   final q = query.trim().toLowerCase();

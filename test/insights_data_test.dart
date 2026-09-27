@@ -5,16 +5,20 @@ import 'package:expense_tracker/data/db/tables.dart';
 import 'package:expense_tracker/features/insights/insights_data.dart';
 
 Category _cat(int id, String name, String color) =>
-    Category(id: id, name: name, iconKey: 'category', colorHex: color, isArchived: false);
+    Category(id: '$id', name: name, iconKey: 'category', colorHex: color, isArchived: false, updatedAt: DateTime(2026), dirty: false);
 
 Expense _exp(int id, int amount, int catId, DateTime date) => Expense(
-      id: id,
+      id: '$id',
       description: 'x',
       amount: amount,
-      categoryId: catId,
+      categoryId: '$catId',
       date: date,
       source: ExpenseSource.manual,
       createdAt: date,
+      updatedAt: date,
+      isPrivate: false,
+      frozen: false,
+      dirty: false,
     );
 
 void main() {

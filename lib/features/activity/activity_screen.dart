@@ -19,7 +19,7 @@ class ActivityScreen extends ConsumerStatefulWidget {
 
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   String _query = '';
-  int? _categoryId;
+  String? _categoryId;
 
   @override
   Widget build(BuildContext context) {
@@ -112,12 +112,12 @@ class _ChipBar extends StatelessWidget {
     required this.onSelect,
   });
   final List<Category> categories;
-  final int? selected;
-  final ValueChanged<int?> onSelect;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(String label, int? id, {Color? dot}) => Padding(
+    Widget chip(String label, String? id, {Color? dot}) => Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         avatar: dot == null

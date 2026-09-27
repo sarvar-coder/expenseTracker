@@ -43,7 +43,7 @@ InsightsData insightsFor(
 ) {
   final (start, end) = periodRange(period, now);
   final catById = {for (final c in categories) c.id: c};
-  final sums = <int, int>{};
+  final sums = <String, int>{};
   var total = 0;
   for (final e in expenses) {
     if (e.date.isBefore(start) || !e.date.isBefore(end)) continue;
