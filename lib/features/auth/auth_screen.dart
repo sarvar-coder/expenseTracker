@@ -19,7 +19,14 @@ String authErrorText(Object e) {
       'Bu email allaqachon ro\'yxatdan o\'tgan',
     'otp_expired' => 'Kod noto\'g\'ri yoki eskirgan',
     'weak_password' => 'Parol juda oddiy (kamida 6 belgi)',
-    'over_email_send_rate_limit' ||
+    // Per-address cooldown says "...only request this after N seconds";
+    // the project-wide hourly cap says "email rate limit exceeded".
+    'over_email_send_rate_limit' => switch (
+          RegExp(r'after (\d+) seconds').firstMatch(e.message)?.group(1)) {
+        final s? => 'Juda tez. $s soniyadan so\'ng qayta urining',
+        null =>
+          'Soatlik email limiti tugadi. 1 soatgacha kuting, so\'ng qayta urining',
+      },
     'over_request_rate_limit' =>
       'Juda ko\'p urinish. Birozdan so\'ng qayta urining',
     _ => e.message,
