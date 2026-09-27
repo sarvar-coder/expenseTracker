@@ -27,6 +27,7 @@ begin
   insert into public.expenses (id, category_id, description, amount, date, source) values
     (eb1, cb1, 'bread', 50, now(), 'manual'), (eb2, cb2, 'gym', 70, now(), 'manual');
   select count(*) into n from public.invites; assert n = 1, 'B sees own invite';
+  select * into r from public.my_invites(); assert r.family_name = 'Fam' and r.invited_by_name = 'Ali', 'invite shows family + inviter';
   perform public.accept_invite(inv, true);
   select category_id into newcat from public.expenses where id = eb1; assert newcat = ca, 'food merged into Food';
   select count(*) into n from public.expenses where id = eb2 and pending_category = 'Gym'; assert n = 1, 'Gym pending in Boshqa';
@@ -62,6 +63,11 @@ begin
   begin perform public.leave_family(); ok := false;
   exception when others then ok := sqlerrm = 'transfer_admin_first'; end;
   assert ok, 'admin must transfer first';
+  perform public.transfer_admin(b);
+  select count(*) into n from public.family_members where role = 'admin' and user_id = b; assert n = 1, 'admin transferred';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  perform public.transfer_admin(a);
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   perform public.remove_member(b);
   select count(*) into n from public.family_expenses_since('epoch') where id = eb1 and frozen; assert n = 1, 'history kept frozen';
 
@@ -71,6 +77,9 @@ begin
   select count(*) into n from public.expenses where id = eb1 and description = 'bread'; assert n = 1, 'frozen row read-only';
   select count(*) into n from public.categories where id = ca; assert n = 1, 'ex-member still sees history category';
   select count(*) into n from public.family_expenses_since('epoch'); assert n = 0, 'ex-member sees no family rows';
+  select count(*) into n from public.categories where owner_id = b and deleted_at is null;
+  assert n = 3, 'ex-member keeps Food, Boshqa, Gym as personal copies, got ' || n;
+  insert into public.categories (id, owner_id, name, color_hex) values (gen_random_uuid(), b, 'Taxi', '5B8DB8');
 
   -- A leaves last: family closes
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
