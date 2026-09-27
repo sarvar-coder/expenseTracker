@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -40,10 +39,7 @@ final syncProvider = Provider<SyncService>((ref) {
   return sync;
 });
 
-final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(
-      ref.watch(sharedPrefsProvider),
-      const FlutterSecureStorage(),
-    ));
+final settingsStoreProvider = Provider<SettingsStore>((ref) => SettingsStore(ref.watch(sharedPrefsProvider)));
 
 /// Reactive settings (budget / locale). Home watches this so budget
 /// changes update the dashboard immediately.
@@ -90,19 +86,9 @@ final expensesProvider = StreamProvider<List<Expense>>(
   (ref) => ref.watch(databaseProvider).watchExpenses(),
 );
 
-/// Builds a Gemini parser from the stored key (or `--dart-define=GEMINI_API_KEY`),
-/// resolving to null when no key is configured. A plain Provider returning an
-/// async factory — avoids `.future` and stays trivially overridable in tests.
-final aiParserProvider = Provider<Future<AiParser?> Function()>((ref) {
-  final store = ref.watch(settingsStoreProvider);
-  return () async {
-    final stored = await store.getApiKey();
-    final key = (stored != null && stored.isNotEmpty)
-        ? stored
-        : const String.fromEnvironment('GEMINI_API_KEY');
-    return key.isEmpty ? null : AiParser.gemini(key);
-  };
-});
+/// AI parsing through the `parse-expense` Edge Function (signed-in only).
+final aiParserProvider =
+    Provider<AiParser>((_) => AiParser(Supabase.instance.client.functions));
 
 /// On-device STT for Speak mode. Overridden in tests with a fake that drives
 /// transcripts without a microphone.

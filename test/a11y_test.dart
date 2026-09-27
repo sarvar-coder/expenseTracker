@@ -1,7 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -61,7 +60,6 @@ void main() {
         tester.platformDispatcher.platformBrightnessTestValue = brightness;
         addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
         SharedPreferences.setMockInitialValues({});
-        FlutterSecureStorage.setMockInitialValues({});
         final prefs = await SharedPreferences.getInstance();
         final handle = tester.ensureSemantics();
 

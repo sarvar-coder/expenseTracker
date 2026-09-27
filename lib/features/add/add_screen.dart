@@ -378,17 +378,7 @@ class _TypeFormState extends ConsumerState<_TypeForm> {
       return;
     }
     setState(() => _busy = true);
-    final parser = await ref.read(aiParserProvider)();
-    if (parser == null) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      _toast(
-        'Sozlamalarda Gemini kalitini qo\'shing — qo\'lda to\'ldirilmoqda',
-      );
-      widget.onEdit(desc: raw);
-      return;
-    }
-    final p = await parser.parse(raw);
+    final p = await ref.read(aiParserProvider).parse(raw);
     if (!mounted) return;
     if (p == null) {
       setState(() => _busy = false);

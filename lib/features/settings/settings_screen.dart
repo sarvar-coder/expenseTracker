@@ -24,17 +24,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool _hasKey = false;
-
-  @override
-  void initState() {
-    super.initState();
-    ref
-        .read(settingsStoreProvider)
-        .hasApiKey()
-        .then((v) => mounted ? setState(() => _hasKey = v) : null);
-  }
-
   void _toast(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
@@ -73,12 +62,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ]),
           _section('AI va ovoz', [
-            _row(
-              icon: Icons.key_outlined,
-              title: 'Gemini API kaliti',
-              subtitle: _hasKey ? 'Kalit o\'rnatilgan' : 'O\'rnatilmagan',
-              onTap: _editApiKey,
-            ),
             _row(
               icon: Icons.mic_none,
               title: 'Ovoz tili',
@@ -217,40 +200,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     await onSave(amount);
-  }
-
-  Future<void> _editApiKey() async {
-    final ctl = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Gemini API kaliti'),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          obscureText: true,
-          decoration: const InputDecoration(hintText: 'Kalitni joylashtiring'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Bekor qilish'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, ctl.text),
-            child: const Text('Saqlash'),
-          ),
-        ],
-      ),
-    );
-    if (result == null) return;
-    final key = result.trim();
-    if (key.isEmpty) {
-      _toast('Kalit bo\'sh');
-      return;
-    }
-    await ref.read(settingsStoreProvider).setApiKey(key);
-    if (mounted) setState(() => _hasKey = true);
   }
 
   Future<void> _export() async {
