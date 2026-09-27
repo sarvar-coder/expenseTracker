@@ -29,12 +29,17 @@ void main() async {
   );
 }
 
-class ExpenseTrackerApp extends StatelessWidget {
+class ExpenseTrackerApp extends ConsumerWidget {
   const ExpenseTrackerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Keyed by sign-in state: flipping it rebuilds the navigator, dropping
+    // every pushed route and dialog instead of swapping the home under them.
+    final signedIn =
+        ref.watch(sessionEmailProvider.select((s) => s.value != null));
     return MaterialApp(
+      key: ValueKey(signedIn),
       title: 'Xarajatlar',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),

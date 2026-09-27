@@ -134,8 +134,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Flush unsynced edits: the next account to sign in here wipes local rows.
     await ref.read(syncProvider).run().timeout(const Duration(seconds: 5), onTimeout: () {});
     if (!mounted) return;
-    // Pop back to the gate first; it then shows the sign-in screen.
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    // The app rebuilds its navigator on sign-out, dropping this route.
     await ref.read(authProvider).signOut();
   }
 
