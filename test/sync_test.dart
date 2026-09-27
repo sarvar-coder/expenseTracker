@@ -56,6 +56,21 @@ void main() {
     expect(cats.every((c) => c.familyId == 'fam' && c.ownerId == null), isTrue);
   });
 
+  test('adoptLocal as a family member turns unknown categories into requests', () async {
+    final gym = await db.insertCategory(CategoriesCompanion.insert(name: 'Gym', colorHex: 'AAAAAA'));
+    final expenseId = await addExpense(gym);
+    await applyCategories(db, [
+      {...serverCategory('srv-boshqa', 'Boshqa'), 'owner_id': null, 'family_id': 'fam'},
+    ]);
+
+    await adoptLocal(db, 'u1', 'fam', canCreate: false);
+
+    final e = (await db.getExpenses()).firstWhere((e) => e.id == expenseId);
+    expect((e.categoryId, e.pendingCategory, e.dirty), ('srv-boshqa', 'Gym', true));
+    final left = (await db.getAllCategories()).map((c) => c.id);
+    expect(left, ['srv-boshqa'], reason: 'member creates no categories');
+  });
+
   test('applyExpenses: newer server row wins, unpushed newer local edit is kept',
       () async {
     final cat = (await db.getCategories()).first;

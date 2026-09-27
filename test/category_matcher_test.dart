@@ -42,4 +42,20 @@ void main() {
     final cats = await db.getAllCategories();
     expect(cats.map((c) => c.colorHex).toSet().length, cats.length);
   });
+
+  test('family member: known name matches, unknown goes to Boshqa as pending', () async {
+    final food = (await db.getCategories()).firstWhere((c) => c.name == 'Food & dining');
+    final boshqa = await db.insertCategory(CategoriesCompanion.insert(name: 'Boshqa', colorHex: '9E9E9E'));
+    final before = (await db.getAllCategories()).length;
+
+    expect(await resolveCategory(db, 'food & dining', canCreate: false), (id: food.id, pending: null));
+    expect(await resolveCategory(db, ' Gym ', canCreate: false), (id: boshqa, pending: 'Gym'));
+    expect((await db.getAllCategories()).length, before, reason: 'nothing created');
+  });
+
+  test('can create (admin / no family): creates as before', () async {
+    final r = await resolveCategory(db, 'Gym', canCreate: true);
+    expect(r.pending, isNull);
+    expect((await db.getCategories()).any((c) => c.id == r.id && c.name == 'Gym'), isTrue);
+  });
 }

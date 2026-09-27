@@ -24,6 +24,7 @@ class SyncService {
 
   static const _uidKey = 'sync.uid';
   static const _familyKey = 'sync.family'; // '' = not in a family
+  static const _adminKey = 'sync.admin';
   static const _retry = Duration(seconds: 30);
   static const _page = 1000;
 
@@ -89,7 +90,7 @@ class SyncService {
 
     final member = await client
         .from('family_members')
-        .select('family_id')
+        .select('family_id, role')
         .eq('user_id', uid)
         .maybeSingle();
     final familyId = member?['family_id'] as String?;
@@ -102,6 +103,7 @@ class SyncService {
       await prefs.remove('sync.expenses');
     }
     await prefs.setString(_familyKey, familyId ?? '');
+    await prefs.setBool(_adminKey, member?['role'] == 'admin');
 
     // Categories first: merge local ones into same-name server ones before
     // pushing (a fresh device seeds defaults that already exist remotely).
@@ -110,7 +112,7 @@ class SyncService {
           await hideForeignCategories(db, familyId);
         }));
     await hideForeignCategories(db, familyId); // no rows pulled after leaving
-    await adoptLocal(db, uid, familyId);
+    await adoptLocal(db, uid, familyId, canCreate: canCreateCategories(prefs));
     await _push('categories',
         await (db.select(db.categories)..where((c) => c.dirty)).get(), _categoryJson);
     await _push('expenses',
@@ -188,10 +190,17 @@ class SyncService {
       .map((r) => r.read<int>('n'));
 }
 
+/// Outside a family, or as its admin, the user may create categories. As of
+/// the last sync; true before the first one.
+bool canCreateCategories(SharedPreferences prefs) =>
+    (prefs.getString(SyncService._familyKey) ?? '').isEmpty ||
+    (prefs.getBool(SyncService._adminKey) ?? false);
+
 /// Gives unowned local rows (made before sign-in or since the last sync) to
-/// [uid]. Unowned categories named like an existing one are merged into it.
+/// [uid]. Unowned categories named like an existing one are merged into it;
+/// if the user can't create categories, the rest become Boshqa + request.
 @visibleForTesting
-Future<void> adoptLocal(AppDatabase db, String uid, String? familyId) =>
+Future<void> adoptLocal(AppDatabase db, String uid, String? familyId, {bool canCreate = true}) =>
     db.transaction(() async {
       final c = db.categories;
       final orphan = c.ownerId.isNull() & c.familyId.isNull();
@@ -201,20 +210,22 @@ Future<void> adoptLocal(AppDatabase db, String uid, String? familyId) =>
             .get())
           _norm(k.name): k.id,
       };
+      final boshqa = canCreate ? null : owned['boshqa'];
       for (final k in await (db.select(c)..where((_) => orphan)).get()) {
         final twin = owned[_norm(k.name)];
-        if (twin == null) continue;
+        if (twin == null && boshqa == null) continue;
         await (db.update(db.expenses)..where((e) => e.categoryId.equals(k.id)))
             .write(ExpensesCompanion(
-          categoryId: Value(twin),
+          categoryId: Value(twin ?? boshqa!),
+          pendingCategory: twin == null ? Value(k.name) : const Value.absent(),
           updatedAt: Value(DateTime.now()),
           dirty: const Value(true),
         ));
         // Never pushed, so a hard delete is safe.
         await (db.delete(c)..where((x) => x.id.equals(k.id))).go();
       }
-      // In a family, new categories are the family's (server lets only the
-      // admin insert those; a member's stays dirty until step 7's requests).
+      // In a family, new categories are the family's (admin only; a member's
+      // were all turned into requests above).
       await (db.update(c)..where((_) => orphan)).write(familyId == null
           ? CategoriesCompanion(ownerId: Value(uid))
           : CategoriesCompanion(familyId: Value(familyId)));

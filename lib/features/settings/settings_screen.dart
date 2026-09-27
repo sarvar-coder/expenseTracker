@@ -7,6 +7,7 @@ import '../../data/db/database.dart';
 import '../../providers/providers.dart';
 import '../../services/category_matcher.dart';
 import '../../services/csv_export.dart';
+import '../../services/sync_service.dart' show canCreateCategories;
 import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 
@@ -270,6 +271,9 @@ class _CategoriesScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
+  /// Family categories are the admin's to manage; a member only views them.
+  late final _canEdit = canCreateCategories(ref.read(sharedPrefsProvider));
+
   Future<void> _rename(Category c) async {
     final ctl = TextEditingController(text: c.name);
     final name = await showDialog<String>(
@@ -332,7 +336,7 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
       appBar: AppBar(
         title: const Text('Turkumlar'),
         actions: [
-          IconButton(
+          if (_canEdit) IconButton(
             tooltip: 'Turkum qo\'shish',
             icon: const Icon(Icons.add),
             onPressed: _add,
@@ -405,7 +409,7 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
       overflow: TextOverflow.ellipsis,
       style: c.isArchived ? TextStyle(color: context.colors.muted) : null,
     ),
-    trailing: Row(
+    trailing: !_canEdit ? null : Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
