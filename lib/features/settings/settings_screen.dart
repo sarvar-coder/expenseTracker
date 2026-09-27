@@ -37,11 +37,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Sozlamalar')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           AppSpace.page,
           0,
           AppSpace.page,
-          AppSpace.section,
+          AppSpace.bottom(context),
         ),
         children: [
           _section('Umumiy', [
@@ -373,11 +373,11 @@ class _CategoriesScreenState extends ConsumerState<_CategoriesScreen> {
               final active = [for (final c in cats) if (!c.isArchived) c];
               final archived = [for (final c in cats) if (c.isArchived) c];
               return ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   AppSpace.page,
                   0,
                   AppSpace.page,
-                  AppSpace.section,
+                  AppSpace.bottom(context),
                 ),
                 children: [
                   if (active.isNotEmpty) _group('Faol', active),

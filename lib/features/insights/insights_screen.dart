@@ -32,11 +32,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     final data = insightsFor(expenses, categories, _period, DateTime.now());
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpace.page,
         8,
         AppSpace.page,
-        AppSpace.section + 72, // clear the floating add button
+        AppSpace.bottom(context, extra: 72), // clear the floating add button
       ),
       children: [
         Text('Tahlil', style: t.headlineMedium),
