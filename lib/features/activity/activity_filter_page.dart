@@ -73,10 +73,8 @@ class _FilterPageState extends State<_FilterPage> {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.7,
       ),
-      builder: (_) => _CategorySheet(
-        categories: widget.categories,
-        selected: _cats,
-      ),
+      builder: (_) =>
+          _CategorySheet(categories: widget.categories, selected: _cats),
     );
     if (picked != null) setState(() => _cats = picked);
   }
@@ -135,9 +133,7 @@ class _FilterPageState extends State<_FilterPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Filtr'),
-        actions: [
-          TextButton(onPressed: _clear, child: const Text('Tozalash')),
-        ],
+        actions: [TextButton(onPressed: _clear, child: const Text('Tozalash'))],
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -310,4 +306,83 @@ class _CategorySheetState extends State<_CategorySheet> {
       ),
     ],
   );
+}
+
+/// Removable chips for each active filter part; tapping × drops just that part.
+class ActiveFilters extends StatelessWidget {
+  const ActiveFilters({
+    super.key,
+    required this.filter,
+    required this.catById,
+    required this.onChanged,
+    this.leading,
+  });
+  final ActivityFilter filter;
+  final Map<String, Category> catById;
+  final ValueChanged<ActivityFilter> onChanged;
+  final Widget? leading; // non-removable chip shown first (Tahlil's period)
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filter;
+    Widget chip(String label, ActivityFilter without, {Color? dot}) =>
+        InputChip(
+          avatar: dot == null
+              ? null
+              : CircleAvatar(radius: 5, backgroundColor: dot),
+          label: Text(label),
+          onDeleted: () => onChanged(without),
+          deleteButtonTooltipMessage: 'Olib tashlash',
+        );
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ?leading,
+        for (final id in f.categoryIds)
+          if (catById[id] case final cat?)
+            chip(
+              cat.name,
+              ActivityFilter(
+                categoryIds: {...f.categoryIds}..remove(id),
+                range: f.range,
+                minAmount: f.minAmount,
+                maxAmount: f.maxAmount,
+                isPrivate: f.isPrivate,
+              ),
+              dot: colorFromHex(cat.colorHex),
+            ),
+        if (f.range case final r?)
+          chip(
+            rangeLabel(r),
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              minAmount: f.minAmount,
+              maxAmount: f.maxAmount,
+              isPrivate: f.isPrivate,
+            ),
+          ),
+        if (f.minAmount != null || f.maxAmount != null)
+          chip(
+            amountLabel(f.minAmount, f.maxAmount),
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              range: f.range,
+              isPrivate: f.isPrivate,
+            ),
+          ),
+        if (f.isPrivate case final p?)
+          chip(
+            p ? 'Shaxsiy' : 'Umumiy',
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              range: f.range,
+              minAmount: f.minAmount,
+              maxAmount: f.maxAmount,
+            ),
+          ),
+      ],
+    );
+  }
 }

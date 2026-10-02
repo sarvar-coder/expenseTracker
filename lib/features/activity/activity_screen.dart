@@ -79,7 +79,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ),
         if (!_filter.isEmpty) ...[
           const SizedBox(height: 12),
-          _ActiveFilters(
+          ActiveFilters(
             filter: _filter,
             catById: catById,
             onChanged: (f) => setState(() => _filter = f),
@@ -124,78 +124,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               ),
             ),
           ],
-      ],
-    );
-  }
-}
-
-/// Removable chips for each active filter part; tapping × drops just that part.
-class _ActiveFilters extends StatelessWidget {
-  const _ActiveFilters({
-    required this.filter,
-    required this.catById,
-    required this.onChanged,
-  });
-  final ActivityFilter filter;
-  final Map<String, Category> catById;
-  final ValueChanged<ActivityFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filter;
-    Widget chip(String label, ActivityFilter without, {Color? dot}) => InputChip(
-      avatar: dot == null ? null : CircleAvatar(radius: 5, backgroundColor: dot),
-      label: Text(label),
-      onDeleted: () => onChanged(without),
-      deleteButtonTooltipMessage: 'Olib tashlash',
-    );
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final id in f.categoryIds)
-          if (catById[id] case final cat?)
-            chip(
-              cat.name,
-              ActivityFilter(
-                categoryIds: {...f.categoryIds}..remove(id),
-                range: f.range,
-                minAmount: f.minAmount,
-                maxAmount: f.maxAmount,
-                isPrivate: f.isPrivate,
-              ),
-              dot: colorFromHex(cat.colorHex),
-            ),
-        if (f.range case final r?)
-          chip(
-            rangeLabel(r),
-            ActivityFilter(
-              categoryIds: f.categoryIds,
-              minAmount: f.minAmount,
-              maxAmount: f.maxAmount,
-              isPrivate: f.isPrivate,
-            ),
-          ),
-        if (f.minAmount != null || f.maxAmount != null)
-          chip(
-            amountLabel(f.minAmount, f.maxAmount),
-            ActivityFilter(
-              categoryIds: f.categoryIds,
-              range: f.range,
-              isPrivate: f.isPrivate,
-            ),
-          ),
-        if (f.isPrivate case final p?)
-          chip(
-            p ? 'Shaxsiy' : 'Umumiy',
-            ActivityFilter(
-              categoryIds: f.categoryIds,
-              range: f.range,
-              minAmount: f.minAmount,
-              maxAmount: f.maxAmount,
-            ),
-          ),
       ],
     );
   }
