@@ -26,6 +26,7 @@ void main() {
           sharedPrefsProvider.overrideWithValue(prefs),
           databaseProvider.overrideWithValue(db),
           categoriesProvider.overrideWith((ref) => Stream.value(cats)),
+          allCategoriesProvider.overrideWith((ref) => Stream.value(cats)),
           expensesProvider.overrideWith((ref) => Stream.value(const <Expense>[])),
         ],
         child: MaterialApp(home: home),
@@ -42,6 +43,14 @@ void main() {
       .widget<SegmentedButton<AddMode>>(find.byType(SegmentedButton<AddMode>))
       .selected
       .contains({'Yozish': AddMode.type, 'Aytish': AddMode.speak, 'Qo\'lda': AddMode.manual}[label]);
+
+  // Turkum field opens a bottom sheet; pick [name] from it.
+  Future<void> pickCategory(WidgetTester tester, String name) async {
+    await tester.tap(find.byIcon(Icons.expand_more));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text(name)));
+    await tester.pumpAndSettle();
+  }
 
   testWidgets('opens in Yozish, then reopens in the last picked mode', (tester) async {
     await tester.pumpWidget(app(const AddScreen()));
@@ -100,7 +109,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, '45000');
     await tester.enterText(find.byType(TextField).last, 'Coffee');
-    await tester.tap(find.widgetWithText(ChoiceChip, cats[1].name));
+    await pickCategory(tester, cats[1].name);
     await tester.tap(find.widgetWithText(ChoiceChip, 'Kecha'));
     await tester.pump();
     expect(tester.getSize(find.widgetWithText(ChoiceChip, 'Kecha')).height,
@@ -132,7 +141,7 @@ void main() {
     Future<Expense> save(String desc) async {
       await tester.enterText(find.byType(TextField).first, '1000');
       await tester.enterText(find.byType(TextField).last, desc);
-      await tester.tap(find.widgetWithText(ChoiceChip, cats[0].name));
+      await pickCategory(tester, cats[0].name);
       await tester.ensureVisible(find.text('Saqlash'));
       await tester.pump();
       await tester.runAsync(() async {
