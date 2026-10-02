@@ -51,11 +51,16 @@ void main() {
             .height,
         greaterThanOrEqualTo(48));
 
-    // Open sheet, pick Transport, apply.
+    // Filter page: Turkum sheet -> Transport -> Tayyor -> Qo'llash.
     await tester.tap(find.byTooltip('Filtr'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilterChip, 'Transport'));
+    await tester.tap(find.text('Turkum'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Transport'));
     await tester.pump();
+    await tester.tap(find.text('Tayyor'));
+    await tester.pumpAndSettle();
+    expect(find.text('Transport'), findsOneWidget); // row subtitle
     await tester.tap(find.text('Qo\'llash'));
     await tester.pumpAndSettle();
     expect(find.text('Coffee'), findsNothing);
@@ -68,6 +73,21 @@ void main() {
     await tester.pump();
     expect(find.text('Coffee'), findsOneWidget);
     expect(find.byType(InputChip), findsNothing);
+
+    // Ko'rinish drop-down: Shaxsiy hides both (shared) rows.
+    await tester.tap(find.byTooltip('Filtr'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ko\'rinish'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(RadioListTile<bool?>, 'Shaxsiy'));
+    await tester.pump();
+    await tester.tap(find.text('Qo\'llash'));
+    await tester.pumpAndSettle();
+    expect(find.text('Coffee'), findsNothing);
+    expect(find.text('Taxi'), findsNothing);
+    expect(find.text('Mos keladigani yo\'q'), findsOneWidget);
+    await tester.tap(find.byTooltip('Olib tashlash'));
+    await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'cof');
     await tester.pump();

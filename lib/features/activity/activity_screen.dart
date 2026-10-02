@@ -7,7 +7,7 @@ import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 import 'activity_filter.dart';
-import 'activity_filter_sheet.dart';
+import 'activity_filter_page.dart';
 
 /// Tarix: search + filter sheet over every expense, grouped by day with
 /// each day's total.
@@ -23,7 +23,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   ActivityFilter _filter = const ActivityFilter();
 
   Future<void> _openFilter(List<Category> categories) async {
-    final f = await showActivityFilterSheet(
+    final f = await openActivityFilter(
       context,
       current: _filter,
       categories: categories,
