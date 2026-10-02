@@ -16,7 +16,8 @@ class InsightsData {
 }
 
 /// Aggregates spend-by-category over the half-open window [start, end),
-/// keeping only expenses that pass [filter]. Pure — directly unit-testable, like `summarize`.
+/// keeping only expenses that pass [filter]. Pure — directly unit-testable,
+/// like `summarize`.
 InsightsData insightsFor(
   List<Expense> expenses,
   List<Category> categories,

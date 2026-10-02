@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
-import '../common/ui_utils.dart';
 import '../activity/activity_filter.dart';
 import '../activity/activity_filter_page.dart';
+import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 import 'insights_data.dart';
 
