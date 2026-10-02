@@ -140,6 +140,8 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
   late final _amount = TextEditingController(text: widget.initialAmount);
   late final _desc = TextEditingController(text: widget.initialDescription);
   late String? _categoryId = widget.initialCategoryId;
+  // Requested (not yet approved) category name; expense sits in Boshqa meanwhile.
+  late String? _pending = widget.editing?.pendingCategory;
   late DateTime _date = widget.editing?.date ?? DateTime.now();
   late bool _private = widget.initialPrivate;
   bool _saving = false;
@@ -177,10 +179,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           categoryId: _categoryId!,
           date: _date,
           isPrivate: _private,
-          // picked another category: no longer waiting for the requested one
-          pendingCategory: _categoryId == editing.categoryId
-              ? Value(editing.pendingCategory)
-              : const Value(null),
+          pendingCategory: Value(_pending),
         ),
       );
     } else {
@@ -192,6 +191,7 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
           date: _date,
           source: ExpenseSource.manual,
           rawInput: const Value(null),
+          pendingCategory: Value(_pending),
           isPrivate: Value(_private),
         ),
       );
@@ -212,6 +212,95 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
     Navigator.of(context).maybePop();
   }
 
+  /// Bottom sheet: pick a category, or add one (admin/solo) / request one
+  /// (family member — expense waits in Boshqa until the admin approves).
+  Future<void> _pickCategory() async {
+    final canCreate = canCreateCategories(ref.read(sharedPrefsProvider));
+    final r = await showModalBottomSheet<({String id, String? pending})>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+      ),
+      builder: (sheet) => Consumer(
+        builder: (sheet, ref, _) {
+          final cats =
+              ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+          return ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.only(bottom: AppSpace.bottom(sheet)),
+            children: [
+              for (final cat in cats)
+                ListTile(
+                  leading: CircleAvatar(
+                    radius: 8,
+                    backgroundColor: colorFromHex(cat.colorHex),
+                  ),
+                  title: Text(cat.name),
+                  trailing: cat.id == _categoryId && _pending == null
+                      ? Icon(Icons.check, color: sheet.colors.accent)
+                      : null,
+                  onTap: () =>
+                      Navigator.pop(sheet, (id: cat.id, pending: null)),
+                ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: Text(canCreate ? 'Yangi turkum' : 'Turkum so\'rash'),
+                subtitle: canCreate
+                    ? null
+                    : const Text('Admin tasdiqlaguncha Boshqa\'da turadi'),
+                onTap: () async {
+                  final name = await _askName(sheet, canCreate);
+                  if (name == null || name.isEmpty || !sheet.mounted) return;
+                  final res = await resolveCategory(
+                    ref.read(databaseProvider),
+                    name,
+                    canCreate: canCreate,
+                  );
+                  if (sheet.mounted) Navigator.pop(sheet, res);
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (r != null) {
+      setState(() {
+        _categoryId = r.id;
+        _pending = r.pending;
+      });
+    }
+  }
+
+  Future<String?> _askName(BuildContext ctx, bool canCreate) {
+    final ctl = TextEditingController();
+    return showDialog<String>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        title: Text(canCreate ? 'Yangi turkum' : 'Turkum so\'rash'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'Turkum nomi'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('Bekor qilish'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(d, ctl.text.trim()),
+            child: Text(canCreate ? 'Qo\'shish' : 'So\'rash'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -226,8 +315,11 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = Theme.of(context).textTheme;
-    final categories =
-        ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
+    // All (archived too): an edited expense may sit in an archived category.
+    final selected = (ref.watch(allCategoriesProvider).asData?.value ??
+            const <Category>[])
+        .where((cat) => cat.id == _categoryId)
+        .firstOrNull;
     final now = DateTime.now();
     final isToday = DateUtils.isSameDay(_date, now);
     final isYesterday =
@@ -272,21 +364,24 @@ class _ManualFormState extends ConsumerState<_ManualForm> {
         ),
         const SizedBox(height: AppSpace.gap),
         _label('Turkum'),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            for (final cat in categories)
-              ChoiceChip(
-                avatar: CircleAvatar(
-                  radius: 5,
-                  backgroundColor: colorFromHex(cat.colorHex),
-                ),
-                label: Text(cat.name),
-                selected: _categoryId == cat.id,
-                onSelected: (_) => setState(() => _categoryId = cat.id),
-              ),
-          ],
+        Card(
+          child: ListTile(
+            onTap: _pickCategory,
+            leading: CircleAvatar(
+              radius: 8,
+              backgroundColor: selected == null
+                  ? c.border
+                  : colorFromHex(selected.colorHex),
+            ),
+            title: Text(
+              selected?.name ?? 'Turkum tanlang',
+              style: selected == null ? TextStyle(color: c.muted) : null,
+            ),
+            subtitle: _pending == null
+                ? null
+                : Text('So\'raldi: $_pending — hozircha Boshqa'),
+            trailing: Icon(Icons.expand_more, color: c.muted),
+          ),
         ),
         const SizedBox(height: AppSpace.gap),
         _label('Sana'),
