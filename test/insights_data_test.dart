@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:expense_tracker/data/db/database.dart';
 import 'package:expense_tracker/data/db/tables.dart';
+import 'package:expense_tracker/features/activity/activity_filter.dart';
 import 'package:expense_tracker/features/insights/insights_data.dart';
 
 Category _cat(int id, String name, String color) => Category(
@@ -67,6 +68,22 @@ void main() {
       DateTime(2026, 7, 20),
     );
     expect(data.total, 15000);
+  });
+
+  test('filter narrows total and slices', () {
+    final data = insightsFor(
+      [
+        _exp(1, 10000, 1, DateTime(2026, 7, 2)),
+        _exp(2, 50000, 1, DateTime(2026, 7, 3)), // over max, out
+        _exp(3, 20000, 2, DateTime(2026, 7, 4)), // other category, out
+      ],
+      cats,
+      DateTime(2026, 7),
+      DateTime(2026, 8),
+      filter: const ActivityFilter(categoryIds: {'1'}, maxAmount: 40000),
+    );
+    expect(data.total, 10000);
+    expect(data.slices.single.category.name, 'Food');
   });
 
   test('empty period yields zero total and no slices', () {

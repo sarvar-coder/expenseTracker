@@ -6,12 +6,15 @@ import '../../app/theme.dart';
 import '../../data/db/database.dart';
 import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
+import '../activity/activity_filter.dart';
+import '../activity/activity_filter_page.dart';
 import '../common/widgets.dart';
 import 'insights_data.dart';
 
 /// Tahlil: category-share donut with a center total + ranked legend, over a
-/// month of the chosen year or a custom day range within it. Filtering and
-/// aggregation live in the pure `insightsFor`.
+/// month of the chosen year, narrowed by the same filter page Tarix uses
+/// (its Sana range replaces the month). Aggregation lives in the pure
+/// `insightsFor`.
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
@@ -23,8 +26,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   static const _firstYear = 2020; // same floor as the add screen's date picker
   final _selectedKey = GlobalKey();
   int _year = DateTime.now().year;
-  int? _month = DateTime.now().month; // null => _custom
-  DateTimeRange? _custom;
+  int _month = DateTime.now().month;
+  ActivityFilter _filter = const ActivityFilter();
 
   @override
   void initState() {
@@ -65,37 +68,26 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     if (year == null || year == _year) return;
     setState(() {
       final last = _lastMonth(year);
-      _month = _month == null || _month! > last ? last : _month;
+      if (_month > last) _month = last;
       _year = year;
-      _custom = null; // custom range belonged to the old year
     });
     _scrollToSelected();
   }
 
-  Future<void> _pickCustom() async {
-    final now = DateTime.now();
-    final last = _year == now.year
-        ? DateTime(now.year, now.month, now.day)
-        : DateTime(_year, 12, 31);
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(_year),
-      lastDate: last,
-      initialDateRange: _custom,
-      helpText: 'Bitta kun uchun kunni ikki marta bosing',
+  Future<void> _openFilter(List<Category> categories) async {
+    final f = await openActivityFilter(
+      context,
+      current: _filter,
+      categories: categories,
     );
-    if (range == null) return;
-    setState(() {
-      _custom = range;
-      _month = null;
-    });
+    if (f == null) return;
+    setState(() => _filter = f);
+    if (f.isEmpty) _scrollToSelected(); // month pills are back
   }
 
-  String get _customLabel {
-    final r = _custom;
-    if (r == null) return 'Maxsus';
-    if (DateUtils.isSameDay(r.start, r.end)) return uzDayMonth(r.start);
-    return '${uzDayMonth(r.start)} – ${uzDayMonth(r.end)}';
+  void _onFilterChanged(ActivityFilter f) {
+    setState(() => _filter = f);
+    if (f.isEmpty) _scrollToSelected();
   }
 
   @override
@@ -106,14 +98,14 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
     final categories =
         ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
-    final custom = _custom;
-    final (start, end) = custom == null
-        ? (DateTime(_year, _month!), DateTime(_year, _month! + 1))
+    final range = _filter.range;
+    final (start, end) = range == null
+        ? (DateTime(_year, _month), DateTime(_year, _month + 1))
         : (
-            custom.start,
-            DateUtils.addDaysToDate(custom.end, 1),
+            range.start,
+            DateUtils.addDaysToDate(range.end, 1),
           ); // end day inclusive
-    final data = insightsFor(expenses, categories, start, end);
+    final data = insightsFor(expenses, categories, start, end, filter: _filter);
 
     Widget pill(String label, bool selected, VoidCallback onTap) => Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -142,29 +134,47 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               icon: const Icon(Icons.expand_more),
               label: Text('$_year'),
             ),
+            IconButton(
+              tooltip: 'Filtr',
+              onPressed: () => _openFilter(categories),
+              icon: Badge(
+                label: Text('${_filter.count}'),
+                isLabelVisible: !_filter.isEmpty,
+                child: const Icon(Icons.tune),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: AppSpace.gap),
-        SizedBox(
-          height: 48,
-          // Not a lazy ListView: the selected chip must be built for
-          // ensureVisible even when it starts off-screen.
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (var m = 1; m <= _lastMonth(_year); m++)
-                  pill(uzMonths[m - 1], _month == m, () {
-                    setState(() {
-                      _month = m;
-                      _custom = null;
-                    });
-                  }),
-                pill(_customLabel, _month == null, _pickCustom),
-              ],
+        if (!_filter.isEmpty)
+          ActiveFilters(
+            filter: _filter,
+            catById: {for (final c in categories) c.id: c},
+            onChanged: _onFilterChanged,
+            // No Sana in the filter: the month still applies, so show it.
+            leading: range == null
+                ? Chip(label: Text('${uzMonths[_month - 1]} $_year'))
+                : null,
+          )
+        else
+          SizedBox(
+            height: 48,
+            // Not a lazy ListView: the selected chip must be built for
+            // ensureVisible even when it starts off-screen.
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var m = 1; m <= _lastMonth(_year); m++)
+                    pill(
+                      uzMonths[m - 1],
+                      _month == m,
+                      () => setState(() => _month = m),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
         const SizedBox(height: AppSpace.gap),
         if (data.slices.isEmpty)
           const EmptyState(

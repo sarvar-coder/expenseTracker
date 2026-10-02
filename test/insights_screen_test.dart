@@ -11,7 +11,7 @@ import 'package:expense_tracker/providers/providers.dart';
 
 void main() {
   testWidgets(
-    'shows total and legend; month pills; year sheet; custom picker',
+    'shows total and legend; month pills; year sheet; filter swaps pills for chips',
     (tester) async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       late List<Category> cats;
@@ -68,11 +68,30 @@ void main() {
       expect(find.text('Bu davrda xarajat yo\'q'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, 'Dekabr'), findsOneWidget);
 
-      // Custom pill opens the range picker.
-      await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Maxsus'));
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Maxsus'));
+      // No Maxsus pill any more — the filter's Sana replaces it.
+      expect(find.widgetWithText(ChoiceChip, 'Maxsus'), findsNothing);
+
+      // Filter by Ko'rinish: month pills give way to chips (period + filter).
+      await tester.tap(find.byTooltip('Filtr'));
       await tester.pumpAndSettle();
-      expect(find.byType(DateRangePickerDialog), findsOneWidget);
+      expect(find.text('Turkum'), findsOneWidget);
+      await tester.tap(find.text('Ko\'rinish'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(RadioListTile<bool?>, 'Umumiy'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Qo\'llash'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(
+        find.text('${uzMonths[now.month - 1]} ${now.year - 1}'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(InputChip, 'Umumiy'), findsOneWidget);
+
+      // Removing the last chip brings the month pills back.
+      await tester.tap(find.byTooltip('Olib tashlash'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ChoiceChip, 'Dekabr'), findsOneWidget);
     },
   );
 
