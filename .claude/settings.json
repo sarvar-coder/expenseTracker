@@ -1,7 +1,6 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
-    "firebase@claude-plugins-official": true,
     "supabase@claude-plugins-official": true,
     "mobile-dev@bolsar": true
   }
