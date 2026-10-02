@@ -1,7 +1,5 @@
 import '../../data/db/database.dart';
 
-enum InsightPeriod { week, month, year }
-
 class Slice {
   final Category category;
   final int amount;
@@ -16,32 +14,14 @@ class InsightsData {
   double fraction(int amount) => total <= 0 ? 0 : amount / total;
 }
 
-/// [start, end) window for [period] containing [now]. Week starts Monday.
-(DateTime, DateTime) periodRange(InsightPeriod period, DateTime now) {
-  final today = DateTime(now.year, now.month, now.day);
-  switch (period) {
-    case InsightPeriod.week:
-      final start = today.subtract(Duration(days: now.weekday - 1));
-      return (start, start.add(const Duration(days: 7)));
-    case InsightPeriod.month:
-      return (
-        DateTime(now.year, now.month, 1),
-        DateTime(now.year, now.month + 1, 1),
-      );
-    case InsightPeriod.year:
-      return (DateTime(now.year, 1, 1), DateTime(now.year + 1, 1, 1));
-  }
-}
-
-/// Aggregates spend-by-category over [period]. Pure — directly unit-testable,
-/// like `summarize`.
+/// Aggregates spend-by-category over the half-open window [start, end).
+/// Pure — directly unit-testable, like `summarize`.
 InsightsData insightsFor(
   List<Expense> expenses,
   List<Category> categories,
-  InsightPeriod period,
-  DateTime now,
+  DateTime start,
+  DateTime end,
 ) {
-  final (start, end) = periodRange(period, now);
   final catById = {for (final c in categories) c.id: c};
   final sums = <String, int>{};
   var total = 0;
