@@ -10,7 +10,8 @@ import '../common/widgets.dart';
 import 'insights_data.dart';
 
 /// Tahlil: category-share donut with a center total + ranked legend, over a
-/// Hafta/Oy/Yil window. Filtering/aggregation lives in the pure `insightsFor`.
+/// month of the chosen year or a custom day range within it. Filtering and
+/// aggregation live in the pure `insightsFor`.
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
@@ -19,7 +20,83 @@ class InsightsScreen extends ConsumerStatefulWidget {
 }
 
 class _InsightsScreenState extends ConsumerState<InsightsScreen> {
-  InsightPeriod _period = InsightPeriod.month;
+  static const _firstYear = 2020; // same floor as the add screen's date picker
+  final _selectedKey = GlobalKey();
+  int _year = DateTime.now().year;
+  int? _month = DateTime.now().month; // null => _custom
+  DateTimeRange? _custom;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollToSelected();
+  }
+
+  /// Last visible month of [year]: future months of the current year are hidden.
+  int _lastMonth(int year) {
+    final now = DateTime.now();
+    return year == now.year ? now.month : 12;
+  }
+
+  void _scrollToSelected() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    final ctx = _selectedKey.currentContext;
+    if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.5);
+  });
+
+  Future<void> _pickYear() async {
+    final now = DateTime.now();
+    final year = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (var y = now.year; y >= _firstYear; y--)
+              ListTile(
+                title: Text('$y'),
+                trailing: y == _year ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, y),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (year == null || year == _year) return;
+    setState(() {
+      final last = _lastMonth(year);
+      _month = _month == null || _month! > last ? last : _month;
+      _year = year;
+      _custom = null; // custom range belonged to the old year
+    });
+    _scrollToSelected();
+  }
+
+  Future<void> _pickCustom() async {
+    final now = DateTime.now();
+    final last = _year == now.year
+        ? DateTime(now.year, now.month, now.day)
+        : DateTime(_year, 12, 31);
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(_year),
+      lastDate: last,
+      initialDateRange: _custom,
+      helpText: 'Bitta kun uchun kunni ikki marta bosing',
+    );
+    if (range == null) return;
+    setState(() {
+      _custom = range;
+      _month = null;
+    });
+  }
+
+  String get _customLabel {
+    final r = _custom;
+    if (r == null) return 'Maxsus';
+    if (DateUtils.isSameDay(r.start, r.end)) return uzDayMonth(r.start);
+    return '${uzDayMonth(r.start)} – ${uzDayMonth(r.end)}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +106,24 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         ref.watch(expensesProvider).asData?.value ?? const <Expense>[];
     final categories =
         ref.watch(categoriesProvider).asData?.value ?? const <Category>[];
-    final data = insightsFor(expenses, categories, _period, DateTime.now());
+    final custom = _custom;
+    final (start, end) = custom == null
+        ? (DateTime(_year, _month!), DateTime(_year, _month! + 1))
+        : (
+            custom.start,
+            DateUtils.addDaysToDate(custom.end, 1),
+          ); // end day inclusive
+    final data = insightsFor(expenses, categories, start, end);
+
+    Widget pill(String label, bool selected, VoidCallback onTap) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        key: selected ? _selectedKey : null,
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+      ),
+    );
 
     return ListView(
       padding: EdgeInsets.fromLTRB(
@@ -39,17 +133,37 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         AppSpace.bottom(context, extra: 72), // clear the floating add button
       ),
       children: [
-        Text('Tahlil', style: t.headlineMedium),
-        const SizedBox(height: AppSpace.gap),
-        SegmentedButton<InsightPeriod>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: InsightPeriod.week, label: Text('Hafta')),
-            ButtonSegment(value: InsightPeriod.month, label: Text('Oy')),
-            ButtonSegment(value: InsightPeriod.year, label: Text('Yil')),
+        Row(
+          children: [
+            Expanded(child: Text('Tahlil', style: t.headlineMedium)),
+            TextButton.icon(
+              onPressed: _pickYear,
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.expand_more),
+              label: Text('$_year'),
+            ),
           ],
-          selected: {_period},
-          onSelectionChanged: (s) => setState(() => _period = s.first),
+        ),
+        const SizedBox(height: AppSpace.gap),
+        SizedBox(
+          height: 48,
+          // Not a lazy ListView: the selected chip must be built for
+          // ensureVisible even when it starts off-screen.
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var m = 1; m <= _lastMonth(_year); m++)
+                  pill(uzMonths[m - 1], _month == m, () {
+                    setState(() {
+                      _month = m;
+                      _custom = null;
+                    });
+                  }),
+                pill(_customLabel, _month == null, _pickCustom),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: AppSpace.gap),
         if (data.slices.isEmpty)
