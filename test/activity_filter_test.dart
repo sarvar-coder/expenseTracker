@@ -1,10 +1,13 @@
+import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:expense_tracker/data/db/database.dart';
 import 'package:expense_tracker/data/db/tables.dart';
 import 'package:expense_tracker/features/activity/activity_filter.dart';
 
-Expense _exp(int id, String desc, int catId, DateTime date) => Expense(
+Expense _exp(int id, String desc, int catId, DateTime date,
+        {bool isPrivate = false}) =>
+    Expense(
       id: '$id',
       description: desc,
       amount: 1000 * id,
@@ -14,7 +17,7 @@ Expense _exp(int id, String desc, int catId, DateTime date) => Expense(
       rawInput: null,
       createdAt: date,
       updatedAt: date,
-      isPrivate: false,
+      isPrivate: isPrivate,
       frozen: false,
       dirty: false,
     );
@@ -41,10 +44,54 @@ void main() {
     expect(sections.single.items.single.description, 'Korzinka');
   });
 
-  test('categoryId narrows to one category', () {
-    final sections = groupExpenses(expenses, categoryId: '10', now: now);
-    final all = [for (final s in sections) ...s.items];
-    expect(all.map((e) => e.description), ['Bon Cafe', 'Korzinka']);
+  List<String> names(ActivityFilter f, [List<Expense>? list]) => [
+        for (final s in groupExpenses(list ?? expenses, filter: f, now: now))
+          for (final e in s.items) e.description,
+      ];
+
+  test('categories: one or several', () {
+    expect(names(const ActivityFilter(categoryIds: {'10'})),
+        ['Bon Cafe', 'Korzinka']);
+    expect(names(const ActivityFilter(categoryIds: {'10', '20'})),
+        ['Bon Cafe', 'Yandex Go', 'Korzinka']);
+  });
+
+  test('date range includes the whole end day', () {
+    final f = ActivityFilter(
+        range: DateTimeRange(
+            start: DateTime(2026, 7, 5), end: DateTime(2026, 7, 7)));
+    expect(names(f), ['Yandex Go', 'Korzinka']);
+    expect(f.count, 1);
+  });
+
+  test('amount min/max are inclusive', () {
+    // amounts: 1000, 2000, 3000
+    expect(names(const ActivityFilter(minAmount: 2000)),
+        ['Yandex Go', 'Korzinka']);
+    expect(names(const ActivityFilter(maxAmount: 2000)),
+        ['Bon Cafe', 'Yandex Go']);
+    expect(names(const ActivityFilter(minAmount: 2000, maxAmount: 2000)),
+        ['Yandex Go']);
+  });
+
+  test('private / shared', () {
+    final list = [
+      _exp(1, 'Gift', 10, DateTime(2026, 7, 8, 9), isPrivate: true),
+      _exp(2, 'Bread', 10, DateTime(2026, 7, 8, 8)),
+    ];
+    expect(names(const ActivityFilter(isPrivate: true), list), ['Gift']);
+    expect(names(const ActivityFilter(isPrivate: false), list), ['Bread']);
+    expect(names(const ActivityFilter(), list), ['Gift', 'Bread']);
+  });
+
+  test('count / isEmpty', () {
+    expect(const ActivityFilter().isEmpty, isTrue);
+    expect(
+        const ActivityFilter(
+                categoryIds: {'1', '2'}, minAmount: 1, maxAmount: 2,
+                isPrivate: true)
+            .count,
+        3);
   });
 
   test('no match yields empty list', () {

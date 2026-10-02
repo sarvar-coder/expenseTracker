@@ -7,8 +7,9 @@ import '../../providers/providers.dart';
 import '../common/ui_utils.dart';
 import '../common/widgets.dart';
 import 'activity_filter.dart';
+import 'activity_filter_page.dart';
 
-/// Tarix: search + category chips over every expense, grouped by day with
+/// Tarix: search + filter sheet over every expense, grouped by day with
 /// each day's total.
 class ActivityScreen extends ConsumerStatefulWidget {
   const ActivityScreen({super.key});
@@ -19,7 +20,16 @@ class ActivityScreen extends ConsumerStatefulWidget {
 
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   String _query = '';
-  String? _categoryId;
+  ActivityFilter _filter = const ActivityFilter();
+
+  Future<void> _openFilter(List<Category> categories) async {
+    final f = await openActivityFilter(
+      context,
+      current: _filter,
+      categories: categories,
+    );
+    if (f != null) setState(() => _filter = f);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +43,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final sections = groupExpenses(
       expenses,
       query: _query,
-      categoryId: _categoryId,
+      filter: _filter,
       now: DateTime.now(),
     );
 
@@ -45,7 +55,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         AppSpace.bottom(context, extra: 72), // clear the floating add button
       ),
       children: [
-        Text('Tarix', style: t.headlineMedium),
+        Row(
+          children: [
+            Expanded(child: Text('Tarix', style: t.headlineMedium)),
+            IconButton(
+              tooltip: 'Filtr',
+              onPressed: () => _openFilter(categories),
+              icon: Badge(
+                label: Text('${_filter.count}'),
+                isLabelVisible: !_filter.isEmpty,
+                child: const Icon(Icons.tune),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpace.gap),
         TextField(
           onChanged: (v) => setState(() => _query = v),
@@ -54,12 +77,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             prefixIcon: Icon(Icons.search, color: c.muted),
           ),
         ),
-        const SizedBox(height: 12),
-        _ChipBar(
-          categories: categories,
-          selected: _categoryId,
-          onSelect: (id) => setState(() => _categoryId = id),
-        ),
+        if (!_filter.isEmpty) ...[
+          const SizedBox(height: 12),
+          _ActiveFilters(
+            filter: _filter,
+            catById: catById,
+            onChanged: (f) => setState(() => _filter = f),
+          ),
+        ],
         if (sections.isEmpty)
           expenses.isEmpty
               ? const EmptyState(
@@ -70,7 +95,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               : const EmptyState(
                   icon: Icons.search_off,
                   title: 'Mos keladigani yo\'q',
-                  hint: 'Boshqa so\'z yoki turkumni sinab ko\'ring',
+                  hint: 'Boshqa so\'z yoki filtrni sinab ko\'ring',
                 )
         else
           for (final section in sections) ...[
@@ -104,41 +129,74 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 }
 
-/// Horizontal chip row: `Hammasi` then each category with its color dot.
-class _ChipBar extends StatelessWidget {
-  const _ChipBar({
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
+/// Removable chips for each active filter part; tapping × drops just that part.
+class _ActiveFilters extends StatelessWidget {
+  const _ActiveFilters({
+    required this.filter,
+    required this.catById,
+    required this.onChanged,
   });
-  final List<Category> categories;
-  final String? selected;
-  final ValueChanged<String?> onSelect;
+  final ActivityFilter filter;
+  final Map<String, Category> catById;
+  final ValueChanged<ActivityFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(String label, String? id, {Color? dot}) => Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        avatar: dot == null
-            ? null
-            : CircleAvatar(radius: 5, backgroundColor: dot),
-        label: Text(label),
-        selected: id == selected,
-        onSelected: (_) => onSelect(id),
-      ),
+    final f = filter;
+    Widget chip(String label, ActivityFilter without, {Color? dot}) => InputChip(
+      avatar: dot == null ? null : CircleAvatar(radius: 5, backgroundColor: dot),
+      label: Text(label),
+      onDeleted: () => onChanged(without),
+      deleteButtonTooltipMessage: 'Olib tashlash',
     );
 
-    return SizedBox(
-      height: 48,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          chip('Hammasi', null),
-          for (final cat in categories)
-            chip(cat.name, cat.id, dot: colorFromHex(cat.colorHex)),
-        ],
-      ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final id in f.categoryIds)
+          if (catById[id] case final cat?)
+            chip(
+              cat.name,
+              ActivityFilter(
+                categoryIds: {...f.categoryIds}..remove(id),
+                range: f.range,
+                minAmount: f.minAmount,
+                maxAmount: f.maxAmount,
+                isPrivate: f.isPrivate,
+              ),
+              dot: colorFromHex(cat.colorHex),
+            ),
+        if (f.range case final r?)
+          chip(
+            rangeLabel(r),
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              minAmount: f.minAmount,
+              maxAmount: f.maxAmount,
+              isPrivate: f.isPrivate,
+            ),
+          ),
+        if (f.minAmount != null || f.maxAmount != null)
+          chip(
+            amountLabel(f.minAmount, f.maxAmount),
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              range: f.range,
+              isPrivate: f.isPrivate,
+            ),
+          ),
+        if (f.isPrivate case final p?)
+          chip(
+            p ? 'Shaxsiy' : 'Umumiy',
+            ActivityFilter(
+              categoryIds: f.categoryIds,
+              range: f.range,
+              minAmount: f.minAmount,
+              maxAmount: f.maxAmount,
+            ),
+          ),
+      ],
     );
   }
 }
