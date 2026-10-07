@@ -46,6 +46,8 @@ data class Expense(
     @ColumnInfo(name = "is_private") val isPrivate: Boolean = false,
     @ColumnInfo(name = "pending_category") val pendingCategory: String? = null, // awaiting admin approval
     val frozen: Boolean = false, // ex-member history
+    /** O'tkazma: money given to this family member (user id). Kept out of every spending total. */
+    @ColumnInfo(name = "transfer_to") val transferTo: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "owner_id") val ownerId: String? = null,
     @ColumnInfo(name = "family_id") val familyId: String? = null,

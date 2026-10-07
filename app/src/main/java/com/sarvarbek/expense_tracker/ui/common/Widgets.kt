@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MicNone
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -135,6 +136,16 @@ fun CategoryBadge(category: Category?, size: Dp = 44.dp) {
     }
 }
 
+/** [CategoryBadge]'s shape for an O'tkazma row. Decorative: the row says "O'tkazma". */
+@Composable
+private fun TransferBadge(size: Dp = 44.dp) {
+    val c = AppTheme.colors
+    Box(
+        Modifier.size(size).background(c.muted.copy(alpha = 0.22f), RoundedCornerShape(size * 0.32f)),
+        contentAlignment = Alignment.Center,
+    ) { Icon(Icons.Outlined.SwapHoriz, null, tint = c.text, modifier = Modifier.size(size * 0.5f)) }
+}
+
 /** Empty screen/section: says what's missing and what to do next. */
 @Composable
 fun EmptyState(icon: ImageVector, title: String, hint: String? = null) {
@@ -221,13 +232,14 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CategoryBadge(category)
+            val transfer = expense.transferTo != null
+            if (transfer) TransferBadge() else CategoryBadge(category)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(expense.description, style = t.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(category?.name ?: "Turkumsiz", style = t.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(if (transfer) "O'tkazma" else category?.name ?: "Turkumsiz", style = t.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                     Icon(srcIcon, srcLabel, tint = c.muted, modifier = Modifier.size(13.dp))
                     if (expense.isPrivate) Icon(Icons.Outlined.VisibilityOff, "Maxfiy", tint = c.muted, modifier = Modifier.size(13.dp))

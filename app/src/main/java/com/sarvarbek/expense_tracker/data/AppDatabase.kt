@@ -35,9 +35,14 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
     )
 }
 
+/** v3: O'tkazma recipient on expenses. */
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) = db.execSQL("ALTER TABLE `expenses` ADD COLUMN `transfer_to` TEXT")
+}
+
 // ponytail: exportSchema off, migrations hand-written and checked by DataTest's
 // v1 upgrade test; export schemas if migrations pile up.
-@Database(entities = [Category::class, Expense::class, Need::class], version = 2, exportSchema = false)
+@Database(entities = [Category::class, Expense::class, Need::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): ExpenseDao
 
@@ -49,7 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         for (c in seedCategories()) {
@@ -124,7 +129,7 @@ abstract class ExpenseDao {
 
     @Query(
         "SELECT category_id AS categoryId, SUM(amount) AS total FROM expenses " +
-            "WHERE deleted_at IS NULL AND date >= :start AND date < :end GROUP BY category_id",
+            "WHERE deleted_at IS NULL AND transfer_to IS NULL AND date >= :start AND date < :end GROUP BY category_id",
     )
     abstract suspend fun categoryTotalRows(start: Long, end: Long): List<CategoryTotal>
 
@@ -133,7 +138,7 @@ abstract class ExpenseDao {
         categoryTotalRows(start, end).associate { it.categoryId to it.total }
 
     /** Total spent in [start, end). */
-    @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL AND date >= :start AND date < :end")
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL AND transfer_to IS NULL AND date >= :start AND date < :end")
     abstract suspend fun totalSpent(start: Long, end: Long): Long
 
     // --- Needs ---

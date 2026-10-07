@@ -6,6 +6,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -72,10 +73,17 @@ private fun Routes() {
     // Above the tab so the last overview survives tab switches.
     val family = remember { FamilyState(container.family) }
     @Composable
-    fun Add(editing: Expense?) = AddScreen(
-        container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
-        onClose = { nav.popBackStack() }, editing = editing,
-    )
+    fun Add(editing: Expense?) {
+        // O'tkazma recipients come from the Oila overview; fetch it if the tab wasn't opened yet.
+        LaunchedEffect(Unit) {
+            if (family.overview == null && !container.prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty()) family.refresh()
+        }
+        val members = family.overview?.let { f -> f.members.filter { it.userId != f.myId }.map { it.userId to it.label } }.orEmpty()
+        AddScreen(
+            container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
+            onClose = { nav.popBackStack() }, editing = editing, members = members,
+        )
+    }
     CompositionLocalProvider(LocalToaster provides toaster) {
         NavHost(nav, startDestination = "shell") {
             composable("shell") {

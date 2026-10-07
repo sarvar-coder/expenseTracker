@@ -13,7 +13,7 @@ data class InsightsData(val total: Long, val slices: List<Slice>) { // slices so
 }
 
 /**
- * Spend by category over the half-open day window [start, end), keeping only
+ * Spend by category (transfers left out) over the half-open day window [start, end), keeping only
  * expenses that pass [filter].
  */
 fun insightsFor(
@@ -25,7 +25,7 @@ fun insightsFor(
 ): InsightsData {
     val from = start.startMillis()
     val to = end.startMillis()
-    val kept = expenses.filter { it.date in from until to && filter.matches(it) }
+    val kept = expenses.filter { it.transferTo == null && it.date in from until to && filter.matches(it) }
     val catById = categories.associateBy { it.id }
     val slices = kept.groupBy { it.categoryId }
         .mapNotNull { (id, items) -> catById[id]?.let { Slice(it, items.sumOf { e -> e.amount }) } }
