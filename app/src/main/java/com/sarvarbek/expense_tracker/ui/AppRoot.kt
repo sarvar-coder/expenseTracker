@@ -99,12 +99,12 @@ private fun Routes() {
                 Shell(
                     onAdd = { nav.go("add") },
                     snackbarHost = { SnackbarHost(toaster.host) { AppSnackbar(it) } },
-                ) { index, _ ->
+                ) { index, active ->
                     when (index) {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.go("settings") }) { nav.go("edit/${it.id}") }
                         1 -> ActivityScreen(container.db) { nav.go("edit/${it.id}") }
                         2 -> InsightsScreen(container.db)
-                        else -> FamilyScreen(family, container.db, onNeeds = { nav.go("needs") }) { nav.go("family-settings") }
+                        else -> FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }) { nav.go("family-settings") }
                     }
                 }
             }

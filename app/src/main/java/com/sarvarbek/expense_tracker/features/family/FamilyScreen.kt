@@ -166,7 +166,7 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyScreen(state: FamilyState, db: ExpenseDao, onNeeds: () -> Unit = {}, onSettings: () -> Unit = {}) {
+fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onNeeds: () -> Unit = {}, onSettings: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
@@ -174,7 +174,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onNeeds: () -> Unit = {}, o
     var filterOpen by remember { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
-    LaunchedEffect(state) { state.refresh() } // every time the tab opens
+    LaunchedEffect(state, active) { if (active) state.refresh() } // every time the tab opens
 
     PullToRefreshBox(
         refreshing,

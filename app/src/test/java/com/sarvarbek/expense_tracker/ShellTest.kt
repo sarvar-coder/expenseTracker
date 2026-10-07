@@ -77,6 +77,27 @@ class ShellTest {
             .performClick()
         assertTrue(added)
     }
+
+    @Test fun tabsStayAliveAndOnlyActiveIsVisible() {
+        var composed = 0
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { i, _ ->
+                    if (i == 0) {
+                        val n = androidx.compose.runtime.remember { ++composed }
+                        Text("page0 $n")
+                    } else Text("page$i")
+                }
+            }
+        }
+        rule.onNodeWithText("Tarix").performClick()
+        rule.onNodeWithText("page1").assertExists()
+        rule.onNodeWithText("page0", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Asosiy").performClick()
+        // Same `remember` instance: tab 0 was never disposed and rebuilt.
+        rule.onNodeWithText("page0 1").assertExists()
+        rule.onNodeWithText("page1").assertDoesNotExist()
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

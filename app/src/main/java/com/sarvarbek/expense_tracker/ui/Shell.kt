@@ -1,8 +1,7 @@
 package com.sarvarbek.expense_tracker.ui
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -40,23 +39,26 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sarvarbek.expense_tracker.ui.common.t
-import com.sarvarbek.expense_tracker.ui.theme.AppMotion
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 
@@ -69,15 +71,21 @@ private val tabs = listOf(
     Tab("shell.family", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
 )
 
-/** Bottom-nav shell: 4 tabs (state kept per tab) + bottom-right FAB that opens Add. */
+/**
+ * Bottom-nav shell: 4 tabs + bottom-right FAB that opens Add. Visited tabs stay
+ * composed, so a switch is a 150 ms crossfade of ready content: no data reload,
+ * no empty-state flash, scroll kept. [page] gets whether its tab is showing.
+ * ponytail: hidden tabs keep collecting their flows; unload if a tab gets heavy.
+ */
 @Composable
 fun Shell(
     onAdd: () -> Unit,
     snackbarHost: @Composable () -> Unit = {},
-    page: @Composable (index: Int, select: (Int) -> Unit) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
+    page: @Composable (index: Int, active: Boolean) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
     var index by rememberSaveable { mutableIntStateOf(0) }
-    val holder = rememberSaveableStateHolder()
+    var visited by rememberSaveable { mutableStateOf(listOf(0)) }
+    if (index !in visited) visited = visited + index
     Scaffold(
         containerColor = AppTheme.colors.bg,
         contentWindowInsets = WindowInsets(0),
@@ -86,8 +94,17 @@ fun Shell(
         bottomBar = { NavBar(index) { index = it } },
     ) { pad ->
         Box(Modifier.padding(pad).statusBarsPadding().fillMaxSize()) {
-            AnimatedContent(index, Modifier.fillMaxSize(), transitionSpec = { AppMotion.tabIn togetherWith AppMotion.tabOut }, label = "tab") { i ->
-                holder.SaveableStateProvider(i) { page(i) { index = it } }
+            for (i in visited) key(i) {
+                val active = i == index
+                val alpha by animateFloatAsState(if (active) 1f else 0f, tween(150), label = "tab")
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(if (active) 1f else 0f)
+                        // Faded-out tabs aren't placed: no drawing, touches or semantics.
+                        .layout { m, c -> m.measure(c).let { p -> layout(p.width, p.height) { if (active || alpha > 0f) p.placeWithLayer(0, 0) { this.alpha = alpha } } } }
+                        .then(if (active) Modifier else Modifier.clearAndSetSemantics {}),
+                ) { page(i, active) }
             }
         }
     }

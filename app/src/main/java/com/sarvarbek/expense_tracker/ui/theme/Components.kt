@@ -60,10 +60,6 @@ object AppMotion {
     val popEnter: EnterTransition = slideInHorizontally(tween(POP, easing = decelerate)) { -it / 4 } +
         fadeIn(tween(POP, easing = decelerate), initialAlpha = 0.6f)
     val popExit: ExitTransition = slideOutHorizontally(tween(POP, easing = accelerate)) { it }
-
-    /** Tabs are peers: fade-through, no slide. */
-    val tabIn: EnterTransition = fadeIn(tween(210, delayMillis = 90, easing = decelerate))
-    val tabOut: ExitTransition = fadeOut(tween(90, easing = accelerate))
 }
 
 /**
