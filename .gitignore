@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Native Android (Gradle at repo root)
+/.gradle/
+/app/build/
+/local.properties
+/key.properties
+*.jks
+*.keystore
+.kotlin/
