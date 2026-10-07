@@ -1,0 +1,56 @@
+package com.sarvarbek.expense_tracker.features.activity
+
+import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.ui.common.toLocalDate
+import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
+import java.time.LocalDate
+
+/** A day's worth of expenses under a human label (Bugun / Kecha / "8 Iyul"). */
+data class DaySection(val label: String, val items: List<Expense>)
+
+/** Tarix sheet filters. Empty/null fields mean "no constraint". */
+data class ActivityFilter(
+    val categoryIds: Set<String> = emptySet(),
+    val range: ClosedRange<LocalDate>? = null, // whole days, end inclusive
+    val minAmount: Long? = null,
+    val maxAmount: Long? = null,
+    val isPrivate: Boolean? = null, // null = all, true = Shaxsiy, false = Umumiy
+) {
+    /** Active filter groups — shown as the badge on the filter icon. */
+    val count: Int
+        get() = listOf(
+            categoryIds.isNotEmpty(), range != null, minAmount != null || maxAmount != null, isPrivate != null,
+        ).count { it }
+
+    val isEmpty get() = count == 0
+
+    fun matches(e: Expense): Boolean =
+        (categoryIds.isEmpty() || e.categoryId in categoryIds) &&
+            (range == null || e.date.toLocalDate() in range) &&
+            (minAmount == null || e.amount >= minAmount) &&
+            (maxAmount == null || e.amount <= maxAmount) &&
+            (isPrivate == null || e.isPrivate == isPrivate)
+}
+
+/**
+ * Filters [expenses] by description substring + [filter], then groups the
+ * (already date-desc) list into day sections.
+ */
+fun groupExpenses(
+    expenses: List<Expense>,
+    query: String = "",
+    filter: ActivityFilter = ActivityFilter(),
+    today: LocalDate,
+): List<DaySection> {
+    val q = query.trim().lowercase()
+    fun labelFor(d: LocalDate) = when (d) {
+        today -> "Bugun"
+        today.minusDays(1) -> "Kecha"
+        else -> uzDayMonth(d)
+    }
+    // groupBy keeps first-seen order; input is already date-desc.
+    return expenses
+        .filter { filter.matches(it) && (q.isEmpty() || it.description.lowercase().contains(q)) }
+        .groupBy { labelFor(it.date.toLocalDate()) }
+        .map { (label, items) -> DaySection(label, items) }
+}
