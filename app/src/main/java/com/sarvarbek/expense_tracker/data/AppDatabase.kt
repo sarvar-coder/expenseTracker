@@ -118,6 +118,50 @@ abstract class ExpenseDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL AND date >= :start AND date < :end")
     abstract suspend fun totalSpent(start: Long, end: Long): Long
 
+    // --- Sync (raw: no dirty/updatedAt bump unless stated) ---
+    /** Every row, soft-deleted included. */
+    @Query("SELECT * FROM categories") abstract suspend fun allCategoryRows(): List<Category>
+
+    @Query("SELECT * FROM categories WHERE dirty = 1") abstract suspend fun dirtyCategories(): List<Category>
+
+    @Query("SELECT * FROM expenses WHERE dirty = 1") abstract suspend fun dirtyExpenses(): List<Expense>
+
+    @Query("SELECT (SELECT count(*) FROM categories WHERE dirty = 1) + (SELECT count(*) FROM expenses WHERE dirty = 1)")
+    abstract fun watchDirtyCount(): Flow<Int>
+
+    /** Clean only if not edited again while the push was in flight. */
+    @Query("UPDATE categories SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    abstract suspend fun markCategoryClean(id: String, updatedAt: Long)
+
+    @Query("UPDATE expenses SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    abstract suspend fun markExpenseClean(id: String, updatedAt: Long)
+
+    /** Repoints expenses (dirty); [pending] null keeps their pendingCategory. */
+    @Query(
+        "UPDATE expenses SET category_id = :to, pending_category = COALESCE(:pending, pending_category), " +
+            "updated_at = :now, dirty = 1 WHERE category_id = :from",
+    )
+    abstract suspend fun moveExpenses(from: String, to: String, pending: String?, now: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM categories WHERE id = :id") abstract suspend fun hardDeleteCategory(id: String)
+
+    /** Unowned categories become the family's, or the user's outside one. */
+    @Query(
+        "UPDATE categories SET owner_id = CASE WHEN :familyId IS NULL THEN :uid END, family_id = :familyId " +
+            "WHERE owner_id IS NULL AND family_id IS NULL",
+    )
+    abstract suspend fun claimCategories(uid: String, familyId: String?)
+
+    @Query("UPDATE expenses SET owner_id = :uid, family_id = :familyId WHERE owner_id IS NULL")
+    abstract suspend fun claimExpenses(uid: String, familyId: String?)
+
+    /** Hides categories of any family but [familyId] (null = all); never pushed. */
+    @Query(
+        "UPDATE categories SET deleted_at = :now, dirty = 0 WHERE family_id IS NOT NULL " +
+            "AND (:familyId IS NULL OR family_id != :familyId) AND deleted_at IS NULL",
+    )
+    abstract suspend fun hideForeignCategories(familyId: String?, now: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM expenses") abstract suspend fun deleteAllExpenses()
 
     @Query("DELETE FROM categories") abstract suspend fun deleteAllCategories()
