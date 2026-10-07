@@ -181,8 +181,8 @@ class SettingsFamilyTest : ScreenTest() {
     }
 
     @Test fun inFamilyShowsBudgetMembersSharedListAndRequests() {
+        val cat = runBlocking { db.getCategories().first { it.name == "Groceries" }.id }
         runBlocking {
-            val cat = db.getCategories().first { it.name == "Groceries" }.id
             fun e(desc: String, family: String?, private: Boolean = false) =
                 Expense(description = desc, amount = 10_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, familyId = family, isPrivate = private)
             db.insertExpense(e("Non", "f1"))
@@ -192,7 +192,7 @@ class SettingsFamilyTest : ScreenTest() {
         val overview = FamilyOverview(
             "f1", "Uy", "u1", isAdmin = true,
             members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
-            others = listOf(FamilyExpense("o1", "Vali", "c1", "Taksi", 20_000, System.currentTimeMillis())),
+            others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali")),
             requests = listOf(CategoryRequest("r1", "Dorilar")),
         )
         show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }), db) }
@@ -207,7 +207,19 @@ class SettingsFamilyTest : ScreenTest() {
         // management lives behind the gear now
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
+        rule.onNodeWithContentDescription("Jami 30 000 UZS").assertExists() // donut over the shared list
         assertTapTargets()
+
+        // Filter by member: only Vali's row stays; Ko'rinish is hidden (all shared).
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        assertTrue(rule.onAllNodesWithText("Ko'rinish").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("A'zo").performClick()
+        rule.onNode(hasText("Vali") and hasClickAction()).performClick() // the sheet row, not the member row
+        rule.onNodeWithText("Tayyor").performClick()
+        rule.onNodeWithText("Qo'llash").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Non").fetchSemanticsNodes().isEmpty() }
+        rule.onNodeWithText("Taksi").assertExists()
+        rule.onNodeWithContentDescription("Jami 20 000 UZS").assertExists()
     }
 
     private fun overview(admin: Boolean) = FamilyOverview(

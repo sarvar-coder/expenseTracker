@@ -16,11 +16,12 @@ data class ActivityFilter(
     val minAmount: Long? = null,
     val maxAmount: Long? = null,
     val isPrivate: Boolean? = null, // null = all, true = Shaxsiy, false = Umumiy
+    val memberIds: Set<String> = emptySet(), // Oila only: who added it
 ) {
     /** Active filter groups — shown as the badge on the filter icon. */
     val count: Int
         get() = listOf(
-            categoryIds.isNotEmpty(), range != null, minAmount != null || maxAmount != null, isPrivate != null,
+            categoryIds.isNotEmpty(), range != null, minAmount != null || maxAmount != null, isPrivate != null, memberIds.isNotEmpty(),
         ).count { it }
 
     val isEmpty get() = count == 0
@@ -30,7 +31,8 @@ data class ActivityFilter(
             (range == null || e.date.toLocalDate() in range) &&
             (minAmount == null || e.amount >= minAmount) &&
             (maxAmount == null || e.amount <= maxAmount) &&
-            (isPrivate == null || e.isPrivate == isPrivate)
+            (isPrivate == null || e.isPrivate == isPrivate) &&
+            (memberIds.isEmpty() || e.ownerId in memberIds)
 }
 
 /**
@@ -58,13 +60,13 @@ fun groupExpenses(
 
 /** Keeps the filter across tab switches (the shell saves per-tab state). */
 val ActivityFilterSaver = listSaver<ActivityFilter, Any?>(
-    save = { f -> listOf(ArrayList(f.categoryIds), f.range?.start?.toEpochDay(), f.range?.endInclusive?.toEpochDay(), f.minAmount, f.maxAmount, f.isPrivate) },
+    save = { f -> listOf(ArrayList(f.categoryIds), f.range?.start?.toEpochDay(), f.range?.endInclusive?.toEpochDay(), f.minAmount, f.maxAmount, f.isPrivate, ArrayList(f.memberIds)) },
     restore = { l ->
         @Suppress("UNCHECKED_CAST")
         ActivityFilter(
             (l[0] as List<String>).toSet(),
             (l[1] as Long?)?.let { LocalDate.ofEpochDay(it)..LocalDate.ofEpochDay(l[2] as Long) },
-            l[3] as Long?, l[4] as Long?, l[5] as Boolean?,
+            l[3] as Long?, l[4] as Long?, l[5] as Boolean?, (l[6] as List<String>).toSet(),
         )
     },
 )

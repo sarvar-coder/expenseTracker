@@ -1,5 +1,7 @@
 package com.sarvarbek.expense_tracker.services
 
+import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.data.ExpenseSource
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
@@ -35,11 +37,8 @@ data class CategoryRequest(val id: String, val name: String)
  */
 data class FamilyMember(val userId: String, val name: String, val isAdmin: Boolean, val shared: Long, val contribution: Long)
 
-/** A shared family expense, with who added it. [date] is epoch millis. */
-data class FamilyExpense(
-    val id: String, val ownerName: String, val categoryId: String,
-    val description: String, val amount: Long, val date: Long,
-)
+/** A shared family expense ([Expense.ownerId] set) with who added it. */
+data class FamilyExpense(val expense: Expense, val ownerName: String)
 
 data class SentInvite(val id: String, val email: String)
 
@@ -50,7 +49,7 @@ data class FamilyOverview(
     val myId: String,
     val isAdmin: Boolean,
     val members: List<FamilyMember>,
-    /** Other members' shared expenses this month (own ones come from Room). */
+    /** Other members' shared expenses, all time (own ones come from Room). */
     val others: List<FamilyExpense>,
     /** Admin only: sent invites and pending category requests. */
     val invites: List<SentInvite> = emptyList(),
@@ -75,7 +74,7 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
     /**
      * Null when not in a family. Syncs first so the server has our latest
      * budget and expenses. Online only: the summary is computed server-side.
-     * [from]/[to] are epoch millis, [to] exclusive.
+     * [from]/[to] (epoch millis, [to] exclusive) bound the summary only.
      */
     suspend fun overview(from: Long, to: Long): FamilyOverview? {
         sync.run()
@@ -116,9 +115,14 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                     // Private rows are tombstones (date and details null): skip before parsing.
                     val private = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
                     if (private || e.str("deleted_at") != null) return@mapNotNull null
-                    val d = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli()
-                    if (d < from || d >= to) null
-                    else FamilyExpense(e.str("id")!!, e.str("owner_name")!!, e.str("category_id")!!, e.str("description")!!, e.num("amount"), d)
+                    FamilyExpense(
+                        Expense(
+                            id = e.str("id")!!, description = e.str("description")!!, amount = e.num("amount"),
+                            categoryId = e.str("category_id")!!, date = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli(),
+                            source = ExpenseSource.manual, ownerId = e.str("owner_id")!!, familyId = fid, dirty = false,
+                        ),
+                        e.str("owner_name")!!,
+                    )
                 },
                 invites = invites.await(),
                 requests = requests.await(),
