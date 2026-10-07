@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 // Release signing reads key.properties (gitignored; same keystore as the Flutter
@@ -50,6 +51,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // java.time on minSdk 24.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildFeatures {
@@ -73,6 +76,10 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.navigation.compose)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    coreLibraryDesugaring(libs.desugar)
     debugImplementation(libs.compose.tooling)
     debugImplementation(libs.compose.test.manifest)
 
