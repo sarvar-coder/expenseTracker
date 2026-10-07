@@ -239,7 +239,7 @@ private fun AdminSection(f: FamilyOverview, a: FamilyActions) {
     }
     SectionLabel("Turkum so'rovlari", badge = f.requests.size)
     if (f.requests.isEmpty()) {
-        Text("Yangi so'rov yo'q", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+        Text("Yangi so'rov yo'q", color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
     } else {
         DividedCard(f.requests, indent = 16.dp) { r ->
             IconRow(null, r.name, "Hozircha \"Boshqa\"da") {
@@ -267,7 +267,7 @@ private fun IconRow(
     }
     Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall)
+        if (subtitle != null) Text(subtitle, color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
     }
     trailing()
 }

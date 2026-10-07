@@ -81,7 +81,7 @@ fun ActivityScreen(db: ExpenseDao, onEdit: (Expense) -> Unit) {
         items(sections, key = { it.label }) { section ->
             Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 20.dp, bottom = 8.dp)) {
                 Text(section.label, style = t.titleMedium, modifier = Modifier.weight(1f))
-                Text(formatMoney(section.items.filter { it.transferTo == null }.sumOf { it.amount }), style = t.labelMedium)
+                Text(formatMoney(section.items.filter { it.transferTo == null }.sumOf { it.amount }), color = AppTheme.colors.muted, style = t.labelMedium)
             }
             AppCard(Modifier.fillMaxWidth()) {
                 for (e in section.items) ExpenseTile(e, catById[e.categoryId], db, onEdit)

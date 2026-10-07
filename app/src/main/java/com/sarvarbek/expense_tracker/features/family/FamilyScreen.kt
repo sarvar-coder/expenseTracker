@@ -243,7 +243,7 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
             AppCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column(Modifier.padding(start = 20.dp, top = 16.dp, end = 12.dp, bottom = 8.dp)) {
                     Text("“${i.familyName}” oilasiga taklif", style = t.titleMedium)
-                    Text("${i.invitedBy} taklif qildi", style = t.bodySmall)
+                    Text("${i.invitedBy} taklif qildi", color = AppTheme.colors.muted, style = t.bodySmall)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                         LinkButton({ act(null) { deleteInvite(i.id) } }) { Text("Rad etish") }
                         Spacer(Modifier.width(8.dp))
@@ -324,7 +324,7 @@ private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker
         Text(e.description, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             "${fe.ownerName} · ${uzDayMonth(e.date.toLocalDate())} ${e.date.toLocalDateTime().format(hhmm)}",
-            style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
     Spacer(Modifier.width(12.dp))
@@ -343,7 +343,7 @@ private fun MemberRow(m: FamilyMember, myId: String) = Row(
 ) {
     Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
         Text(memberLabel(m, myId), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("Byudjetga hissa: ${formatMoney(m.contribution)} UZS", style = MaterialTheme.typography.bodySmall)
+        Text("Byudjetga hissa: ${formatMoney(m.contribution)} UZS", color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
     }
     Spacer(Modifier.width(8.dp))
     Money(m.shared)
