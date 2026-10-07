@@ -23,7 +23,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -244,7 +243,6 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
                     Text(if (transfer) t("widgets.transfer") else category?.name ?: t("widgets.no_category"), color = AppTheme.colors.muted, style = ty.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                     Icon(srcIcon, srcLabel, tint = c.muted, modifier = Modifier.size(13.dp))
-                    if (expense.isPrivate) Icon(Icons.Outlined.VisibilityOff, t("add.private"), tint = c.muted, modifier = Modifier.size(13.dp))
                     if (expense.frozen) Icon(Icons.Outlined.Lock, t("widgets.read_only"), tint = c.muted, modifier = Modifier.size(13.dp))
                 }
             }

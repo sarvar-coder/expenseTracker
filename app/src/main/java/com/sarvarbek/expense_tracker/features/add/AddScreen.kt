@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -154,7 +153,6 @@ fun AddScreen(
     var mode by rememberSaveable {
         mutableStateOf(if (editing != null || !aiModes) AddMode.manual else AddMode.entries.firstOrNull { it.name == settings.lastAddMode } ?: AddMode.type)
     }
-    val prefs by settings.settings.collectAsStateWithLifecycle()
     var prefill by remember { mutableStateOf(editing?.let { Prefill(it.amount.toString(), it.description, it.categoryId, it.isPrivate) }) }
     Scaffold(
         containerColor = c.bg,
@@ -186,11 +184,11 @@ fun AddScreen(
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, prefs.defaultPrivate), members, onClose)
+                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, false), members, onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
                     TypeForm(db, settings, parse, speech, canCreate, voice = mode == AddMode.speak, onClose) { raw ->
-                        prefill = Prefill("", raw, null, settings.settings.value.defaultPrivate)
+                        prefill = Prefill("", raw, null, false)
                         mode = AddMode.manual
                     }
                 }
@@ -222,7 +220,8 @@ private fun ManualForm(
     // Requested (not yet approved) category name; expense sits in Boshqa meanwhile.
     var pending by rememberSaveable { mutableStateOf(editing?.pendingCategory) }
     var date by rememberSaveable { mutableStateOf(editing?.date?.toLocalDateTime() ?: LocalDateTime.now()) }
-    var private by rememberSaveable { mutableStateOf(init.private) }
+    // ponytail: Maxfiy toggle hidden for now; new rows shared, edits keep their own flag.
+    val private = init.private
     var transfer by rememberSaveable { mutableStateOf(editing?.transferTo != null) }
     var transferTo by rememberSaveable { mutableStateOf(editing?.transferTo) }
     var saving by remember { mutableStateOf(false) }
@@ -339,25 +338,6 @@ private fun ManualForm(
             if (isToday || isYesterday) t("add.other_date") else "${uzDayMonth(date.toLocalDate())} ${date.year}",
             !isToday && !isYesterday, { picking = true },
         )
-    }
-    // Per-expense "hide from family" toggle; starts from the Settings default.
-    // Transfers never reach the family, so no toggle for them.
-    if (!transfer) {
-        Spacer(Modifier.height(AppSpace.gap))
-        AppCard(Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.toggleable(private, role = Role.Switch) { private = it }.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Outlined.VisibilityOff, null, tint = c.muted)
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(t("add.private"), style = ty.bodyLarge)
-                    Text(t("add.private_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
-                }
-                Switch(private, null)
-            }
-        }
     }
     Spacer(Modifier.height(AppSpace.section))
     PrimaryButton(::save, Modifier.fillMaxWidth(), enabled = !saving) {
@@ -553,7 +533,7 @@ private fun TypeForm(
                 Expense(
                     description = p.item, amount = p.amount, categoryId = cat.id, date = p.date.startMillis(),
                     source = if (voice) ExpenseSource.voice else ExpenseSource.typed, rawInput = raw,
-                    pendingCategory = cat.pending, isPrivate = settings.settings.value.defaultPrivate,
+                    pendingCategory = cat.pending, isPrivate = false,
                 ),
             )
             onClose()

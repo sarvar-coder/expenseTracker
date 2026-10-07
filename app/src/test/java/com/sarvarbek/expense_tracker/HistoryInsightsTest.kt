@@ -108,16 +108,10 @@ class HistoryInsightsTest {
         rule.onNodeWithText("Coffee").assertExists()
         rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
 
-        // Ko'rinish drop-down: Shaxsiy hides both (shared) rows.
+        // Maxfiy is off, so no Ko'rinish filter.
         rule.onNodeWithContentDescription("Filtr").performClick()
-        tap("Ko'rinish")
-        tap("Shaxsiy")
-        tap("Qo'llash")
-        rule.waitForIdle()
-        rule.onNodeWithText("Coffee").assertDoesNotExist()
-        rule.onNodeWithText("Taxi").assertDoesNotExist()
-        rule.onNodeWithText("Mos keladigani yo'q").assertExists()
-        removeChip()
+        rule.onNodeWithText("Ko'rinish").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Orqaga").performClick()
 
         val search = rule.onNode(hasSetTextAction())
         search.performTextReplacement("cof")
@@ -165,16 +159,16 @@ class HistoryInsightsTest {
         rule.onNodeWithText("Bu davrda xarajat yo'q").assertExists()
         rule.onNodeWithText("Dekabr").assertExists()
 
-        // Filter by Ko'rinish: month pills give way to chips (period + filter).
+        // Filter by Summa: month pills give way to chips (period + filter).
         rule.onNodeWithContentDescription("Filtr").performClick()
         rule.onNodeWithText("Turkum").assertExists()
-        tap("Ko'rinish")
-        tap("Umumiy")
+        tap("Summa")
+        rule.onNodeWithTag("min").performTextReplacement("1000")
         tap("Qo'llash")
         rule.waitForIdle()
         rule.onNodeWithText("Dekabr").assertDoesNotExist()
         rule.onNodeWithText("${monthName(now.monthValue)} ${now.year - 1}").assertExists()
-        chip("Umumiy").assertExists()
+        chip("1 000 dan").assertExists()
 
         // Removing the last chip brings the month pills back.
         removeChip()

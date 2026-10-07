@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Checkbox
@@ -48,7 +46,6 @@ import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDateRangePickerState
@@ -106,7 +103,8 @@ fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier
 /**
  * Tarix filter page, full screen over the shell. [onApply] gets the new
  * filter on Qo'llash; [onDismiss] on back. Non-empty [members] (id to name)
- * means the Oila list: adds an A'zo row and drops Ko'rinish (all shared).
+ * means the Oila list: adds an A'zo row.
+ * ponytail: Ko'rinish (Shaxsiy/Umumiy) row hidden while Maxfiy is off.
  */
 @Composable
 fun ActivityFilterPage(
@@ -133,7 +131,6 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
     var memberSheet by remember { mutableStateOf(false) }
     var rangePicker by remember { mutableStateOf(false) }
     var amountOpen by remember { mutableStateOf(false) }
-    var visibilityOpen by remember { mutableStateOf(false) }
 
     fun apply() {
         var lo = parseAmount(min)
@@ -185,23 +182,6 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
                 Row(Modifier.padding(start = AppSpace.page, end = AppSpace.page, bottom = AppSpace.gap), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AmountField(min, t("activity.from"), Modifier.weight(1f).testTag("min")) { min = it }
                     AmountField(max, t("activity.to"), Modifier.weight(1f).testTag("max")) { max = it }
-                }
-            }
-            val visibility = listOf<Pair<Boolean?, String>>(null to t("activity.all"), false to t("activity.shared"), true to t("activity.personal"))
-            if (members.isEmpty()) FilterRow(Icons.Outlined.Visibility, t("activity.visibility"), visibility.first { it.first == private }.second, onClick = { visibilityOpen = !visibilityOpen }) {
-                Icon(if (visibilityOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
-            }
-            if (visibilityOpen && members.isEmpty()) {
-                for ((value, label) in visibility) {
-                    Row(
-                        Modifier.fillMaxWidth().selectable(private == value, role = Role.RadioButton) { private = value }
-                            .defaultMinSize(minHeight = 56.dp).padding(horizontal = AppSpace.page),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(private == value, null)
-                        Spacer(Modifier.width(16.dp))
-                        Text(label, style = ty.bodyLarge)
-                    }
                 }
             }
         }
