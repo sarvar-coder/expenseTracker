@@ -130,7 +130,8 @@ private fun Routes() {
                     }
                 }
             }
-            composable("family-settings") { FamilySettingsScreen(family) { nav.back() } }
+            // Also popped when the family vanishes (maybe while backgrounded): unguarded, route-scoped.
+            composable("family-settings") { FamilySettingsScreen(family) { nav.popBackStack("family-settings", inclusive = true) } }
             composable("needs") {
                 val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
                 NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }

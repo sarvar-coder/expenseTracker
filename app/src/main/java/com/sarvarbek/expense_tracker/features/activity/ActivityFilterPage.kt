@@ -122,6 +122,7 @@ fun ActivityFilterPage(
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
     var after by remember { mutableStateOf<(() -> Unit)?>(null) }
     fun close(then: () -> Unit) {
+        if (!shown.targetState) return // already closing: first action wins
         after = then
         shown.targetState = false
     }

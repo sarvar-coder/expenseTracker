@@ -76,7 +76,7 @@ object AppMotion {
 fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(hide: (() -> Unit) -> Unit) -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val hide: (() -> Unit) -> Unit = { then -> scope.launch { state.hide() }.invokeOnCompletion { then() } }
+    val hide: (() -> Unit) -> Unit = { then -> scope.launch { state.hide() }.invokeOnCompletion { if (!state.isVisible) then() } }
     ModalBottomSheet(onDismiss, sheetState = state, containerColor = AppTheme.colors.card) { content(hide) }
 }
 
