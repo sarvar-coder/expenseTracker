@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
@@ -29,6 +30,7 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
+import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
 import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
@@ -202,10 +204,44 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Taksi").assertExists()
         assertTrue("private stays hidden", rule.onAllNodesWithText("Sovg'a").fetchSemanticsNodes().isEmpty())
         assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
-        rule.onNodeWithText("Dorilar").assertExists()
-        rule.onNodeWithText("Oilani o'chirish").assertExists()
-        rule.onNodeWithContentDescription("Amallar").assertExists() // only on Vali, not self
+        // management lives behind the gear now
+        assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         assertTapTargets()
+    }
+
+    private fun overview(admin: Boolean) = FamilyOverview(
+        "f1", "Uy", "u1", isAdmin = admin,
+        members = listOf(FamilyMember("u1", "Ali", admin, 0, 0), FamilyMember("u2", "Vali", !admin, 0, 0)),
+        others = emptyList(),
+        requests = if (admin) listOf(CategoryRequest("r1", "Dorilar")) else emptyList(),
+    )
+
+    @Test fun adminFamilySettingsManageMembersAndDelete() {
+        val state = FamilyState(null, load = { overview(admin = true) }, loadInvites = { emptyList() })
+        show {
+            LaunchedEffect(Unit) { state.refresh() }
+            if (state.loaded) FamilySettingsScreen(state) {}
+        }
+        waitFor("Dorilar")
+        rule.onNodeWithText("Oilani o'chirish").assertExists()
+        rule.onNodeWithText("Oiladan chiqish").assertExists()
+        rule.onNodeWithText("A'zo taklif qilish").assertExists()
+        rule.onNodeWithContentDescription("Amallar: Vali").performClick()
+        rule.onNodeWithText("Admin qilish").assertExists()
+        rule.onNodeWithText("Oiladan chiqarish").assertExists()
+    }
+
+    @Test fun memberFamilySettingsCanOnlyLeave() {
+        val state = FamilyState(null, load = { overview(admin = false) }, loadInvites = { emptyList() })
+        show {
+            LaunchedEffect(Unit) { state.refresh() }
+            if (state.loaded) FamilySettingsScreen(state) {}
+        }
+        waitFor("Oiladan chiqish")
+        assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithText("A'zo taklif qilish").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithContentDescription("Amallar: Vali").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun frozenTileCannotBeOpened() {

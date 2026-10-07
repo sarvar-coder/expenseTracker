@@ -210,7 +210,8 @@ class BackendTest {
     }
 
     @Test fun familyErrorTextMapsServerCodes() {
-        assertTrue("adminlik" in familyErrorText("transfer_admin_first"))
+        assertTrue("admin" in familyErrorText("transfer_admin_first"))
+        assertTrue("admin" in familyErrorText("last_admin"))
         assertTrue("taklif qilingan" in familyErrorText("duplicate key", "23505"))
         assertTrue("Qayta" in familyErrorText("boom"))
     }
