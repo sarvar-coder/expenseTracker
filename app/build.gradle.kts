@@ -10,9 +10,7 @@ plugins {
 // Release signing reads key.properties (gitignored; same keystore as the Flutter
 // builds so the APK installs as an update). Missing file = debug signing.
 val keystoreProperties = Properties().apply {
-    val file = listOf("key.properties", "android/key.properties")
-        .map { rootProject.file(it) }.firstOrNull { it.exists() }
-    file?.inputStream()?.use { load(it) }
+    rootProject.file("key.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
 android {

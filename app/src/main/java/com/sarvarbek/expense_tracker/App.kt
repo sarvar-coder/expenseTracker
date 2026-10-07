@@ -15,12 +15,15 @@ import io.github.jan.supabase.auth.SettingsSessionManager
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import java.io.File
 
 class App : Application() {
     val container by lazy { AppContainer(this) }
 
     override fun onCreate() {
         super.onCreate()
+        // Upgrade from the Flutter app: its Drift DB is replaced by a re-sync from the cloud.
+        File(filesDir.parentFile, "app_flutter").deleteRecursively()
         container.sync.start()
     }
 }

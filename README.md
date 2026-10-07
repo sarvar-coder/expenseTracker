@@ -1,17 +1,19 @@
-# expense_tracker
+# Xarajatlar
 
-A new Flutter project.
+Personal + family expense tracker for Android (Kotlin, Jetpack Compose), in Uzbek.
+Add expenses by typing, speaking or by hand; AI picks the item, amount and category.
+Offline-first (Room) with background sync to Supabase; families share categories
+and spending.
 
-## Getting Started
+## Build
 
-This project is a starting point for a Flutter application.
+Needs JDK 17 and the Android SDK.
 
-A few resources to get you started if this is your first Flutter project:
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug   # tests + lint
+./gradlew assembleDebug                           # debug APK (installs as "Xarajatlar dev")
+./gradlew assembleRelease                         # signed release APK (needs key.properties)
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Backend (schema, RLS, RPCs, the `parse-expense` Edge Function) lives in `supabase/`.
+See `CLAUDE.md` for architecture and decisions.
