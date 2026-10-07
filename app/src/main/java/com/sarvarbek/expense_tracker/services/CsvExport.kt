@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.sarvarbek.expense_tracker.data.Expense
 import java.io.File
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
+import com.sarvarbek.expense_tracker.ui.common.t
 
 /** RFC 4180 field: quoted (inner quotes doubled) only when it needs to be. */
 private fun field(v: Any): String {
@@ -27,7 +28,7 @@ fun shareCsv(context: Context, csv: String) {
     val send = Intent(Intent.ACTION_SEND)
         .setType("text/csv")
         .putExtra(Intent.EXTRA_STREAM, uri)
-        .putExtra(Intent.EXTRA_TEXT, "Xarajatlar eksporti")
+        .putExtra(Intent.EXTRA_TEXT, t("svc.csv.share_text"))
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }

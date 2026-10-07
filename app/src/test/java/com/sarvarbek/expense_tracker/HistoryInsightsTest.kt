@@ -33,7 +33,7 @@ import org.junit.Assert.assertEquals
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
-import com.sarvarbek.expense_tracker.ui.common.uzMonths
+import com.sarvarbek.expense_tracker.ui.common.monthName
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -153,8 +153,8 @@ class HistoryInsightsTest {
         rule.onNodeWithText("100%").assertExists()
 
         // Current month pill selected; future months hidden.
-        rule.onNodeWithText(uzMonths[now.monthValue - 1]).assertIsSelected()
-        if (now.monthValue < 12) rule.onNodeWithText(uzMonths[now.monthValue]).assertDoesNotExist()
+        rule.onNodeWithText(monthName(now.monthValue)).assertIsSelected()
+        if (now.monthValue < 12) rule.onNodeWithText(monthName(now.monthValue + 1)).assertDoesNotExist()
 
         // Year sheet lists years; picking last year shows all 12 months, no data.
         tap("${now.year}")
@@ -173,7 +173,7 @@ class HistoryInsightsTest {
         tap("Qo'llash")
         rule.waitForIdle()
         rule.onNodeWithText("Dekabr").assertDoesNotExist()
-        rule.onNodeWithText("${uzMonths[now.monthValue - 1]} ${now.year - 1}").assertExists()
+        rule.onNodeWithText("${monthName(now.monthValue)} ${now.year - 1}").assertExists()
         chip("Umumiy").assertExists()
 
         // Removing the last chip brings the month pills back.

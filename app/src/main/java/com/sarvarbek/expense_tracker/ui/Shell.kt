@@ -53,16 +53,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 
-private data class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
+private data class Tab(val labelKey: String, val icon: ImageVector, val selectedIcon: ImageVector)
 
 private val tabs = listOf(
-    Tab("Asosiy", Icons.Outlined.Home, Icons.Rounded.Home),
-    Tab("Tarix", Icons.Outlined.ReceiptLong, Icons.Rounded.ReceiptLong),
-    Tab("Tahlil", Icons.Outlined.DonutLarge, Icons.Rounded.DonutLarge),
-    Tab("Oila", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
+    Tab("shell.home", Icons.Outlined.Home, Icons.Rounded.Home),
+    Tab("shell.history", Icons.Outlined.ReceiptLong, Icons.Rounded.ReceiptLong),
+    Tab("shell.insights", Icons.Outlined.DonutLarge, Icons.Rounded.DonutLarge),
+    Tab("shell.family", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
 )
 
 /** Bottom-nav shell: 4 tabs (state kept per tab) + bottom-right FAB that opens Add. */
@@ -70,7 +71,7 @@ private val tabs = listOf(
 fun Shell(
     onAdd: () -> Unit,
     snackbarHost: @Composable () -> Unit = {},
-    page: @Composable (index: Int, select: (Int) -> Unit) -> Unit = { i, _ -> Placeholder(tabs[i].label) },
+    page: @Composable (index: Int, select: (Int) -> Unit) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
     var index by rememberSaveable { mutableIntStateOf(0) }
     val holder = rememberSaveableStateHolder()
@@ -138,7 +139,7 @@ private fun NavItem(tab: Tab, selected: Boolean, onTap: () -> Unit, modifier: Mo
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            tab.label,
+            t(tab.labelKey),
             style = MaterialTheme.typography.labelSmall.copy(
                 color = color,
                 fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
@@ -159,7 +160,7 @@ private fun Fab(onClick: () -> Unit) {
             .background(c.accent)
             .clickable(role = Role.Button, onClick = onClick)
             .size(64.dp)
-            .semantics { contentDescription = "Xarajat qo'shish" },
+            .semantics { contentDescription = t("add.title_new") },
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Filled.Add, null, tint = c.onAccent, modifier = Modifier.size(30.dp))

@@ -65,7 +65,8 @@ import com.sarvarbek.expense_tracker.ui.common.CategoryBadge
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.colorFromHex
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
-import com.sarvarbek.expense_tracker.ui.common.uzMonths
+import com.sarvarbek.expense_tracker.ui.common.monthName
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
@@ -87,7 +88,7 @@ private fun lastMonth(year: Int): Int = LocalDate.now().let { if (year == it.yea
 @Composable
 fun InsightsScreen(db: ExpenseDao) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
     val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
     val now = LocalDate.now()
@@ -109,9 +110,9 @@ fun InsightsScreen(db: ExpenseDao) {
     LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Tahlil", style = t.headlineMedium, modifier = Modifier.weight(1f))
+                Text(t("insights.title"), style = ty.headlineMedium, modifier = Modifier.weight(1f))
                 TextButton({ yearSheet = true }, Modifier.defaultMinSize(minHeight = 48.dp)) {
-                    Text("$year", style = t.labelLarge.copy(color = c.accent))
+                    Text("$year", style = ty.labelLarge.copy(color = c.accent))
                     Icon(Icons.Filled.ExpandMore, null, tint = c.accent)
                 }
                 FilterButton(filter.count) { filterOpen = true }
@@ -122,7 +123,7 @@ fun InsightsScreen(db: ExpenseDao) {
                     filter, categories.associateBy { it.id }, onChange = { filter = it },
                     // No Sana in the filter: the month still applies, so show it.
                     leading = if (range == null) {
-                        { SuggestionChip({}, { Text("${uzMonths[month - 1]} $year") }) }
+                        { SuggestionChip({}, { Text("${monthName(month)} $year") }) }
                     } else {
                         null
                     },
@@ -133,7 +134,7 @@ fun InsightsScreen(db: ExpenseDao) {
             Spacer(Modifier.height(AppSpace.gap))
         }
         if (data.slices.isEmpty()) {
-            item { EmptyState(Icons.Outlined.DonutLarge, "Bu davrda xarajat yo'q", "Boshqa davrni tanlang yoki xarajat qo'shing") }
+            item { EmptyState(Icons.Outlined.DonutLarge, t("insights.empty_title"), t("insights.empty_body")) }
         } else {
             item { CategoryBreakdown(data) }
         }
@@ -163,7 +164,7 @@ private fun MonthPills(year: Int, month: Int, onPick: (Int) -> Unit) {
     Row(Modifier.horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (m in 1..lastMonth(year)) {
             AppChip(
-                uzMonths[m - 1], month == m, { onPick(m) },
+                monthName(m), month == m, { onPick(m) },
                 if (month == m) Modifier.onPlaced { selectedCenter = it.positionInParent().x.toInt() + it.size.width / 2 } else Modifier,
             )
         }
@@ -173,7 +174,7 @@ private fun MonthPills(year: Int, month: Int, onPick: (Int) -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     ModalBottomSheet(onDismiss, containerColor = AppTheme.colors.card) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = AppSpace.section)) {
             for (y in LocalDate.now().year downTo FIRST_YEAR) {
@@ -181,8 +182,8 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
                     Modifier.fillMaxWidth().clickable { onPick(y) }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("$y", style = t.bodyLarge, modifier = Modifier.weight(1f))
-                    if (y == selected) Icon(Icons.Filled.Check, "Tanlangan", tint = AppTheme.colors.accent)
+                    Text("$y", style = ty.bodyLarge, modifier = Modifier.weight(1f))
+                    if (y == selected) Icon(Icons.Filled.Check, t("add.selected"), tint = AppTheme.colors.accent)
                 }
             }
         }
@@ -194,7 +195,7 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
 internal fun CategoryBreakdown(data: InsightsData) {
     AppCard(Modifier.fillMaxWidth()) { Donut(data) }
     Spacer(Modifier.height(AppSpace.section))
-    Text("Turkumlar", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
+    Text(t("insights.categories"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
     Spacer(Modifier.height(12.dp))
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(vertical = 6.dp)) {
@@ -209,11 +210,11 @@ internal fun CategoryBreakdown(data: InsightsData) {
 /** Share donut (3dp gaps between slices) with "Jami" + total in the hole. Read out as one label. */
 @Composable
 private fun Donut(data: InsightsData) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val colors = data.slices.map { colorFromHex(it.category.colorHex) }
     Box(
         Modifier.fillMaxWidth().padding(vertical = 28.dp).height(232.dp)
-            .clearAndSetSemantics { contentDescription = "Jami ${formatMoney(data.total)} UZS" },
+            .clearAndSetSemantics { contentDescription = t("insights.total_a11y", formatMoney(data.total)) },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(216.dp)) {
@@ -234,13 +235,13 @@ private fun Donut(data: InsightsData) {
             }
         }
         Column(Modifier.padding(horizontal = 96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Jami", color = AppTheme.colors.muted, style = t.labelMedium)
+            Text(t("insights.total"), color = AppTheme.colors.muted, style = ty.labelMedium)
             Spacer(Modifier.height(4.dp))
             androidx.compose.foundation.text.BasicText(
-                formatMoney(data.total), style = t.displaySmall.copy(color = LocalContentColor.current, textAlign = TextAlign.Center), maxLines = 1,
-                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(maxFontSize = t.displaySmall.fontSize),
+                formatMoney(data.total), style = ty.displaySmall.copy(color = LocalContentColor.current, textAlign = TextAlign.Center), maxLines = 1,
+                autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(maxFontSize = ty.displaySmall.fontSize),
             )
-            Text("UZS", color = AppTheme.colors.muted, style = t.labelSmall)
+            Text("UZS", color = AppTheme.colors.muted, style = ty.labelSmall)
         }
     }
 }
@@ -248,15 +249,15 @@ private fun Donut(data: InsightsData) {
 /** Badge; name + amount over a share bar in the category color + percent. */
 @Composable
 private fun LegendRow(slice: Slice, fraction: Double) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         CategoryBadge(slice.category)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row {
-                Text(slice.category.name, style = t.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(slice.category.name, style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
-                Text(formatMoney(slice.amount), style = t.titleSmall)
+                Text(formatMoney(slice.amount), style = ty.titleSmall)
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -268,7 +269,7 @@ private fun LegendRow(slice: Slice, fraction: Double) {
                     gapSize = 0.dp,
                     drawStopIndicator = {},
                 )
-                Text("${Math.round(fraction * 100)}%", color = AppTheme.colors.muted, style = t.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+                Text("${Math.round(fraction * 100)}%", color = AppTheme.colors.muted, style = ty.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
             }
         }
     }

@@ -71,6 +71,7 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.ui.common.colorFromHex
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
@@ -90,15 +91,15 @@ fun rangeLabel(r: ClosedRange<LocalDate>) =
 /** "10 000 – 50 000", "10 000 dan", "50 000 gacha". */
 fun amountLabel(min: Long?, max: Long?) = when {
     min != null && max != null -> "${formatMoney(min)} – ${formatMoney(max)}"
-    min != null -> "${formatMoney(min)} dan"
-    else -> "${formatMoney(max!!)} gacha"
+    min != null -> t("activity.amount_from", formatMoney(min))
+    else -> t("activity.amount_to", formatMoney(max!!))
 }
 
 /** Tune icon with the active-group count badge. Shared by Tarix and Tahlil. */
 @Composable
 fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier.size(48.dp)) {
     BadgedBox(badge = { if (count > 0) Badge { Text("$count") } }) {
-        Icon(Icons.Filled.Tune, "Filtr")
+        Icon(Icons.Filled.Tune, t("activity.filter"))
     }
 }
 
@@ -121,7 +122,7 @@ fun ActivityFilterPage(
 @Composable
 private fun FilterPage(current: ActivityFilter, categories: List<Category>, members: Map<String, String>, onBack: () -> Unit, onApply: (ActivityFilter) -> Unit) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     var cats by remember { mutableStateOf(current.categoryIds) }
     var range by remember { mutableStateOf(current.range) }
     var private by remember { mutableStateOf(current.isPrivate) }
@@ -142,52 +143,52 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
     }
 
     val catLabel = when (cats.size) {
-        0 -> "Hammasi"
-        1 -> categories.firstOrNull { it.id == cats.single() }?.name ?: "1 ta turkum"
-        else -> "${cats.size} ta turkum"
+        0 -> t("activity.all")
+        1 -> categories.firstOrNull { it.id == cats.single() }?.name ?: t("activity.n_categories", 1)
+        else -> t("activity.n_categories", cats.size)
     }
     val whoLabel = when (who.size) {
-        0 -> "Hammasi"
-        1 -> members[who.single()] ?: "1 ta a'zo"
-        else -> "${who.size} ta a'zo"
+        0 -> t("activity.all")
+        1 -> members[who.single()] ?: t("activity.n_members", 1)
+        else -> t("activity.n_members", who.size)
     }
-    val amountText = parseAmount(min).let { lo -> parseAmount(max).let { hi -> if (lo == null && hi == null) "Istalgan" else amountLabel(lo, hi) } }
+    val amountText = parseAmount(min).let { lo -> parseAmount(max).let { hi -> if (lo == null && hi == null) t("activity.any") else amountLabel(lo, hi) } }
 
     Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Orqaga") }
-            Text("Filtr", style = t.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, t("common.back")) }
+            Text(t("activity.filter"), style = ty.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
             LinkButton({
                 cats = emptySet(); range = null; private = null; who = emptySet(); min = ""; max = ""
-            }) { Text("Tozalash") }
+            }) { Text(t("activity.clear")) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
             if (members.isNotEmpty()) {
-                FilterRow(Icons.Outlined.Person, "A'zo", whoLabel, onClick = { memberSheet = true }) {
+                FilterRow(Icons.Outlined.Person, t("activity.member"), whoLabel, onClick = { memberSheet = true }) {
                     Icon(Icons.Filled.ChevronRight, null)
                 }
             }
-            FilterRow(Icons.Outlined.Category, "Turkum", catLabel, onClick = { catSheet = true }) {
+            FilterRow(Icons.Outlined.Category, t("activity.category"), catLabel, onClick = { catSheet = true }) {
                 Icon(Icons.Filled.ChevronRight, null)
             }
-            FilterRow(Icons.Outlined.DateRange, "Sana", range?.let(::rangeLabel) ?: "Istalgan", onClick = { rangePicker = true }) {
+            FilterRow(Icons.Outlined.DateRange, t("activity.date"), range?.let(::rangeLabel) ?: t("activity.any"), onClick = { rangePicker = true }) {
                 if (range == null) {
                     Icon(Icons.Filled.ChevronRight, null)
                 } else {
-                    IconButton({ range = null }) { Icon(Icons.Filled.Close, "Sanani tozalash") }
+                    IconButton({ range = null }) { Icon(Icons.Filled.Close, t("activity.clear_date")) }
                 }
             }
-            FilterRow(Icons.Outlined.Payments, "Summa", amountText, onClick = { amountOpen = !amountOpen }) {
+            FilterRow(Icons.Outlined.Payments, t("activity.amount"), amountText, onClick = { amountOpen = !amountOpen }) {
                 Icon(if (amountOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
             }
             if (amountOpen) {
                 Row(Modifier.padding(start = AppSpace.page, end = AppSpace.page, bottom = AppSpace.gap), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AmountField(min, "dan", Modifier.weight(1f).testTag("min")) { min = it }
-                    AmountField(max, "gacha", Modifier.weight(1f).testTag("max")) { max = it }
+                    AmountField(min, t("activity.from"), Modifier.weight(1f).testTag("min")) { min = it }
+                    AmountField(max, t("activity.to"), Modifier.weight(1f).testTag("max")) { max = it }
                 }
             }
-            val visibility = listOf<Pair<Boolean?, String>>(null to "Hammasi", false to "Umumiy", true to "Shaxsiy")
-            if (members.isEmpty()) FilterRow(Icons.Outlined.Visibility, "Ko'rinish", visibility.first { it.first == private }.second, onClick = { visibilityOpen = !visibilityOpen }) {
+            val visibility = listOf<Pair<Boolean?, String>>(null to t("activity.all"), false to t("activity.shared"), true to t("activity.personal"))
+            if (members.isEmpty()) FilterRow(Icons.Outlined.Visibility, t("activity.visibility"), visibility.first { it.first == private }.second, onClick = { visibilityOpen = !visibilityOpen }) {
                 Icon(if (visibilityOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
             }
             if (visibilityOpen && members.isEmpty()) {
@@ -199,13 +200,13 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
                     ) {
                         RadioButton(private == value, null)
                         Spacer(Modifier.width(16.dp))
-                        Text(label, style = t.bodyLarge)
+                        Text(label, style = ty.bodyLarge)
                     }
                 }
             }
         }
         PrimaryButton(::apply, Modifier.fillMaxWidth().padding(start = AppSpace.page, end = AppSpace.page, top = 8.dp, bottom = AppSpace.gap)) {
-            Text("Qo'llash")
+            Text(t("activity.apply"))
         }
     }
 
@@ -223,7 +224,7 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
 /** List row: muted icon, title over current value, trailing control. */
 @Composable
 private fun FilterRow(icon: ImageVector, title: String, value: String, onClick: () -> Unit, trailing: @Composable () -> Unit) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).defaultMinSize(minHeight = 64.dp).padding(horizontal = AppSpace.page, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -231,8 +232,8 @@ private fun FilterRow(icon: ImageVector, title: String, value: String, onClick: 
         Icon(icon, null, tint = AppTheme.colors.muted)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = t.bodyLarge)
-            Text(value, color = AppTheme.colors.muted, style = t.bodySmall)
+            Text(title, style = ty.bodyLarge)
+            Text(value, color = AppTheme.colors.muted, style = ty.bodySmall)
         }
         trailing()
     }
@@ -250,7 +251,7 @@ private fun AmountField(value: String, hint: String, modifier: Modifier, onChang
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PickSheet(options: List<Triple<String, String, Color?>>, selected: Set<String>, onDismiss: () -> Unit, onDone: (Set<String>) -> Unit) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     var picked by remember { mutableStateOf(selected) }
     ModalBottomSheet(onDismiss, containerColor = AppTheme.colors.card) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -265,14 +266,14 @@ private fun PickSheet(options: List<Triple<String, String, Color?>>, selected: S
                         Box(Modifier.size(16.dp).background(dot, CircleShape))
                         Spacer(Modifier.width(16.dp))
                     }
-                    Text(label, style = t.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(label, style = ty.bodyLarge, modifier = Modifier.weight(1f))
                     Checkbox(on, null)
                 }
             }
         }
         Row(Modifier.padding(start = AppSpace.page, end = AppSpace.page, top = 8.dp, bottom = AppSpace.gap), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SecondaryButton({ picked = emptySet() }, Modifier.weight(1f)) { Text("Hammasi") }
-            PrimaryButton({ onDone(picked) }, Modifier.weight(1f)) { Text("Tayyor") }
+            SecondaryButton({ picked = emptySet() }, Modifier.weight(1f)) { Text(t("activity.all")) }
+            PrimaryButton({ onDone(picked) }, Modifier.weight(1f)) { Text(t("common.done")) }
         }
     }
 }
@@ -299,13 +300,13 @@ private fun RangePick(initial: ClosedRange<LocalDate>?, onDismiss: () -> Unit, o
                 val start = state.selectedStartDateMillis?.day()
                 // Only a start picked = that one day.
                 if (start == null) onDismiss() else onPick(start..(state.selectedEndDateMillis?.day() ?: start))
-            }) { Text("OK") }
+            }) { Text(t("common.ok")) }
         },
-        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+        dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
     ) {
         DateRangePicker(
             state, Modifier.weight(1f),
-            title = { Text("Bitta kun uchun kunni ikki marta bosing", Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)) },
+            title = { Text(t("activity.range_hint"), Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)) },
         )
     }
 }
@@ -329,7 +330,7 @@ fun ActiveFilters(
         onClick = { onChange(without) },
         label = { Text(label) },
         avatar = dot?.let { { Box(Modifier.size(10.dp).background(it, CircleShape)) } },
-        trailingIcon = { Icon(Icons.Filled.Close, "Olib tashlash", Modifier.size(InputChipDefaults.IconSize)) },
+        trailingIcon = { Icon(Icons.Filled.Close, t("activity.remove"), Modifier.size(InputChipDefaults.IconSize)) },
     )
     val f = filter
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -341,6 +342,6 @@ fun ActiveFilters(
         }
         f.range?.let { Chip(rangeLabel(it), f.copy(range = null)) }
         if (f.minAmount != null || f.maxAmount != null) Chip(amountLabel(f.minAmount, f.maxAmount), f.copy(minAmount = null, maxAmount = null))
-        f.isPrivate?.let { Chip(if (it) "Shaxsiy" else "Umumiy", f.copy(isPrivate = null)) }
+        f.isPrivate?.let { Chip(if (it) t("activity.personal") else t("activity.shared"), f.copy(isPrivate = null)) }
     }
 }

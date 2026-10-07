@@ -12,14 +12,11 @@ private val grouping = DecimalFormat("#,###", DecimalFormatSymbols().apply { gro
 /** UZS-style grouped amount with space separators, e.g. 2450000 -> "2 450 000". */
 fun formatMoney(amount: Long): String = grouping.format(amount)
 
-/** Uzbek month names (hardcoded — no locale data needed). */
-val uzMonths = listOf(
-    "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
-    "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
-)
+/** Month name, 1-based, in the current UI script. */
+fun monthName(m: Int) = t("month.$m")
 
 /** "5 Iyul" */
-fun uzDayMonth(d: LocalDate) = "${d.dayOfMonth} ${uzMonths[d.monthValue - 1]}"
+fun uzDayMonth(d: LocalDate) = "${d.dayOfMonth} ${monthName(d.monthValue)}"
 
 /**
  * Parse a user-entered amount, ignoring spaces/separators. "45 000" -> 45000.
