@@ -83,7 +83,7 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
     val t = MaterialTheme.typography
     Row {
         Column(Modifier.weight(1f)) {
-            Text(uzDayMonth(date), style = t.labelMedium)
+            Text(uzDayMonth(date), color = AppTheme.colors.muted, style = t.labelMedium)
             Text("Bugun", style = t.headlineMedium)
         }
         OutlinedIconButton(

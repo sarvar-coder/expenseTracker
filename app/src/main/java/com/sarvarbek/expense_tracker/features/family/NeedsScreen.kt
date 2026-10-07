@@ -80,7 +80,7 @@ fun NeedsCard(db: ExpenseDao, onOpen: () -> Unit) {
         Column(Modifier.clickable(onClickLabel = "Kerakli ro'yxatini ochish", onClick = onOpen).padding(16.dp, 12.dp)) {
             if (open.isEmpty()) {
                 Text("Hammasi olingan", style = t.titleSmall)
-                Text("Nima kerakligini yozib qo'ying", style = t.bodySmall)
+                Text("Nima kerakligini yozib qo'ying", color = AppTheme.colors.muted, style = t.bodySmall)
             } else {
                 for (n in open.take(3)) {
                     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

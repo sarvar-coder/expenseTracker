@@ -198,7 +198,7 @@ fun AddScreen(
 
 @Composable
 private fun Label(text: String) =
-    Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+    Text(text, color = AppTheme.colors.muted, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
 
 @Composable
 private fun ManualForm(
@@ -260,7 +260,7 @@ private fun ManualForm(
 
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)) {
-            Text("Summa", style = t.labelMedium)
+            Text("Summa", color = AppTheme.colors.muted, style = t.labelMedium)
             TextField(
                 amount, { v -> amount = v.filter { it.isDigit() } },
                 Modifier.fillMaxWidth().testTag("amount"),
@@ -297,7 +297,7 @@ private fun ManualForm(
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text("O'tkazma", style = t.bodyLarge)
-                    Text("Oila a'zosiga berilgan pul — xarajatga qo'shilmaydi", style = t.bodySmall)
+                    Text("Oila a'zosiga berilgan pul — xarajatga qo'shilmaydi", color = AppTheme.colors.muted, style = t.bodySmall)
                 }
                 Switch(transfer, null)
             }
@@ -309,7 +309,7 @@ private fun ManualForm(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             for ((id, label) in members) AppChip(label, transferTo == id, { transferTo = id })
         }
-        if (members.isEmpty()) Text("A'zolar yuklanmadi — internetni tekshiring", style = t.bodySmall, modifier = Modifier.padding(start = 4.dp))
+        if (members.isEmpty()) Text("A'zolar yuklanmadi — internetni tekshiring", color = AppTheme.colors.muted, style = t.bodySmall, modifier = Modifier.padding(start = 4.dp))
     } else {
         Label("Turkum")
         AppCard(Modifier.fillMaxWidth()) {
@@ -321,7 +321,7 @@ private fun ManualForm(
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(selected?.name ?: "Turkum tanlang", style = t.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
-                    if (pending != null) Text("So'raldi: $pending — hozircha Boshqa", style = t.bodySmall)
+                    if (pending != null) Text("So'raldi: $pending — hozircha Boshqa", color = AppTheme.colors.muted, style = t.bodySmall)
                 }
                 Icon(Icons.Filled.ExpandMore, null, tint = c.muted)
             }
@@ -350,7 +350,7 @@ private fun ManualForm(
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Maxfiy", style = t.bodyLarge)
-                    Text("Oila bu xarajatni ko'rmaydi", style = t.bodySmall)
+                    Text("Oila bu xarajatni ko'rmaydi", color = AppTheme.colors.muted, style = t.bodySmall)
                 }
                 Switch(private, null)
             }
@@ -432,7 +432,7 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
                 Spacer(Modifier.width(16.dp))
                 Column {
                     Text(if (canCreate) "Yangi turkum" else "Turkum so'rash", style = t.bodyLarge)
-                    if (!canCreate) Text("Admin tasdiqlaguncha Boshqa'da turadi", style = t.bodySmall)
+                    if (!canCreate) Text("Admin tasdiqlaguncha Boshqa'da turadi", color = AppTheme.colors.muted, style = t.bodySmall)
                 }
             }
         }
@@ -576,7 +576,7 @@ private fun TypeForm(
             Spacer(Modifier.height(12.dp))
             Text(
                 if (listening) "Tinglanmoqda… to'xtatish uchun bosing" else "Mikrofonni bosing va nima olganingizni ayting",
-                style = t.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                color = AppTheme.colors.muted, style = t.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(AppSpace.gap))
         }

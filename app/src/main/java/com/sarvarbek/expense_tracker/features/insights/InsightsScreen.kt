@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.DonutLarge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -233,13 +234,13 @@ private fun Donut(data: InsightsData) {
             }
         }
         Column(Modifier.padding(horizontal = 96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Jami", style = t.labelMedium)
+            Text("Jami", color = AppTheme.colors.muted, style = t.labelMedium)
             Spacer(Modifier.height(4.dp))
             androidx.compose.foundation.text.BasicText(
-                formatMoney(data.total), style = t.displaySmall.copy(textAlign = TextAlign.Center), maxLines = 1,
+                formatMoney(data.total), style = t.displaySmall.copy(color = LocalContentColor.current, textAlign = TextAlign.Center), maxLines = 1,
                 autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(maxFontSize = t.displaySmall.fontSize),
             )
-            Text("UZS", style = t.labelSmall)
+            Text("UZS", color = AppTheme.colors.muted, style = t.labelSmall)
         }
     }
 }
@@ -267,7 +268,7 @@ private fun LegendRow(slice: Slice, fraction: Double) {
                     gapSize = 0.dp,
                     drawStopIndicator = {},
                 )
-                Text("${Math.round(fraction * 100)}%", style = t.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+                Text("${Math.round(fraction * 100)}%", color = AppTheme.colors.muted, style = t.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
             }
         }
     }

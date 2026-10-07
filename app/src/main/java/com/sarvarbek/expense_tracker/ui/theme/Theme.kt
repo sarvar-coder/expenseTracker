@@ -92,33 +92,36 @@ val Manrope = FontFamily(
 
 private const val TABULAR = "tnum"
 
-private fun style(size: Int, weight: FontWeight, color: Color, height: Float? = null, spacing: Float = 0f, tabular: Boolean = false) =
+private fun style(size: Int, weight: FontWeight, height: Float? = null, spacing: Float = 0f, tabular: Boolean = false) =
     TextStyle(
         fontFamily = Manrope,
         fontSize = size.sp,
         fontWeight = weight,
-        color = color,
         lineHeight = height?.let { (size * it).sp } ?: TextStyle.Default.lineHeight,
         letterSpacing = spacing.sp,
         fontFeatureSettings = if (tabular) TABULAR else null,
     )
 
-/** Type scale (Manrope). Amounts use tabular figures so digits line up. */
-private fun typography(c: AppColors) = Typography(
-    displayLarge = style(44, FontWeight.ExtraBold, c.text, 1.05f, -1.6f, tabular = true),
-    displayMedium = style(45, FontWeight.Normal, c.text, 1.15f),
-    displaySmall = style(30, FontWeight.ExtraBold, c.text, 1.1f, -1f, tabular = true),
-    headlineMedium = style(28, FontWeight.ExtraBold, c.text, 1.15f, -0.8f),
-    headlineSmall = style(24, FontWeight.Normal, c.text, 1.33f),
-    titleLarge = style(20, FontWeight.Bold, c.text, 1.25f, -0.3f),
-    titleMedium = style(16, FontWeight.Bold, c.text, 1.3f),
-    titleSmall = style(15, FontWeight.Bold, c.text, 1.3f, tabular = true),
-    bodyLarge = style(16, FontWeight.Medium, c.text, 1.45f),
-    bodyMedium = style(14, FontWeight.Medium, c.text, 1.45f),
-    bodySmall = style(13, FontWeight.Medium, c.muted, 1.35f),
-    labelLarge = style(15, FontWeight.Bold, c.text),
-    labelMedium = style(13, FontWeight.SemiBold, c.muted),
-    labelSmall = style(12, FontWeight.SemiBold, c.muted),
+/**
+ * Type scale (Manrope). Amounts use tabular figures so digits line up.
+ * No colors here: Text takes LocalContentColor from its container (Card, Snackbar, Badge, chip).
+ * Secondary text passes color = AppTheme.colors.muted at the call site.
+ */
+private val typography = Typography(
+    displayLarge = style(44, FontWeight.ExtraBold, 1.05f, -1.6f, tabular = true),
+    displayMedium = style(45, FontWeight.Normal, 1.15f),
+    displaySmall = style(30, FontWeight.ExtraBold, 1.1f, -1f, tabular = true),
+    headlineMedium = style(28, FontWeight.ExtraBold, 1.15f, -0.8f),
+    headlineSmall = style(24, FontWeight.Normal, 1.33f),
+    titleLarge = style(20, FontWeight.Bold, 1.25f, -0.3f),
+    titleMedium = style(16, FontWeight.Bold, 1.3f),
+    titleSmall = style(15, FontWeight.Bold, 1.3f, tabular = true),
+    bodyLarge = style(16, FontWeight.Medium, 1.45f),
+    bodyMedium = style(14, FontWeight.Medium, 1.45f),
+    bodySmall = style(13, FontWeight.Medium, 1.35f),
+    labelLarge = style(15, FontWeight.Bold),
+    labelMedium = style(13, FontWeight.SemiBold),
+    labelSmall = style(12, FontWeight.SemiBold),
 )
 
 private val LocalAppColors = staticCompositionLocalOf { AppColors.Light }
@@ -159,7 +162,7 @@ fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> U
     CompositionLocalProvider(LocalAppColors provides c) {
         MaterialTheme(
             colorScheme = scheme,
-            typography = typography(c),
+            typography = typography,
             shapes = Shapes(
                 small = RoundedCornerShape(AppRadii.sm),
                 medium = RoundedCornerShape(AppRadii.md),

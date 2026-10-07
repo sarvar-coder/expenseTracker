@@ -139,7 +139,7 @@ fun SettingsScreen(
                 })) { it() }
                 Text(
                     "Bepul tarif so'rovlari Google tomonidan modellarini yaxshilash uchun ishlatilishi mumkin.",
-                    style = MaterialTheme.typography.bodySmall,
+                    color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 10.dp),
                 )
             }
@@ -208,7 +208,7 @@ private fun RowIcon(icon: ImageVector) {
 @Composable
 private fun RowText(title: String, subtitle: String, modifier: Modifier) = Column(modifier) {
     Text(title, style = MaterialTheme.typography.titleSmall)
-    Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Text(subtitle, color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable

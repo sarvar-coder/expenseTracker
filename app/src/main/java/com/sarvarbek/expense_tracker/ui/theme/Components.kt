@@ -37,7 +37,7 @@ fun PrimaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: B
     Button(
         onClick, modifier.defaultMinSize(minHeight = 56.dp), enabled, shape = md,
         colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent),
-        content = { ProvideLabel { content() } },
+        content = content,
     )
 }
 
@@ -49,7 +49,7 @@ fun SecondaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled:
         onClick, modifier.defaultMinSize(minHeight = 56.dp), enabled, shape = md,
         colors = ButtonDefaults.outlinedButtonColors(contentColor = c.text),
         border = BorderStroke(1.5.dp, c.border),
-        content = { ProvideLabel { content() } },
+        content = content,
     )
 }
 
@@ -59,13 +59,9 @@ fun LinkButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bool
     TextButton(
         onClick, modifier.defaultMinSize(48.dp, 48.dp), enabled,
         colors = ButtonDefaults.textButtonColors(contentColor = AppTheme.colors.accent),
-        content = { ProvideLabel { content() } },
+        content = content,
     )
 }
-
-@Composable
-private fun ProvideLabel(content: @Composable () -> Unit) =
-    androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(color = androidx.compose.ui.graphics.Color.Unspecified), content)
 
 /** Content card: flat; dark mode adds a hairline so cards don't melt into bg. */
 @Composable

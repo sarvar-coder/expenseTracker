@@ -232,7 +232,7 @@ private fun FilterRow(icon: ImageVector, title: String, value: String, onClick: 
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = t.bodyLarge)
-            Text(value, style = t.bodySmall)
+            Text(value, color = AppTheme.colors.muted, style = t.bodySmall)
         }
         trailing()
     }

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +44,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.SpanStyle
@@ -106,7 +108,7 @@ val LocalToaster = staticCompositionLocalOf<Toaster> { error("LocalToaster not p
  */
 @Composable
 fun Money(amount: Long, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.titleSmall, color: Color = Color.Unspecified, autoSize: Boolean = false) {
-    val base = style.merge(TextStyle(color = if (color == Color.Unspecified) style.color else color))
+    val base = style.merge(TextStyle(color = color.takeOrElse { style.color.takeOrElse { LocalContentColor.current } }))
     val text = buildAnnotatedString {
         append(formatMoney(amount))
         // em = relative to the (possibly auto-sized) number.
@@ -162,7 +164,7 @@ fun EmptyState(icon: ImageVector, title: String, hint: String? = null) {
         Text(title, style = t.titleMedium, textAlign = TextAlign.Center)
         if (hint != null) {
             Spacer(Modifier.height(6.dp))
-            Text(hint, style = t.bodySmall, textAlign = TextAlign.Center)
+            Text(hint, color = AppTheme.colors.muted, style = t.bodySmall, textAlign = TextAlign.Center)
         }
     }
 }
@@ -239,7 +241,7 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
                 Text(expense.description, style = t.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (transfer) "O'tkazma" else category?.name ?: "Turkumsiz", style = t.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(if (transfer) "O'tkazma" else category?.name ?: "Turkumsiz", color = AppTheme.colors.muted, style = t.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                     Icon(srcIcon, srcLabel, tint = c.muted, modifier = Modifier.size(13.dp))
                     if (expense.isPrivate) Icon(Icons.Outlined.VisibilityOff, "Maxfiy", tint = c.muted, modifier = Modifier.size(13.dp))
@@ -250,7 +252,7 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
             Column(horizontalAlignment = Alignment.End) {
                 Text(formatMoney(expense.amount), style = t.titleSmall)
                 Spacer(Modifier.height(2.dp))
-                Text(expense.date.toLocalDateTime().format(hhmm), style = t.bodySmall)
+                Text(expense.date.toLocalDateTime().format(hhmm), color = AppTheme.colors.muted, style = t.bodySmall)
             }
         }
     }
@@ -304,7 +306,7 @@ fun SectionLabel(text: String, top: Dp = AppSpace.section, badge: Int = 0) = Row
     Modifier.padding(start = 4.dp, end = 4.dp, top = top, bottom = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
-    Text(text, style = MaterialTheme.typography.labelMedium)
+    Text(text, color = AppTheme.colors.muted, style = MaterialTheme.typography.labelMedium)
     if (badge > 0) {
         Spacer(Modifier.width(8.dp))
         Badge(containerColor = AppTheme.colors.danger) { Text("$badge") }
