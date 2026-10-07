@@ -62,6 +62,21 @@ import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.LinkButton
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Badge
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import com.sarvarbek.expense_tracker.ui.theme.AppCard
+import com.sarvarbek.expense_tracker.ui.theme.AppSpace
+import com.sarvarbek.expense_tracker.ui.theme.fieldColors
+import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
@@ -226,5 +241,69 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
                 Text(expense.date.toLocalDateTime().format(hhmm), style = t.bodySmall)
             }
         }
+    }
+}
+
+/** Yes/no confirm with a named action ("Chiqish", "O'chirish"…). */
+@Composable
+fun ConfirmDialog(title: String, body: String?, action: String, onDismiss: () -> Unit, onConfirm: () -> Unit) = AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text(title) },
+    text = body?.let { { Text(it) } },
+    dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+    confirmButton = { LinkButton(onConfirm) { Text(action) } },
+)
+
+/** One-field dialog. [accept] rejects edits (e.g. digits only). [onDone] gets the trimmed text (may be empty). */
+@Composable
+fun TextDialog(
+    title: String,
+    action: String,
+    onDismiss: () -> Unit,
+    initial: String = "",
+    hint: String? = null,
+    suffix: String? = null,
+    keyboard: KeyboardType = KeyboardType.Text,
+    accept: (String) -> Boolean = { true },
+    onDone: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
+    val focus = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                text, { if (accept(it.text)) text = it }, Modifier.fillMaxWidth().focusRequester(focus),
+                placeholder = hint?.let { { Text(it) } }, suffix = suffix?.let { { Text(it) } }, singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = if (keyboard == KeyboardType.Text) KeyboardCapitalization.Sentences else KeyboardCapitalization.None, keyboardType = keyboard),
+                shape = fieldShape, colors = fieldColors(),
+            )
+        },
+        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+        confirmButton = { LinkButton({ onDone(text.text.trim()) }) { Text(action) } },
+    )
+    DisposableEffect(Unit) { runCatching { focus.requestFocus() }; onDispose {} }
+}
+
+/** Muted label above a card group; optional count badge. */
+@Composable
+fun SectionLabel(text: String, top: Dp = AppSpace.section, badge: Int = 0) = Row(
+    Modifier.padding(start = 4.dp, end = 4.dp, top = top, bottom = 10.dp),
+    verticalAlignment = Alignment.CenterVertically,
+) {
+    Text(text, style = MaterialTheme.typography.labelMedium)
+    if (badge > 0) {
+        Spacer(Modifier.width(8.dp))
+        Badge(containerColor = AppTheme.colors.danger) { Text("$badge") }
+    }
+}
+
+/** Card of [row]s split by hairlines starting at [indent]. */
+@Composable
+fun <T> DividedCard(items: List<T>, indent: Dp = 72.dp, row: @Composable (T) -> Unit) = AppCard(Modifier.fillMaxWidth()) {
+    items.forEachIndexed { i, item ->
+        if (i > 0) HorizontalDivider(Modifier.padding(start = indent), color = AppTheme.colors.border)
+        row(item)
     }
 }
