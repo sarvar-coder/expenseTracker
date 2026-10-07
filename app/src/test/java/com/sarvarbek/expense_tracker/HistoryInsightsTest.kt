@@ -182,7 +182,7 @@ class HistoryInsightsTest {
     }
 
     @Test fun filterSurvivesSaveRestore() {
-        val f = ActivityFilter(setOf("a", "b"), LocalDate.of(2026, 7, 5)..LocalDate.of(2026, 7, 9), 1000, null, true)
+        val f = ActivityFilter(setOf("a", "b"), LocalDate.of(2026, 7, 5)..LocalDate.of(2026, 7, 9), 1000, null, true, setOf("u2"))
         val saved = with(ActivityFilterSaver) { SaverScope { true }.save(f) }!!
         assertEquals(f, ActivityFilterSaver.restore(saved))
         assertEquals(ActivityFilter(), ActivityFilterSaver.restore(with(ActivityFilterSaver) { SaverScope { true }.save(ActivityFilter()) }!!))

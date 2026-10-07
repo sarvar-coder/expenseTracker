@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.FamilyRestroom
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +62,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.ExpenseDao
+import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilterPage
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
+import com.sarvarbek.expense_tracker.features.activity.FilterButton
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
+import com.sarvarbek.expense_tracker.features.insights.CategoryBreakdown
+import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.FamilyException
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.FamilyInvite
@@ -150,7 +159,8 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
 
 /**
  * Oila tab. Not in a family: pending invites + create. In one: this month's
- * family budget vs shared spending, members and the shared expense list.
+ * family budget vs shared spending, members, then the shared expenses (this
+ * month, or the filter's Sana) as a category donut and a list.
  * Management (roles, invites, requests, leave, delete) is behind the gear.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -159,6 +169,8 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
+    var filter by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
+    var filterOpen by remember { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
     LaunchedEffect(state) { state.refresh() } // every time the tab opens
@@ -176,7 +188,11 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(state.overview?.name ?: "Oila", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                    if (state.overview != null) GearButton("Oila sozlamalari", onSettings)
+                    if (state.overview != null) {
+                        FilterButton(filter.count) { filterOpen = true }
+                        Spacer(Modifier.width(4.dp))
+                        GearButton("Oila sozlamalari", onSettings)
+                    }
                 }
                 Spacer(Modifier.height(AppSpace.gap))
             }
@@ -184,7 +200,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act)
-                    state.loaded && f != null -> InFamily(f, db)
+                    state.loaded && f != null -> InFamily(f, db, filter) { filter = it }
                     state.failed -> EmptyState(Icons.Outlined.WifiOff, "Oila ma'lumotini yuklab bo'lmadi", "Internetni tekshirib, pastga torting")
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
@@ -192,7 +208,14 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
         }
     }
     actions.dialog()?.invoke()
+    val f = state.overview
+    if (filterOpen && f != null) {
+        val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
+        ActivityFilterPage(filter, categories, onDismiss = { filterOpen = false }, members = f.memberNames) { filter = it; filterOpen = false }
+    }
 }
+
+private val FamilyOverview.memberNames get() = members.associate { it.userId to it.name }
 
 /** Joining or creating: share past expenses too? */
 @Composable
@@ -247,39 +270,53 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act) {
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, db: ExpenseDao) {
+private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit) {
     val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
-    val from = monthStart().startMillis()
-    val me = f.members.firstOrNull { it.userId == f.myId }
+    val names = f.memberNames
     // Own shared rows come from Room (live, offline edits included); the
     // server only sends the others'.
-    val mine = expenses.filter { it.familyId == f.id && !it.isPrivate && it.date >= from }
-        .map { FamilyExpense(it.id, me?.name ?: "Siz", it.categoryId, it.description, it.amount, it.date) }
-    val list = (mine + f.others).sortedByDescending { it.date }
+    val mine = expenses.filter { it.familyId == f.id && !it.isPrivate }
+        .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: "Siz") }
+    // No Sana in the filter: this month.
+    val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
+    val list = (mine + f.others).filter { filter.copy(range = range).matches(it.expense) }.sortedByDescending { it.expense.date }
+    val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget))
         SectionLabel("A'zolar")
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
-        SectionLabel("Bu oygi umumiy xarajatlar")
-        if (list.isEmpty()) EmptyState(Icons.Outlined.ReceiptLong, "Bu oy umumiy xarajat yo'q")
-        else DividedCard(list) { e -> SharedRow(e, catById[e.categoryId]) }
+        SectionLabel(if (filter.range == null) "Bu oygi umumiy xarajatlar" else "Umumiy xarajatlar")
+        if (!filter.isEmpty) {
+            ActiveFilters(filter, catById, onFilter, names)
+            Spacer(Modifier.height(12.dp))
+        }
+        if (list.isEmpty()) {
+            if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, "Bu oy umumiy xarajat yo'q")
+            else EmptyState(Icons.Outlined.SearchOff, "Mos keladigani yo'q", "Boshqa filtrni sinab ko'ring")
+        } else {
+            CategoryBreakdown(data)
+            SectionLabel("Ro'yxat")
+            // ponytail: whole list in one lazy item; fine for a family's month, page it if wide ranges get slow.
+            DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId]) }
+        }
     }
 }
 
 @Composable
-private fun SharedRow(e: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?) = Row(
+private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?) = Row(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
+    val e = fe.expense
     CategoryBadge(category)
     Spacer(Modifier.width(14.dp))
     Column(Modifier.weight(1f)) {
         Text(e.description, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
-            "${e.ownerName} · ${uzDayMonth(e.date.toLocalDate())} ${e.date.toLocalDateTime().format(hhmm)}",
+            "${fe.ownerName} · ${uzDayMonth(e.date.toLocalDate())} ${e.date.toLocalDateTime().format(hhmm)}",
             style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }

@@ -153,6 +153,15 @@ class HelpersTest {
     @Test fun countAndIsEmpty() {
         assertTrue(ActivityFilter().isEmpty)
         assertEquals(3, ActivityFilter(categoryIds = setOf("1", "2"), minAmount = 1, maxAmount = 2, isPrivate = true).count)
+        assertEquals(1, ActivityFilter(memberIds = setOf("u1", "u2")).count)
+    }
+
+    @Test fun membersOneOrSeveral() {
+        val t = at(2026, 7, 8)
+        val list = listOf(exp(1, 1, 10, t, "Non").copy(ownerId = "u1"), exp(2, 1, 10, t, "Taksi").copy(ownerId = "u2"), exp(3, 1, 10, t, "Dori").copy(ownerId = "u3"))
+        assertEquals(listOf("Taksi"), names(ActivityFilter(memberIds = setOf("u2")), list))
+        assertEquals(listOf("Non", "Dori"), names(ActivityFilter(memberIds = setOf("u1", "u3")), list))
+        assertEquals(3, names(ActivityFilter(), list).size)
     }
 
     // --- csv_export ---

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -58,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -102,24 +104,32 @@ fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier
 
 /**
  * Tarix filter page, full screen over the shell. [onApply] gets the new
- * filter on Qo'llash; [onDismiss] on back.
+ * filter on Qo'llash; [onDismiss] on back. Non-empty [members] (id to name)
+ * means the Oila list: adds an A'zo row and drops Ko'rinish (all shared).
  */
 @Composable
-fun ActivityFilterPage(current: ActivityFilter, categories: List<Category>, onDismiss: () -> Unit, onApply: (ActivityFilter) -> Unit) =
-    Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        FilterPage(current, categories, onDismiss, onApply)
-    }
+fun ActivityFilterPage(
+    current: ActivityFilter,
+    categories: List<Category>,
+    onDismiss: () -> Unit,
+    members: Map<String, String> = emptyMap(),
+    onApply: (ActivityFilter) -> Unit,
+) = Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    FilterPage(current, categories, members, onDismiss, onApply)
+}
 
 @Composable
-private fun FilterPage(current: ActivityFilter, categories: List<Category>, onBack: () -> Unit, onApply: (ActivityFilter) -> Unit) {
+private fun FilterPage(current: ActivityFilter, categories: List<Category>, members: Map<String, String>, onBack: () -> Unit, onApply: (ActivityFilter) -> Unit) {
     val c = AppTheme.colors
     val t = MaterialTheme.typography
     var cats by remember { mutableStateOf(current.categoryIds) }
     var range by remember { mutableStateOf(current.range) }
     var private by remember { mutableStateOf(current.isPrivate) }
+    var who by remember { mutableStateOf(current.memberIds) }
     var min by remember { mutableStateOf(current.minAmount?.toString().orEmpty()) }
     var max by remember { mutableStateOf(current.maxAmount?.toString().orEmpty()) }
     var catSheet by remember { mutableStateOf(false) }
+    var memberSheet by remember { mutableStateOf(false) }
     var rangePicker by remember { mutableStateOf(false) }
     var amountOpen by remember { mutableStateOf(false) }
     var visibilityOpen by remember { mutableStateOf(false) }
@@ -128,13 +138,18 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, onBa
         var lo = parseAmount(min)
         var hi = parseAmount(max)
         if (lo != null && hi != null && lo > hi) lo = hi.also { hi = lo }
-        onApply(ActivityFilter(cats, range, lo, hi, private))
+        onApply(ActivityFilter(cats, range, lo, hi, private, who))
     }
 
     val catLabel = when (cats.size) {
         0 -> "Hammasi"
         1 -> categories.firstOrNull { it.id == cats.single() }?.name ?: "1 ta turkum"
         else -> "${cats.size} ta turkum"
+    }
+    val whoLabel = when (who.size) {
+        0 -> "Hammasi"
+        1 -> members[who.single()] ?: "1 ta a'zo"
+        else -> "${who.size} ta a'zo"
     }
     val amountText = parseAmount(min).let { lo -> parseAmount(max).let { hi -> if (lo == null && hi == null) "Istalgan" else amountLabel(lo, hi) } }
 
@@ -143,10 +158,15 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, onBa
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Orqaga") }
             Text("Filtr", style = t.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
             LinkButton({
-                cats = emptySet(); range = null; private = null; min = ""; max = ""
+                cats = emptySet(); range = null; private = null; who = emptySet(); min = ""; max = ""
             }) { Text("Tozalash") }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
+            if (members.isNotEmpty()) {
+                FilterRow(Icons.Outlined.Person, "A'zo", whoLabel, onClick = { memberSheet = true }) {
+                    Icon(Icons.Filled.ChevronRight, null)
+                }
+            }
             FilterRow(Icons.Outlined.Category, "Turkum", catLabel, onClick = { catSheet = true }) {
                 Icon(Icons.Filled.ChevronRight, null)
             }
@@ -167,10 +187,10 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, onBa
                 }
             }
             val visibility = listOf<Pair<Boolean?, String>>(null to "Hammasi", false to "Umumiy", true to "Shaxsiy")
-            FilterRow(Icons.Outlined.Visibility, "Ko'rinish", visibility.first { it.first == private }.second, onClick = { visibilityOpen = !visibilityOpen }) {
+            if (members.isEmpty()) FilterRow(Icons.Outlined.Visibility, "Ko'rinish", visibility.first { it.first == private }.second, onClick = { visibilityOpen = !visibilityOpen }) {
                 Icon(if (visibilityOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
             }
-            if (visibilityOpen) {
+            if (visibilityOpen && members.isEmpty()) {
                 for ((value, label) in visibility) {
                     Row(
                         Modifier.fillMaxWidth().selectable(private == value, role = Role.RadioButton) { private = value }
@@ -190,7 +210,10 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, onBa
     }
 
     if (catSheet) {
-        CategoryPickSheet(categories, cats, onDismiss = { catSheet = false }) { cats = it; catSheet = false }
+        PickSheet(categories.map { Triple(it.id, it.name, colorFromHex(it.colorHex)) }, cats, onDismiss = { catSheet = false }) { cats = it; catSheet = false }
+    }
+    if (memberSheet) {
+        PickSheet(members.map { Triple(it.key, it.value, null) }, who, onDismiss = { memberSheet = false }) { who = it; memberSheet = false }
     }
     if (rangePicker) {
         RangePick(range, onDismiss = { rangePicker = false }) { range = it; rangePicker = false }
@@ -223,24 +246,26 @@ private fun AmountField(value: String, hint: String, modifier: Modifier, onChang
     shape = fieldShape, colors = fieldColors(),
 )
 
-/** Multi-select category list; "Tayyor" returns the picked ids. */
+/** Multi-select list of (id, label, dot color); "Tayyor" returns the picked ids. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryPickSheet(categories: List<Category>, selected: Set<String>, onDismiss: () -> Unit, onDone: (Set<String>) -> Unit) {
+private fun PickSheet(options: List<Triple<String, String, Color?>>, selected: Set<String>, onDismiss: () -> Unit, onDone: (Set<String>) -> Unit) {
     val t = MaterialTheme.typography
     var picked by remember { mutableStateOf(selected) }
     ModalBottomSheet(onDismiss, containerColor = AppTheme.colors.card) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-            for (cat in categories) {
-                val on = cat.id in picked
+            for ((id, label, dot) in options) {
+                val on = id in picked
                 Row(
-                    Modifier.fillMaxWidth().toggleable(on, role = Role.Checkbox) { picked = if (it) picked + cat.id else picked - cat.id }
+                    Modifier.fillMaxWidth().toggleable(on, role = Role.Checkbox) { picked = if (it) picked + id else picked - id }
                         .defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(16.dp).background(colorFromHex(cat.colorHex), CircleShape))
-                    Spacer(Modifier.width(16.dp))
-                    Text(cat.name, style = t.bodyLarge, modifier = Modifier.weight(1f))
+                    if (dot != null) {
+                        Box(Modifier.size(16.dp).background(dot, CircleShape))
+                        Spacer(Modifier.width(16.dp))
+                    }
+                    Text(label, style = t.bodyLarge, modifier = Modifier.weight(1f))
                     Checkbox(on, null)
                 }
             }
@@ -291,9 +316,15 @@ private fun RangePick(initial: ClosedRange<LocalDate>?, onDismiss: () -> Unit, o
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ActiveFilters(filter: ActivityFilter, catById: Map<String, Category>, onChange: (ActivityFilter) -> Unit, leading: (@Composable () -> Unit)? = null) {
+fun ActiveFilters(
+    filter: ActivityFilter,
+    catById: Map<String, Category>,
+    onChange: (ActivityFilter) -> Unit,
+    members: Map<String, String> = emptyMap(),
+    leading: (@Composable () -> Unit)? = null,
+) {
     @Composable
-    fun Chip(label: String, without: ActivityFilter, dot: androidx.compose.ui.graphics.Color? = null) = InputChip(
+    fun Chip(label: String, without: ActivityFilter, dot: Color? = null) = InputChip(
         selected = false,
         onClick = { onChange(without) },
         label = { Text(label) },
@@ -303,6 +334,7 @@ fun ActiveFilters(filter: ActivityFilter, catById: Map<String, Category>, onChan
     val f = filter
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         leading?.invoke()
+        for (id in f.memberIds) Chip(members[id] ?: continue, f.copy(memberIds = f.memberIds - id))
         for (id in f.categoryIds) {
             val cat = catById[id] ?: continue
             Chip(cat.name, f.copy(categoryIds = f.categoryIds - id), colorFromHex(cat.colorHex))

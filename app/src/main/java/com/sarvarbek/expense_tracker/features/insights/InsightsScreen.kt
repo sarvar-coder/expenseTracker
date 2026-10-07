@@ -134,20 +134,7 @@ fun InsightsScreen(db: ExpenseDao) {
         if (data.slices.isEmpty()) {
             item { EmptyState(Icons.Outlined.DonutLarge, "Bu davrda xarajat yo'q", "Boshqa davrni tanlang yoki xarajat qo'shing") }
         } else {
-            item {
-                AppCard(Modifier.fillMaxWidth()) { Donut(data) }
-                Spacer(Modifier.height(AppSpace.section))
-                Text("Turkumlar", style = t.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
-                Spacer(Modifier.height(12.dp))
-                AppCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        data.slices.forEachIndexed { i, s ->
-                            if (i > 0) HorizontalDivider(Modifier.padding(start = 74.dp, end = 16.dp), color = c.border)
-                            LegendRow(s, data.fraction(s.amount))
-                        }
-                    }
-                }
-            }
+            item { CategoryBreakdown(data) }
         }
     }
 
@@ -196,6 +183,23 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
                     Text("$y", style = t.bodyLarge, modifier = Modifier.weight(1f))
                     if (y == selected) Icon(Icons.Filled.Check, "Tanlangan", tint = AppTheme.colors.accent)
                 }
+            }
+        }
+    }
+}
+
+/** Donut card, then "Turkumlar" with one share row per category. Shared with Oila. */
+@Composable
+internal fun CategoryBreakdown(data: InsightsData) {
+    AppCard(Modifier.fillMaxWidth()) { Donut(data) }
+    Spacer(Modifier.height(AppSpace.section))
+    Text("Turkumlar", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
+    Spacer(Modifier.height(12.dp))
+    AppCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 6.dp)) {
+            data.slices.forEachIndexed { i, s ->
+                if (i > 0) HorizontalDivider(Modifier.padding(start = 74.dp, end = 16.dp), color = AppTheme.colors.border)
+                LegendRow(s, data.fraction(s.amount))
             }
         }
     }
