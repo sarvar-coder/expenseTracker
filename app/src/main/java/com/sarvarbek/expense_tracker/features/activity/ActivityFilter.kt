@@ -1,6 +1,7 @@
 package com.sarvarbek.expense_tracker.features.activity
 
 import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
 import androidx.compose.runtime.saveable.listSaver
@@ -47,8 +48,8 @@ fun groupExpenses(
 ): List<DaySection> {
     val q = query.trim().lowercase()
     fun labelFor(d: LocalDate) = when (d) {
-        today -> "Bugun"
-        today.minusDays(1) -> "Kecha"
+        today -> t("activity.today")
+        today.minusDays(1) -> t("activity.yesterday")
         else -> uzDayMonth(d)
     }
     // groupBy keeps first-seen order; input is already date-desc.

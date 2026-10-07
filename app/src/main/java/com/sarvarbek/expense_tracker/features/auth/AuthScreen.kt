@@ -59,6 +59,7 @@ import com.sarvarbek.expense_tracker.ui.theme.LinkButton
 import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
 import com.sarvarbek.expense_tracker.ui.theme.fieldColors
 import com.sarvarbek.expense_tracker.ui.theme.fieldShape
+import com.sarvarbek.expense_tracker.ui.common.t
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.exception.AuthErrorCode
@@ -76,28 +77,28 @@ private enum class Mode { SignIn, SignUp, Verify, Forgot, Reset }
 /** Uzbek text for an auth failure: Supabase error codes, then network. */
 fun authErrorText(e: Throwable): String = when (e) {
     is AuthRestException -> authErrorText(e.error, e.errorDescription)
-    is IOException -> "Internet aloqasini tekshiring" // HttpRequestException, timeouts
-    else -> "Xatolik yuz berdi. Qayta urining"
+    is IOException -> t("svc.family.offline") // HttpRequestException, timeouts
+    else -> t("auth.err.generic")
 }
 
 fun authErrorText(code: String, message: String): String = when (code) {
-    "invalid_credentials" -> "Email yoki parol noto'g'ri"
-    "user_already_exists", "email_exists" -> "Bu email allaqachon ro'yxatdan o'tgan"
-    "otp_expired" -> "Kod noto'g'ri yoki eskirgan"
-    "weak_password" -> "Parol juda oddiy (kamida 6 belgi)"
+    "invalid_credentials" -> t("auth.err.credentials")
+    "user_already_exists", "email_exists" -> t("auth.err.exists")
+    "otp_expired" -> t("auth.err.otp")
+    "weak_password" -> t("auth.err.weak")
     // Per-address cooldown says "...only request this after N seconds";
     // the project-wide hourly cap says "email rate limit exceeded".
     "over_email_send_rate_limit" -> Regex("""after (\d+) seconds""").find(message)?.groupValues?.get(1)
-        ?.let { "Juda tez. $it soniyadan so'ng qayta urining" }
-        ?: "Soatlik email limiti tugadi. 1 soatgacha kuting, so'ng qayta urining"
-    "over_request_rate_limit" -> "Juda ko'p urinish. Birozdan so'ng qayta urining"
+        ?.let { t("auth.err.cooldown", it) }
+        ?: t("auth.err.hourly")
+    "over_request_rate_limit" -> t("auth.err.too_many")
     else -> message
 }
 
-private fun nameError(v: String) = if (v.isNotBlank()) null else "Ismingizni kiriting"
-private fun emailError(v: String) = if ('@' in v) null else "To'g'ri email kiriting"
-private fun passwordError(v: String) = if (v.length >= 6) null else "Kamida 6 belgi"
-private fun codeError(v: String) = if (Regex("""^\d{6}$""").matches(v.trim())) null else "6 ta raqam kiriting"
+private fun nameError(v: String) = if (v.isNotBlank()) null else t("auth.err.name")
+private fun emailError(v: String) = if ('@' in v) null else t("auth.err.email")
+private fun passwordError(v: String) = if (v.length >= 6) null else t("auth.err.password")
+private fun codeError(v: String) = if (Regex("""^\d{6}$""").matches(v.trim())) null else t("auth.err.code")
 
 /**
  * Sign in / sign up / 6-digit code confirm / password reset. Shown by the
@@ -106,7 +107,7 @@ private fun codeError(v: String) = if (Regex("""^\d{6}$""").matches(v.trim())) n
 @Composable
 fun AuthScreen(auth: Auth) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var mode by rememberSaveable { mutableStateOf(Mode.SignIn) }
@@ -126,11 +127,11 @@ fun AuthScreen(auth: Auth) {
     }
 
     val (title, hint, action) = when (mode) {
-        Mode.SignIn -> Triple("Kirish", "Hisobingizga kiring", "Kirish")
-        Mode.SignUp -> Triple("Ro'yxatdan o'tish", "Yangi hisob yarating", "Ro'yxatdan o'tish")
-        Mode.Verify -> Triple("Emailni tasdiqlang", "$mail manziliga 6 xonali kod yuborildi", "Tasdiqlash")
-        Mode.Forgot -> Triple("Parolni tiklash", "Emailingizga 6 xonali kod yuboramiz", "Kod yuborish")
-        Mode.Reset -> Triple("Yangi parol", "$mail manziliga yuborilgan kodni va yangi parolni kiriting", "Saqlash")
+        Mode.SignIn -> Triple(t("auth.signin"), t("auth.signin_hint"), t("auth.signin"))
+        Mode.SignUp -> Triple(t("auth.signup"), t("auth.signup_hint"), t("auth.signup"))
+        Mode.Verify -> Triple(t("auth.verify"), t("auth.verify_hint", mail), t("auth.confirm"))
+        Mode.Forgot -> Triple(t("auth.forgot"), t("auth.forgot_hint"), t("auth.send_code"))
+        Mode.Reset -> Triple(t("auth.new_password"), t("auth.reset_hint", mail), t("common.save"))
     }
     val needsEmail = mode in setOf(Mode.SignIn, Mode.SignUp, Mode.Forgot)
     // Reset reveals the password field once the code is complete.
@@ -192,7 +193,7 @@ fun AuthScreen(auth: Auth) {
     fun resend() = scope.launch {
         try {
             auth.resendEmail(OtpType.Email.SIGNUP, mail)
-            snackbar.showSnackbar("Kod qayta yuborildi")
+            snackbar.showSnackbar(t("auth.code_resent"))
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             error = authErrorText(e)
@@ -210,12 +211,12 @@ fun AuthScreen(auth: Auth) {
             Spacer(Modifier.height(48.dp))
             Icon(Icons.Outlined.AccountBalanceWallet, null, Modifier.size(48.dp), tint = c.accent)
             Spacer(Modifier.height(AppSpace.gap))
-            Text(title, style = t.headlineMedium)
+            Text(title, style = ty.headlineMedium)
             Spacer(Modifier.height(6.dp))
-            Text(hint, style = t.bodyMedium.copy(color = c.muted))
+            Text(hint, style = ty.bodyMedium.copy(color = c.muted))
             Spacer(Modifier.height(AppSpace.section))
             if (mode == Mode.SignUp) {
-                Field(name, { name = it.take(40) }, "Ism", if (validate) nameError(name) else null, KeyboardType.Text, ContentType.PersonFullName, words = true)
+                Field(name, { name = it.take(40) }, t("auth.name"), if (validate) nameError(name) else null, KeyboardType.Text, ContentType.PersonFullName, words = true)
                 Spacer(Modifier.height(12.dp))
             }
             if (needsEmail) {
@@ -228,7 +229,7 @@ fun AuthScreen(auth: Auth) {
             }
             if (needsPassword) {
                 Field(
-                    password, { password = it }, if (mode == Mode.Reset) "Yangi parol" else "Parol",
+                    password, { password = it }, if (mode == Mode.Reset) t("auth.new_password") else t("auth.password"),
                     if (validate) passwordError(password) else null, KeyboardType.Password,
                     if (mode == Mode.SignIn) ContentType.Password else ContentType.NewPassword,
                     obscure = obscure,
@@ -236,14 +237,14 @@ fun AuthScreen(auth: Auth) {
                         IconButton({ obscure = !obscure }) {
                             Icon(
                                 if (obscure) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                                if (obscure) "Parolni ko'rsatish" else "Parolni yashirish",
+                                if (obscure) t("auth.show_password") else t("auth.hide_password"),
                             )
                         }
                     },
                 )
                 Spacer(Modifier.height(12.dp))
             }
-            error?.let { Text(it, Modifier.padding(bottom = 12.dp), style = t.bodyMedium.copy(color = c.danger)) }
+            error?.let { Text(it, Modifier.padding(bottom = 12.dp), style = ty.bodyMedium.copy(color = c.danger)) }
             PrimaryButton(::submit, Modifier.fillMaxWidth(), enabled = !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(action)
             }
@@ -251,14 +252,14 @@ fun AuthScreen(auth: Auth) {
             val link = Modifier.fillMaxWidth()
             when (mode) {
                 Mode.SignIn -> {
-                    LinkButton({ go(Mode.SignUp) }, link) { Text("Hisobingiz yo'qmi? Ro'yxatdan o'ting") }
-                    LinkButton({ go(Mode.Forgot) }, link) { Text("Parolni unutdingizmi?") }
+                    LinkButton({ go(Mode.SignUp) }, link) { Text(t("auth.no_account")) }
+                    LinkButton({ go(Mode.Forgot) }, link) { Text(t("auth.forgot_link")) }
                 }
                 Mode.Verify -> {
-                    LinkButton({ resend() }, link, enabled = !busy) { Text("Kodni qayta yuborish") }
-                    LinkButton({ go(Mode.SignIn) }, link) { Text("Orqaga") }
+                    LinkButton({ resend() }, link, enabled = !busy) { Text(t("auth.resend")) }
+                    LinkButton({ go(Mode.SignIn) }, link) { Text(t("common.back")) }
                 }
-                else -> LinkButton({ go(Mode.SignIn) }, link) { Text("Kirish sahifasiga qaytish") }
+                else -> LinkButton({ go(Mode.SignIn) }, link) { Text(t("auth.to_signin")) }
             }
         }
     }
@@ -296,7 +297,7 @@ private fun CodeBoxes(value: String, onChange: (String) -> Unit, error: String?)
     Column {
         BasicTextField(
             value, onChange,
-            Modifier.fillMaxWidth().semantics { contentType = ContentType.SmsOtpCode; contentDescription = "Tasdiqlash kodi" },
+            Modifier.fillMaxWidth().semantics { contentType = ContentType.SmsOtpCode; contentDescription = t("auth.code") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             singleLine = true,
             cursorBrush = SolidColor(c.accent.copy(alpha = 0f)),

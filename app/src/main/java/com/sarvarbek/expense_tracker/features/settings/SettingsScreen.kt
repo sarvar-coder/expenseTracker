@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -69,21 +70,30 @@ import com.sarvarbek.expense_tracker.ui.common.CategoryBadge
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.DividedCard
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
+import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.SectionLabel
 import com.sarvarbek.expense_tracker.ui.common.TextDialog
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import kotlinx.coroutines.launch
 
+// Values are string keys, resolved when shown.
 private val locales = linkedMapOf(
-    "en_US" to "Inglizcha",
-    "uz_UZ" to "O'zbekcha",
-    "ru_RU" to "Ruscha",
+    "en_US" to "settings.stt.en",
+    "uz_UZ" to "settings.stt.uz",
+    "ru_RU" to "settings.stt.ru",
+)
+
+// Each name in its own script, so it reads right whichever is active.
+private val uiLanguages = linkedMapOf(
+    I18n.LATIN to "O'zbekcha (lotin)",
+    I18n.CYRILLIC to "Ўзбекча (кирилл)",
 )
 
 /** Pushed from the Home gear; owns its top bar (back arrow). */
@@ -104,69 +114,77 @@ fun SettingsScreen(
     var dialog by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
     val close = { dialog = null }
 
-    AppBarScaffold("Sozlamalar", onBack) { pad ->
+    AppBarScaffold(t("settings.title"), onBack) { pad ->
         LazyColumn(contentPadding = PaddingValues(AppSpace.page, 0.dp, AppSpace.page, AppSpace.section), modifier = Modifier.padding(pad)) {
             item {
-                SectionLabel("Umumiy")
+                SectionLabel(t("settings.general"))
                 DividedCard(listOf<@Composable () -> Unit>(
                     {
-                        SettingRow(Icons.Outlined.AccountBalanceWallet, "Oylik byudjet", if (s.monthlyBudget > 0) "${formatMoney(s.monthlyBudget)} UZS" else "Belgilanmagan") {
+                        SettingRow(Icons.Outlined.AccountBalanceWallet, t("settings.budget"), if (s.monthlyBudget > 0) "${formatMoney(s.monthlyBudget)} UZS" else t("common.not_set")) {
                             dialog = {
                                 TextDialog(
-                                    "Oylik byudjet", "Saqlash", close,
+                                    t("settings.budget"), t("common.save"), close,
                                     initial = if (s.monthlyBudget > 0) s.monthlyBudget.toString() else "",
                                     hint = "4000000", suffix = "UZS", keyboard = KeyboardType.Number,
-                                    accept = { t -> t.all(Char::isDigit) },
+                                    accept = { v -> v.all(Char::isDigit) },
                                 ) { text ->
                                     close()
                                     // 0 or empty clears the budget ("Belgilanmagan").
                                     val amount = if (text.isEmpty()) 0L else parseAmount(text)
-                                    if (amount == null) toaster.show("To'g'ri summa kiriting") else settings.setBudget(amount)
+                                    if (amount == null) toaster.show(t("settings.budget_invalid")) else settings.setBudget(amount)
                                 }
                             }
                         }
                     },
-                    { SettingRow(Icons.Outlined.Category, "Turkumlar", "Qo'shish, tahrirlash, arxivlash", onClick = onCategories) },
+                    { SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onClick = onCategories) },
                     { PrivateRow(s.defaultPrivate, settings::setDefaultPrivate) },
                 )) { it() }
             }
             item {
-                SectionLabel("AI va ovoz")
+                SectionLabel(t("settings.ai_voice"))
                 DividedCard(listOf<@Composable () -> Unit>({
-                    SettingRow(Icons.Outlined.MicNone, "Ovoz tili", locales[s.sttLocale] ?: s.sttLocale) {
-                        dialog = { LocalePicker(s.sttLocale, close) { close(); settings.setLocale(it) } }
+                    SettingRow(Icons.Outlined.Translate, t("settings.ui_language"), uiLanguages[s.uiLanguage] ?: s.uiLanguage) {
+                        dialog = {
+                            OptionPicker(t("settings.ui_language"), uiLanguages, s.uiLanguage, close) {
+                                close(); settings.setUiLanguage(it); I18n.load(context, it)
+                            }
+                        }
+                    }
+                }, {
+                    SettingRow(Icons.Outlined.MicNone, t("settings.stt_language"), locales[s.sttLocale]?.let { t(it) } ?: s.sttLocale) {
+                        dialog = { OptionPicker(t("settings.stt_language"), locales.mapValues { t(it.value) }, s.sttLocale, close) { close(); settings.setLocale(it) } }
                     }
                 })) { it() }
                 Text(
-                    "Bepul tarif so'rovlari Google tomonidan modellarini yaxshilash uchun ishlatilishi mumkin.",
+                    t("settings.ai_note"),
                     color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 10.dp),
                 )
             }
             item {
-                SectionLabel("Hisob")
+                SectionLabel(t("settings.account"))
                 DividedCard(listOf<@Composable () -> Unit>({
-                    SettingRow(Icons.Outlined.Person, "Ism", s.displayName.ifEmpty { "Belgilanmagan" }) {
+                    SettingRow(Icons.Outlined.Person, t("settings.name"), s.displayName.ifEmpty { t("common.not_set") }) {
                         dialog = {
-                            TextDialog("Ism", "Saqlash", close, initial = s.displayName, hint = "Oila sizni shunday ko'radi", accept = { it.length <= 40 }) { name ->
+                            TextDialog(t("settings.name"), t("common.save"), close, initial = s.displayName, hint = t("settings.name_hint"), accept = { it.length <= 40 }) { name ->
                                 close()
-                                if (name.isEmpty()) toaster.show("Ism kiriting") else if (name != s.displayName) settings.setDisplayName(name)
+                                if (name.isEmpty()) toaster.show(t("settings.name_empty")) else if (name != s.displayName) settings.setDisplayName(name)
                             }
                         }
                     }
                 }, {
-                    SettingRow(Icons.AutoMirrored.Outlined.Logout, "Chiqish", email) {
-                        dialog = { ConfirmDialog("Hisobdan chiqasizmi?", null, "Chiqish", close) { close(); onSignOut() } }
+                    SettingRow(Icons.AutoMirrored.Outlined.Logout, t("settings.sign_out"), email) {
+                        dialog = { ConfirmDialog(t("settings.sign_out_confirm"), null, t("settings.sign_out"), close) { close(); onSignOut() } }
                     }
                 })) { it() }
             }
             item {
-                SectionLabel("Ma'lumotlar")
+                SectionLabel(t("settings.data"))
                 DividedCard(listOf<@Composable () -> Unit>({
-                    SettingRow(Icons.Outlined.IosShare, "Ma'lumotni eksport (CSV)", "Barcha xarajatlarni ulashish") {
+                    SettingRow(Icons.Outlined.IosShare, t("settings.export"), t("settings.export_hint")) {
                         scope.launch {
                             val rows = db.getExpenses()
-                            if (rows.isEmpty()) return@launch toaster.show("Eksport uchun hech narsa yo'q")
+                            if (rows.isEmpty()) return@launch toaster.show(t("settings.export_empty"))
                             shareCsv(context, expensesCsv(rows, db.getAllCategories().associate { it.id to it.name }))
                         }
                     }
@@ -187,7 +205,7 @@ internal fun AppBarScaffold(title: String, onBack: () -> Unit, actions: @Composa
         topBar = {
             TopAppBar(
                 title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Orqaga") } },
+                navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, t("common.back")) } },
                 actions = { actions() },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.bg),
             )
@@ -234,18 +252,19 @@ private fun PrivateRow(on: Boolean, onChange: (Boolean) -> Unit) {
     ) {
         RowIcon(Icons.Outlined.VisibilityOff)
         Spacer(Modifier.width(16.dp))
-        RowText("Yangi xarajatlar maxfiy", "Oila maxfiy xarajatlarni ko'rmaydi", Modifier.weight(1f))
+        RowText(t("settings.private_title"), t("settings.private_hint"), Modifier.weight(1f))
         Switch(on, null, colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
     }
 }
 
+/** Single-choice dialog: [options] maps code to label; a tick marks [current]. */
 @Composable
-private fun LocalePicker(current: String, onDismiss: () -> Unit, onPick: (String) -> Unit) = AlertDialog(
+private fun OptionPicker(title: String, options: Map<String, String>, current: String, onDismiss: () -> Unit, onPick: (String) -> Unit) = AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Ovoz tili") },
+    title = { Text(title) },
     text = {
         Column {
-            for ((code, label) in locales) {
+            for ((code, label) in options) {
                 Row(
                     Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).clickable { onPick(code) },
                     verticalAlignment = Alignment.CenterVertically,
@@ -274,7 +293,7 @@ fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
 
     fun rename(c: Category) {
         dialog = {
-            TextDialog("Turkum nomini o'zgartirish", "Saqlash", close, initial = c.name) { name ->
+            TextDialog(t("settings.rename_category"), t("common.save"), close, initial = c.name) { name ->
                 close()
                 if (name.isNotEmpty() && name != c.name) scope.launch { db.updateCategory(c.copy(name = name)) }
             }
@@ -283,25 +302,25 @@ fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
 
     val add = {
         dialog = {
-            TextDialog("Yangi turkum", "Qo'shish", close, hint = "Turkum nomi") { name ->
+            TextDialog(t("settings.new_category"), t("settings.add"), close, hint = t("settings.category_name")) { name ->
                 close()
                 if (name.isNotEmpty()) scope.launch { matchOrCreateCategory(db, name) }
             }
         }
     }
 
-    AppBarScaffold("Turkumlar", onBack, actions = {
-        if (canEdit) IconButton(add) { Icon(Icons.Filled.Add, "Turkum qo'shish") }
+    AppBarScaffold(t("settings.categories"), onBack, actions = {
+        if (canEdit) IconButton(add) { Icon(Icons.Filled.Add, t("settings.add_category")) }
     }) { pad ->
         // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
         val all = cats ?: return@AppBarScaffold
         if (all.isEmpty()) {
-            Box(Modifier.padding(pad)) { EmptyState(Icons.Outlined.Category, "Hali turkum yo'q", "Yuqoridagi + tugmasi bilan qo'shing") }
+            Box(Modifier.padding(pad)) { EmptyState(Icons.Outlined.Category, t("settings.no_categories"), t("settings.no_categories_hint")) }
             return@AppBarScaffold
         }
         val (archived, active) = all.partition { it.isArchived }
         LazyColumn(contentPadding = PaddingValues(AppSpace.page, 0.dp, AppSpace.page, AppSpace.section), modifier = Modifier.padding(pad)) {
-            for ((label, group) in listOf("Faol" to active, "Arxivlangan" to archived)) {
+            for ((label, group) in listOf(t("settings.active") to active, t("settings.archived") to archived)) {
                 if (group.isNotEmpty()) item(label) {
                     SectionLabel(label, top = 12.dp)
                     DividedCard(group) { cat -> CategoryRow(cat, canEdit, { rename(cat) }) { scope.launch { db.updateCategory(cat.copy(isArchived = !cat.isArchived)) } } }
@@ -325,11 +344,11 @@ private fun CategoryRow(c: Category, canEdit: Boolean, onRename: () -> Unit, onT
         style = MaterialTheme.typography.titleSmall.let { if (c.isArchived) it.copy(color = AppTheme.colors.muted) else it },
     )
     if (canEdit) {
-        IconButton(onRename) { Icon(Icons.Outlined.Edit, "Nomini o'zgartirish", Modifier.size(20.dp)) }
+        IconButton(onRename) { Icon(Icons.Outlined.Edit, t("settings.rename"), Modifier.size(20.dp)) }
         IconButton(onToggleArchive) {
             Icon(
                 if (c.isArchived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
-                if (c.isArchived) "Arxivdan chiqarish" else "Arxivlash", Modifier.size(20.dp),
+                if (c.isArchived) t("settings.unarchive") else t("settings.archive"), Modifier.size(20.dp),
             )
         }
     }

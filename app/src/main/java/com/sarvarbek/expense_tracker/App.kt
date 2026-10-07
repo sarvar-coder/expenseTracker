@@ -8,6 +8,7 @@ import com.sarvarbek.expense_tracker.services.AiParser
 import com.sarvarbek.expense_tracker.services.FamilyService
 import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.services.SyncService
+import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.russhwolf.settings.SharedPreferencesSettings
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.SettingsCodeVerifierCache
@@ -24,6 +25,7 @@ class App : Application() {
         super.onCreate()
         // Upgrade from the Flutter app: its Drift DB is replaced by a re-sync from the cloud.
         File(filesDir.parentFile, "app_flutter").deleteRecursively()
+        I18n.load(this, container.settings.settings.value.uiLanguage)
         container.sync.start()
     }
 }

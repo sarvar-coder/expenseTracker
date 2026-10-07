@@ -65,32 +65,34 @@ import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.fieldColors
 import com.sarvarbek.expense_tracker.ui.theme.fieldShape
+import com.sarvarbek.expense_tracker.ui.common.t
 import kotlinx.coroutines.launch
 
-private enum class NeedsFilter(val label: String) { All("Hammasi"), Mine("Mening"), Family("Oila") }
+// label is a string key.
+private enum class NeedsFilter(val label: String) { All("needs.filter.all"), Mine("needs.filter.mine"), Family("family.title") }
 
 /** Oila tab card: up to 3 open items and how many in all; tap opens [NeedsScreen]. */
 @Composable
 fun NeedsCard(db: ExpenseDao, onOpen: () -> Unit) {
     val needs by remember(db) { db.watchNeeds() }.collectAsStateWithLifecycle(emptyList())
     val open = needs.filter { !it.done }
-    val t = MaterialTheme.typography
-    SectionLabel("Kerakli")
+    val ty = MaterialTheme.typography
+    SectionLabel(t("needs.title"))
     AppCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.clickable(onClickLabel = "Kerakli ro'yxatini ochish", onClick = onOpen).padding(16.dp, 12.dp)) {
+        Column(Modifier.clickable(onClickLabel = t("needs.open_label"), onClick = onOpen).padding(16.dp, 12.dp)) {
             if (open.isEmpty()) {
-                Text("Hammasi olingan", style = t.titleSmall)
-                Text("Nima kerakligini yozib qo'ying", color = AppTheme.colors.muted, style = t.bodySmall)
+                Text(t("needs.all_done"), style = ty.titleSmall)
+                Text(t("needs.all_done_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
             } else {
                 for (n in open.take(3)) {
                     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("•  ${n.text}", style = t.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("•  ${n.text}", style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         if (n.familyId != null) FamilyMark()
                     }
                 }
             }
             Row(Modifier.padding(top = 4.dp).defaultMinSize(minHeight = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (open.size > 3) "Yana ${open.size - 3} ta" else "Ro'yxatni ochish", style = t.labelLarge, color = AppTheme.colors.accent, modifier = Modifier.weight(1f))
+                Text(if (open.size > 3) t("needs.more", open.size - 3) else t("needs.open"), style = ty.labelLarge, color = AppTheme.colors.accent, modifier = Modifier.weight(1f))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = AppTheme.colors.accent)
             }
         }
@@ -98,7 +100,7 @@ fun NeedsCard(db: ExpenseDao, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun FamilyMark() = Icon(Icons.Outlined.Groups, "Oila uchun", tint = AppTheme.colors.muted, modifier = Modifier.size(16.dp))
+private fun FamilyMark() = Icon(Icons.Outlined.Groups, t("needs.for_family"), tint = AppTheme.colors.muted, modifier = Modifier.size(16.dp))
 
 /**
  * "Kerakli": what to buy. Personal items, plus the family's shared ones
@@ -116,14 +118,14 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
     val toaster = LocalToaster.current
     val inFamily = familyId != null
     val add = {
-        val t = text.trim()
-        if (t.isNotEmpty()) {
+        val v = text.trim()
+        if (v.isNotEmpty()) {
             text = ""
-            scope.launch { db.insertNeed(Need(text = t.take(200), familyId = familyId.takeIf { forFamily })) }
+            scope.launch { db.insertNeed(Need(text = v.take(200), familyId = familyId.takeIf { forFamily })) }
         }
     }
 
-    AppBarScaffold("Kerakli", onBack) { pad ->
+    AppBarScaffold(t("needs.title"), onBack) { pad ->
         PullToRefreshBox(
             refreshing,
             onRefresh = { scope.launch { refreshing = true; onSync(); refreshing = false } },
@@ -134,7 +136,7 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             text, { text = it }, Modifier.weight(1f),
-                            placeholder = { Text("Nima kerak?") }, singleLine = true,
+                            placeholder = { Text(t("needs.placeholder")) }, singleLine = true,
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { add() }),
                             shape = fieldShape, colors = fieldColors(),
@@ -144,7 +146,7 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
                         FilledIconButton(
                             add, Modifier.size(56.dp), enabled = text.isNotBlank(),
                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = c.accent, contentColor = c.onAccent),
-                        ) { Icon(Icons.Filled.Add, "Qo'shish") }
+                        ) { Icon(Icons.Filled.Add, t("settings.add")) }
                     }
                     if (inFamily) {
                         Row(
@@ -152,11 +154,11 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
                                 .toggleable(forFamily, role = Role.Switch) { forFamily = it }.padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("Oila uchun", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text(t("needs.for_family"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                             Switch(forFamily, null, colors = SwitchDefaults.colors(checkedTrackColor = AppTheme.colors.accent, checkedThumbColor = AppTheme.colors.onAccent))
                         }
                         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            for (f in NeedsFilter.entries) AppChip(f.label, filter == f, { filter = f })
+                            for (f in NeedsFilter.entries) AppChip(t(f.label), filter == f, { filter = f })
                         }
                     }
                     Spacer(Modifier.height(AppSpace.gap))
@@ -171,7 +173,7 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
                         }
                     }
                     if (shown.isEmpty()) {
-                        EmptyState(Icons.Outlined.Checklist, "Ro'yxat bo'sh", "Kerakli narsani yozib, + ni bosing")
+                        EmptyState(Icons.Outlined.Checklist, t("needs.empty"), t("needs.empty_hint"))
                     } else {
                         DividedCard(shown, indent = 56.dp) { n ->
                             NeedRow(
@@ -180,7 +182,7 @@ fun NeedsScreen(db: ExpenseDao, familyId: String?, onSync: suspend () -> Unit, o
                                 onDelete = {
                                     scope.launch {
                                         db.deleteNeed(n.id)
-                                        toaster.show("O'chirildi", "Qaytarish") { db.updateNeed(n) }
+                                        toaster.show(t("needs.deleted"), t("needs.undo")) { db.updateNeed(n) }
                                     }
                                 },
                             )
@@ -206,6 +208,6 @@ private fun NeedRow(n: Need, showFamily: Boolean, onToggle: (Boolean) -> Unit, o
             color = if (n.done) c.muted else c.text, modifier = Modifier.weight(1f),
         )
         if (showFamily && n.familyId != null) FamilyMark()
-        IconButton(onDelete) { Icon(Icons.Outlined.Close, "O'chirish", tint = c.muted) }
+        IconButton(onDelete) { Icon(Icons.Outlined.Close, t("common.delete"), tint = c.muted) }
     }
 }

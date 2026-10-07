@@ -14,6 +14,8 @@ data class Settings(
     val defaultPrivate: Boolean = false,
     /** Name the family sees (profiles.display_name); empty until the first sync. */
     val displayName: String = "",
+    /** UI script: "uz" (Latin) or "uz_cyrl" (Cyrillic). Local only. */
+    val uiLanguage: String = "uz",
 )
 
 /** Plain settings in SharedPreferences; [settings] updates screens live. */
@@ -26,6 +28,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
         sttLocale = prefs.getString(K_LOCALE, null) ?: "uz_UZ",
         defaultPrivate = prefs.getBoolean(K_PRIVATE, false),
         displayName = prefs.getString(K_NAME, null) ?: "",
+        uiLanguage = prefs.getString(K_UI_LANG, null) ?: "uz",
     )
 
     // Budget and private default also live on the server profile (the family
@@ -50,6 +53,11 @@ class SettingsStore(private val prefs: SharedPreferences) {
         state.update { it.copy(sttLocale = v) }
     }
 
+    fun setUiLanguage(v: String) {
+        prefs.edit { putString(K_UI_LANG, v) }
+        state.update { it.copy(uiLanguage = v) }
+    }
+
     val profileDirty get() = prefs.getBoolean(K_PROFILE_DIRTY, false)
     fun markProfileClean() = prefs.edit { remove(K_PROFILE_DIRTY) }
 
@@ -70,6 +78,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
         private const val K_ADD_MODE = "lastAddMode"
         private const val K_PRIVATE = "defaultPrivate"
         private const val K_NAME = "displayName"
+        private const val K_UI_LANG = "uiLanguage"
         // 'sync.' prefix: wiped with the other sync keys when the account changes.
         private const val K_PROFILE_DIRTY = "sync.profileDirty"
     }

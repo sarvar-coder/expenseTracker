@@ -95,6 +95,7 @@ import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.LinkButton
 import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
+import com.sarvarbek.expense_tracker.ui.common.t
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -187,11 +188,11 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onNeeds: () -> Unit = {}, o
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(state.overview?.name ?: "Oila", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    Text(state.overview?.name ?: t("family.title"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                     if (state.overview != null) {
                         FilterButton(filter.count) { filterOpen = true }
                         Spacer(Modifier.width(4.dp))
-                        GearButton("Oila sozlamalari", onSettings)
+                        GearButton(t("family.settings"), onSettings)
                     }
                 }
                 Spacer(Modifier.height(AppSpace.gap))
@@ -202,7 +203,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onNeeds: () -> Unit = {}, o
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
                     state.loaded && f != null -> InFamily(f, db, filter, { filter = it }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
-                        EmptyState(Icons.Outlined.WifiOff, "Oila ma'lumotini yuklab bo'lmadi", "Internetni tekshirib, pastga torting")
+                        EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
@@ -224,32 +225,32 @@ private val FamilyOverview.memberNames get() = members.associate { it.userId to 
 @Composable
 private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Avvalgi xarajatlar") },
-    text = { Text("Oldingi xarajatlaringiz ham oilaga ko'rsatilsinmi? Maxfiy xarajatlar baribir yashirin qoladi.") },
-    dismissButton = { LinkButton({ onPick(false) }) { Text("Yo'q") } },
-    confirmButton = { LinkButton({ onPick(true) }) { Text("Ha, ulashish") } },
+    title = { Text(t("family.history_title")) },
+    text = { Text(t("family.history_text")) },
+    dismissButton = { LinkButton({ onPick(false) }) { Text(t("family.no")) } },
+    confirmButton = { LinkButton({ onPick(true) }) { Text(t("family.yes_share")) } },
 )
 
 @Composable
 private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, needs: @Composable () -> Unit) {
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
         EmptyState(
-            Icons.Outlined.FamilyRestroom, "Siz hali oilada emassiz",
-            "Oila yarating yoki taklifni qabul qiling. Umumiy xarajatlar va byudjet shu yerda ko'rinadi.",
+            Icons.Outlined.FamilyRestroom, t("family.none"),
+            t("family.none_hint"),
         )
         for (i in invites) {
             AppCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column(Modifier.padding(start = 20.dp, top = 16.dp, end = 12.dp, bottom = 8.dp)) {
-                    Text("“${i.familyName}” oilasiga taklif", style = t.titleMedium)
-                    Text("${i.invitedBy} taklif qildi", color = AppTheme.colors.muted, style = t.bodySmall)
+                    Text(t("family.invite_to", i.familyName), style = ty.titleMedium)
+                    Text(t("family.invited_by", i.invitedBy), color = AppTheme.colors.muted, style = ty.bodySmall)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                        LinkButton({ act(null) { deleteInvite(i.id) } }) { Text("Rad etish") }
+                        LinkButton({ act(null) { deleteInvite(i.id) } }) { Text(t("family.decline")) }
                         Spacer(Modifier.width(8.dp))
                         PrimaryButton({
-                            show { HistoryDialog(close) { h -> act("Oilaga qo'shildingiz") { accept(i.id, includeHistory = h) } } }
-                        }) { Text("Qabul qilish") }
+                            show { HistoryDialog(close) { h -> act(t("family.joined")) { accept(i.id, includeHistory = h) } } }
+                        }) { Text(t("family.accept")) }
                     }
                 }
             }
@@ -257,15 +258,15 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
         Spacer(Modifier.height(AppSpace.gap))
         PrimaryButton({
             show {
-                TextDialog("Yangi oila", "Davom etish", close, hint = "Oila nomi") { name ->
+                TextDialog(t("family.new"), t("family.continue"), close, hint = t("family.name")) { name ->
                     if (name.isEmpty()) close()
-                    else show { HistoryDialog(close) { h -> act("Oila yaratildi") { create(name, includeHistory = h) } } }
+                    else show { HistoryDialog(close) { h -> act(t("family.created")) { create(name, includeHistory = h) } } }
                 }
             }
         }, Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Add, null)
             Spacer(Modifier.width(8.dp))
-            Text("Oila yaratish")
+            Text(t("family.create"))
         }
         needs()
     }
@@ -282,7 +283,7 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, 
     // Own shared rows come from Room (live, offline edits included); the
     // server only sends the others'.
     val mine = expenses.filter { it.familyId == f.id && !it.isPrivate && it.transferTo == null }
-        .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: "Siz") }
+        .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: t("family.you")) }
     // No Sana in the filter: this month.
     val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
     // Current members' labels carry their title; ex-members keep the server name.
@@ -293,19 +294,19 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, 
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget))
         needs()
-        SectionLabel("A'zolar")
+        SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
-        SectionLabel(if (filter.range == null) "Bu oygi umumiy xarajatlar" else "Umumiy xarajatlar")
+        SectionLabel(if (filter.range == null) t("family.shared_month") else t("family.shared"))
         if (!filter.isEmpty) {
             ActiveFilters(filter, catById, onFilter, names)
             Spacer(Modifier.height(12.dp))
         }
         if (list.isEmpty()) {
-            if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, "Bu oy umumiy xarajat yo'q")
-            else EmptyState(Icons.Outlined.SearchOff, "Mos keladigani yo'q", "Boshqa filtrni sinab ko'ring")
+            if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
+            else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
         } else {
             CategoryBreakdown(data)
-            SectionLabel("Ro'yxat")
+            SectionLabel(t("family.list"))
             // ponytail: whole list in one lazy item; fine for a family's month, page it if wide ranges get slow.
             DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId]) }
         }
@@ -333,7 +334,7 @@ private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker
 
 /** "Ali (siz) · Ota · admin". */
 internal fun memberLabel(m: FamilyMember, myId: String) = listOfNotNull(
-    m.name, "(siz)".takeIf { m.userId == myId }, m.title?.let { "· $it" }, "· admin".takeIf { m.isAdmin },
+    m.name, t("family.you_suffix").takeIf { m.userId == myId }, m.title?.let { "· $it" }, t("family.admin_suffix").takeIf { m.isAdmin },
 ).joinToString(" ")
 
 @Composable
@@ -343,7 +344,7 @@ private fun MemberRow(m: FamilyMember, myId: String) = Row(
 ) {
     Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
         Text(memberLabel(m, myId), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("Byudjetga hissa: ${formatMoney(m.contribution)} UZS", color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
+        Text(t("family.contribution", formatMoney(m.contribution)), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
     }
     Spacer(Modifier.width(8.dp))
     Money(m.shared)
@@ -366,16 +367,16 @@ internal fun GearButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun BudgetCard(summary: HomeSummary) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
     val over = summary.budget > 0 && summary.spent > summary.budget
     Column(Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp)) {
-        Text("Oila bu oy sarfladi", style = t.labelMedium.copy(color = soft))
+        Text(t("family.spent"), style = ty.labelMedium.copy(color = soft))
         Spacer(Modifier.height(6.dp))
-        Money(summary.spent, style = t.displayMedium, color = c.onHero, autoSize = true)
+        Money(summary.spent, style = ty.displayMedium, color = c.onHero, autoSize = true)
         Spacer(Modifier.height(16.dp))
         if (summary.budget <= 0) {
-            Text("Oila byudjeti yo'q — a'zolar Sozlamalarda byudjet belgilaydi", style = t.labelSmall.copy(color = soft))
+            Text(t("family.no_budget"), style = ty.labelSmall.copy(color = soft))
         } else {
             LinearProgressIndicator(
                 progress = { summary.progress },
@@ -387,10 +388,10 @@ private fun BudgetCard(summary: HomeSummary) {
             )
             Spacer(Modifier.height(8.dp))
             Row {
-                Text("Byudjet: ${formatMoney(summary.budget)}", style = t.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
+                Text(t("family.budget", formatMoney(summary.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
                 Text(
-                    if (over) "${formatMoney(-summary.remaining)} oshdi" else "${formatMoney(summary.remaining)} qoldi",
-                    style = t.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
+                    if (over) t("family.over", formatMoney(-summary.remaining)) else t("family.left", formatMoney(summary.remaining)),
+                    style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
                 )
             }
         }

@@ -24,6 +24,7 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.OffsetDateTime
+import com.sarvarbek.expense_tracker.ui.common.t
 
 /** A pending invite addressed to the signed-in user. */
 data class FamilyInvite(val id: String, val familyName: String, val invitedBy: String)
@@ -226,23 +227,23 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
     } catch (e: FamilyException) {
         throw e
     } catch (_: Exception) {
-        throw FamilyException("Internet aloqasini tekshiring") // offline, timeout
+        throw FamilyException(t("svc.family.offline")) // offline, timeout
     }
 }
 
 private fun JsonObject.num(k: String) = getValue(k).jsonPrimitive.long
 
-/** Server error codes (raised by the RPCs) to Uzbek text. */
+/** Server error codes (raised by the RPCs) to UI text. */
 fun familyErrorText(message: String, code: String? = null) = when {
-    message == "already_in_family" -> "Siz allaqachon oiladasiz"
-    message == "invite_not_found" -> "Taklif topilmadi"
-    message == "not_in_family" -> "Siz oilada emassiz"
-    message == "not_admin" -> "Faqat admin bajara oladi"
-    message == "transfer_admin_first" -> "Avval boshqa a'zoni admin qiling"
-    message == "last_admin" -> "Oilada kamida bitta admin bo'lishi kerak"
-    message == "cannot_remove_self" -> "O'zingizni chiqarib bo'lmaydi"
-    message == "not_a_member" -> "Bu foydalanuvchi oila a'zosi emas"
-    message == "request_not_found" -> "So'rov topilmadi"
-    code == "23505" -> "Bu email allaqachon taklif qilingan"
-    else -> "Xatolik yuz berdi. Qayta urinib ko'ring"
+    message == "already_in_family" -> t("svc.family.already_in_family")
+    message == "invite_not_found" -> t("svc.family.invite_not_found")
+    message == "not_in_family" -> t("svc.family.not_in_family")
+    message == "not_admin" -> t("svc.family.not_admin")
+    message == "transfer_admin_first" -> t("svc.family.transfer_admin_first")
+    message == "last_admin" -> t("svc.family.last_admin")
+    message == "cannot_remove_self" -> t("svc.family.cannot_remove_self")
+    message == "not_a_member" -> t("svc.family.not_a_member")
+    message == "request_not_found" -> t("svc.family.request_not_found")
+    code == "23505" -> t("svc.family.already_invited")
+    else -> t("svc.family.unknown")
 }

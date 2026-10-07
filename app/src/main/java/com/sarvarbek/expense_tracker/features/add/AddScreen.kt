@@ -105,6 +105,7 @@ import com.sarvarbek.expense_tracker.ui.common.colorFromHex
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
 import com.sarvarbek.expense_tracker.ui.common.startMillis
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.toLocalDateTime
 import com.sarvarbek.expense_tracker.ui.common.toMillis
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
@@ -124,7 +125,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 @Suppress("EnumEntryName")
-enum class AddMode(val label: String) { type("Yozish"), speak("Aytish"), manual("Qo'lda") }
+enum class AddMode(val label: String) { type("add.mode.type"), speak("add.mode.speak"), manual("add.mode.manual") }
 
 /** Manual form start values (edit, or a failed parse dropping into Manual). */
 private data class Prefill(val amount: String, val desc: String, val categoryId: String?, val private: Boolean)
@@ -157,8 +158,8 @@ fun AddScreen(
         containerColor = c.bg,
         topBar = {
             TopAppBar(
-                title = { Text(if (editing == null) "Xarajat qo'shish" else "Xarajatni tahrirlash", style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = { IconButton(onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Orqaga") } },
+                title = { Text(if (editing == null) t("add.title_new") else t("add.title_edit"), style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = { IconButton(onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, t("common.back")) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.bg),
             )
         },
@@ -177,7 +178,7 @@ fun AddScreen(
                         shape = SegmentedButtonDefaults.itemShape(i, AddMode.entries.size),
                         icon = {},
                         modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-                    ) { Text(m.label) }
+                    ) { Text(t(m.label)) }
                 }
             }
             Spacer(Modifier.height(AppSpace.gap + 4.dp))
@@ -210,7 +211,7 @@ private fun ManualForm(
     onClose: () -> Unit,
 ) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
     var amount by rememberSaveable { mutableStateOf(init.amount) }
@@ -239,10 +240,10 @@ private fun ManualForm(
         // A transfer needs no description: "→ Singil" by default.
         val d = desc.trim().ifEmpty { if (to != null) "→ ${members.firstOrNull { it.first == to }?.second ?: "O'tkazma"}" else "" }
         when {
-            a == null || a <= 0 -> return toaster.show("To'g'ri summa kiriting")
-            transfer && to == null -> return toaster.show("Kimga berilganini tanlang")
-            d.isEmpty() -> return toaster.show("Tavsif kiriting")
-            to == null && categoryId == null -> return toaster.show("Turkum tanlang")
+            a == null || a <= 0 -> return toaster.show(t("add.err_amount"))
+            transfer && to == null -> return toaster.show(t("add.err_recipient"))
+            d.isEmpty() -> return toaster.show(t("add.err_description"))
+            to == null && categoryId == null -> return toaster.show(t("add.err_category"))
         }
         saving = true
         scope.launch {
@@ -260,13 +261,13 @@ private fun ManualForm(
 
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp)) {
-            Text("Summa", color = AppTheme.colors.muted, style = t.labelMedium)
+            Text(t("add.amount"), color = AppTheme.colors.muted, style = ty.labelMedium)
             TextField(
                 amount, { v -> amount = v.filter { it.isDigit() } },
                 Modifier.fillMaxWidth().testTag("amount"),
-                textStyle = t.displaySmall,
-                placeholder = { Text("0", style = t.displaySmall.copy(color = c.border)) },
-                suffix = { Text("UZS", style = t.titleMedium.copy(color = c.muted)) },
+                textStyle = ty.displaySmall,
+                placeholder = { Text("0", style = ty.displaySmall.copy(color = c.border)) },
+                suffix = { Text("UZS", style = ty.titleMedium.copy(color = c.muted)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = TextFieldDefaults.colors(
@@ -278,10 +279,10 @@ private fun ManualForm(
         }
     }
     Spacer(Modifier.height(AppSpace.gap))
-    Label("Tavsif")
+    Label(t("add.description"))
     OutlinedTextField(
         desc, { desc = it }, Modifier.fillMaxWidth().testTag("desc"),
-        placeholder = { Text("Kofe va kruassan") },
+        placeholder = { Text(t("add.description_hint")) },
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         shape = fieldShape, colors = fieldColors(),
     )
@@ -296,8 +297,8 @@ private fun ManualForm(
                 Icon(Icons.Filled.SwapHoriz, null, tint = c.muted)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("O'tkazma", style = t.bodyLarge)
-                    Text("Oila a'zosiga berilgan pul — xarajatga qo'shilmaydi", color = AppTheme.colors.muted, style = t.bodySmall)
+                    Text(t("add.transfer"), style = ty.bodyLarge)
+                    Text(t("add.transfer_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
                 }
                 Switch(transfer, null)
             }
@@ -305,13 +306,13 @@ private fun ManualForm(
         Spacer(Modifier.height(AppSpace.gap))
     }
     if (transfer) {
-        Label("Kimga")
+        Label(t("add.recipient"))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             for ((id, label) in members) AppChip(label, transferTo == id, { transferTo = id })
         }
-        if (members.isEmpty()) Text("A'zolar yuklanmadi — internetni tekshiring", color = AppTheme.colors.muted, style = t.bodySmall, modifier = Modifier.padding(start = 4.dp))
+        if (members.isEmpty()) Text(t("add.members_failed"), color = AppTheme.colors.muted, style = ty.bodySmall, modifier = Modifier.padding(start = 4.dp))
     } else {
-        Label("Turkum")
+        Label(t("add.category"))
         AppCard(Modifier.fillMaxWidth()) {
             Row(
                 Modifier.clickable { sheet = true }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -320,20 +321,20 @@ private fun ManualForm(
                 Dot(selected?.let { colorFromHex(it.colorHex) } ?: c.border)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(selected?.name ?: "Turkum tanlang", style = t.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
-                    if (pending != null) Text("So'raldi: $pending — hozircha Boshqa", color = AppTheme.colors.muted, style = t.bodySmall)
+                    Text(selected?.name ?: t("add.err_category"), style = ty.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
+                    if (pending != null) Text(t("add.requested", pending), color = AppTheme.colors.muted, style = ty.bodySmall)
                 }
                 Icon(Icons.Filled.ExpandMore, null, tint = c.muted)
             }
         }
     }
     Spacer(Modifier.height(AppSpace.gap))
-    Label("Sana")
+    Label(t("add.date"))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AppChip("Bugun", isToday, { date = LocalDateTime.now() })
-        AppChip("Kecha", isYesterday, { date = LocalDateTime.now().minusDays(1) })
+        AppChip(t("add.today"), isToday, { date = LocalDateTime.now() })
+        AppChip(t("add.yesterday"), isYesterday, { date = LocalDateTime.now().minusDays(1) })
         AppChip(
-            if (isToday || isYesterday) "Boshqa sana" else "${uzDayMonth(date.toLocalDate())} ${date.year}",
+            if (isToday || isYesterday) t("add.other_date") else "${uzDayMonth(date.toLocalDate())} ${date.year}",
             !isToday && !isYesterday, { picking = true },
         )
     }
@@ -349,8 +350,8 @@ private fun ManualForm(
                 Icon(Icons.Outlined.VisibilityOff, null, tint = c.muted)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Maxfiy", style = t.bodyLarge)
-                    Text("Oila bu xarajatni ko'rmaydi", color = AppTheme.colors.muted, style = t.bodySmall)
+                    Text(t("add.private"), style = ty.bodyLarge)
+                    Text(t("add.private_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
                 }
                 Switch(private, null)
             }
@@ -360,7 +361,7 @@ private fun ManualForm(
     PrimaryButton(::save, Modifier.fillMaxWidth(), enabled = !saving) {
         Icon(Icons.Filled.Check, null)
         Spacer(Modifier.width(8.dp))
-        Text("Saqlash")
+        Text(t("common.save"))
     }
     if (editing != null) {
         Spacer(Modifier.height(10.dp))
@@ -372,7 +373,7 @@ private fun ManualForm(
         ) {
             Icon(Icons.Outlined.Delete, null)
             Spacer(Modifier.width(8.dp))
-            Text("O'chirish", style = t.labelLarge.copy(color = c.danger))
+            Text(t("common.delete"), style = ty.labelLarge.copy(color = c.danger))
         }
     }
 
@@ -389,7 +390,7 @@ private fun ManualForm(
             confirmDelete = false
             scope.launch {
                 db.deleteExpense(editing.id)
-                toaster.show("Xarajat o'chirildi")
+                toaster.show(t("widgets.expense_deleted"))
                 onClose()
             }
         })
@@ -406,7 +407,7 @@ private fun Dot(color: Color) = Box(Modifier.size(16.dp).background(color, Circl
 @Composable
 private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String?, onDismiss: () -> Unit, onPick: (ResolvedCategory) -> Unit) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val scope = rememberCoroutineScope()
     val cats by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
     var ask by remember { mutableStateOf(false) }
@@ -419,8 +420,8 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
                 ) {
                     Dot(colorFromHex(cat.colorHex))
                     Spacer(Modifier.width(16.dp))
-                    Text(cat.name, style = t.bodyLarge, modifier = Modifier.weight(1f))
-                    if (cat.id == selectedId) Icon(Icons.Filled.Check, "Tanlangan", tint = c.accent)
+                    Text(cat.name, style = ty.bodyLarge, modifier = Modifier.weight(1f))
+                    if (cat.id == selectedId) Icon(Icons.Filled.Check, t("add.selected"), tint = c.accent)
                 }
             }
             HorizontalDivider(color = c.border)
@@ -431,8 +432,8 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
                 Icon(Icons.Filled.Add, null)
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text(if (canCreate) "Yangi turkum" else "Turkum so'rash", style = t.bodyLarge)
-                    if (!canCreate) Text("Admin tasdiqlaguncha Boshqa'da turadi", color = AppTheme.colors.muted, style = t.bodySmall)
+                    Text(if (canCreate) t("add.new_category") else t("add.request_category"), style = ty.bodyLarge)
+                    if (!canCreate) Text(t("add.request_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
                 }
             }
         }
@@ -451,17 +452,17 @@ private fun NameDialog(canCreate: Boolean, onDismiss: () -> Unit, onDone: (Strin
     val focus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (canCreate) "Yangi turkum" else "Turkum so'rash") },
+        title = { Text(if (canCreate) t("add.new_category") else t("add.request_category")) },
         text = {
             OutlinedTextField(
                 name, { name = it }, Modifier.fillMaxWidth().focusRequester(focus),
-                placeholder = { Text("Turkum nomi") }, singleLine = true,
+                placeholder = { Text(t("add.category_name")) }, singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 shape = fieldShape, colors = fieldColors(),
             )
         },
-        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
-        confirmButton = { LinkButton({ onDone(name.trim()) }) { Text(if (canCreate) "Qo'shish" else "So'rash") } },
+        dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
+        confirmButton = { LinkButton({ onDone(name.trim()) }) { Text(if (canCreate) t("add.add") else t("add.request")) } },
     )
     DisposableEffect(Unit) { runCatching { focus.requestFocus() }; onDispose {} }
 }
@@ -481,9 +482,9 @@ private fun DatePick(initial: LocalDate, onDismiss: () -> Unit, onPick: (LocalDa
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            LinkButton({ state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) } ?: onDismiss() }) { Text("OK") }
+            LinkButton({ state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) } ?: onDismiss() }) { Text(t("common.ok")) }
         },
-        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+        dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
     ) { DatePicker(state) }
 }
 
@@ -505,14 +506,14 @@ private fun TypeForm(
     onFail: (String) -> Unit,
 ) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val toaster = LocalToaster.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var input by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
-    val micError = "Mikrofon ishlamayapti — ruxsatlarni tekshiring"
+    val micError = t("add.mic_error")
 
     fun startListening() {
         speech.listen(settings.settings.value.sttLocale, onResult = { input = it }, onEnd = { listening = false })
@@ -534,14 +535,14 @@ private fun TypeForm(
 
     fun submit() {
         val raw = input.trim()
-        if (raw.isEmpty()) return toaster.show("Nima olganingiz va qanchaligini yozing")
+        if (raw.isEmpty()) return toaster.show(t("add.err_input"))
         if (listening) { speech.stop(); listening = false }
         busy = true
         scope.launch {
             val p = parse(raw, db.getCategories().map { it.name })
             if (p == null) {
                 busy = false
-                toaster.show("Tahlil qilib bo'lmadi — qo'lda to'ldiring")
+                toaster.show(t("add.err_parse"))
                 onFail(raw)
                 return@launch
             }
@@ -554,7 +555,7 @@ private fun TypeForm(
                 ),
             )
             onClose()
-            toaster.show("Qo'shildi: ${p.item} — ${formatMoney(p.amount)} UZS", "Bekor qilish") { db.deleteExpense(id) }
+            toaster.show(t("add.added", p.item, formatMoney(p.amount)), t("common.cancel")) { db.deleteExpense(id) }
         }
     }
 
@@ -569,21 +570,21 @@ private fun TypeForm(
                         ::toggleMic, Modifier.size(84.dp), enabled = !busy,
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = tint, contentColor = c.onAccent),
                     ) {
-                        Icon(if (listening) Icons.Filled.Stop else Icons.Filled.Mic, if (listening) "To'xtatish" else "Gapirish", Modifier.size(36.dp))
+                        Icon(if (listening) Icons.Filled.Stop else Icons.Filled.Mic, if (listening) t("add.stop") else t("add.speak"), Modifier.size(36.dp))
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                if (listening) "Tinglanmoqda… to'xtatish uchun bosing" else "Mikrofonni bosing va nima olganingizni ayting",
-                color = AppTheme.colors.muted, style = t.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                if (listening) t("add.listening") else t("add.mic_hint"),
+                color = AppTheme.colors.muted, style = ty.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(AppSpace.gap))
         }
         OutlinedTextField(
             input, { input = it }, Modifier.fillMaxWidth().testTag("input"),
-            textStyle = t.bodyLarge, minLines = 3, maxLines = 5,
-            placeholder = { Text(if (voice) "Matn shu yerda chiqadi — kerak bo'lsa tahrirlang" else "masalan: kofe va kruassan 45000") },
+            textStyle = ty.bodyLarge, minLines = 3, maxLines = 5,
+            placeholder = { Text(if (voice) t("add.voice_hint") else t("add.type_hint")) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             shape = fieldShape, colors = fieldColors(),
         )
@@ -592,7 +593,7 @@ private fun TypeForm(
             if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = c.muted, strokeWidth = 2.dp)
             else Icon(Icons.Filled.AutoAwesome, null)
             Spacer(Modifier.width(8.dp))
-            Text("AI bilan qo'shish")
+            Text(t("add.ai_add"))
         }
     }
 }

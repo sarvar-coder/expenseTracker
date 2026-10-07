@@ -9,6 +9,7 @@ import com.sarvarbek.expense_tracker.features.home.summarize
 import com.sarvarbek.expense_tracker.features.home.todayExpenses
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.expensesCsv
+import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
 import com.sarvarbek.expense_tracker.ui.common.toMillis
@@ -21,6 +22,9 @@ import java.time.LocalDateTime
 
 /** Plain JVM: ports home_summary, insights_data, activity_filter, csv_export and parseAmount tests. */
 class HelpersTest {
+    // Plain JVM: no Application, so load the Latin strings straight from the source tree.
+    init { I18n.strings = I18n.parse(java.io.File("src/main/assets/i18n/uz.json").readText()) }
+
     private fun at(y: Int, m: Int, d: Int, h: Int = 0, min: Int = 0) = LocalDateTime.of(y, m, d, h, min).toMillis()
 
     private fun exp(id: Int, amount: Long, catId: Int, date: Long, desc: String = "x", isPrivate: Boolean = false) =

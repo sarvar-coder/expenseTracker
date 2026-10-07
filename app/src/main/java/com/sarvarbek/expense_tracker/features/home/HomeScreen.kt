@@ -36,6 +36,7 @@ import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.ui.common.Money
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
+import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
@@ -62,12 +63,12 @@ fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, 
         item { today.filter { it.transferTo == null }.let { spent -> TodayHero(spent.sumOf { it.amount }, spent.size, month) } }
         item {
             Spacer(Modifier.height(AppSpace.section))
-            Text("Bugungi xarajatlar", style = MaterialTheme.typography.titleMedium)
+            Text(t("home.today_expenses"), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(10.dp))
         }
         item {
             if (today.isEmpty()) {
-                EmptyState(Icons.Outlined.ReceiptLong, "Bugun hali xarajat yo'q", "Pastdagi tugma bilan birinchisini qo'shing")
+                EmptyState(Icons.Outlined.ReceiptLong, t("home.empty_title"), t("home.empty_body"))
             } else {
                 AppCard {
                     for (e in today) ExpenseTile(e, catById[e.categoryId], db, onEdit)
@@ -80,11 +81,11 @@ fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, 
 @Composable
 private fun Header(date: LocalDate, onSettings: () -> Unit) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     Row {
         Column(Modifier.weight(1f)) {
-            Text(uzDayMonth(date), color = AppTheme.colors.muted, style = t.labelMedium)
-            Text("Bugun", style = t.headlineMedium)
+            Text(uzDayMonth(date), color = AppTheme.colors.muted, style = ty.labelMedium)
+            Text(t("home.today"), style = ty.headlineMedium)
         }
         OutlinedIconButton(
             onSettings,
@@ -92,25 +93,25 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
             shape = RoundedCornerShape(AppRadii.md),
             colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = c.card, contentColor = c.text),
             border = BorderStroke(1.dp, c.border),
-        ) { Icon(Icons.Outlined.Settings, "Sozlamalar") }
+        ) { Icon(Icons.Outlined.Settings, t("home.settings")) }
     }
 }
 
 @Composable
 private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
     val over = month.budget > 0 && month.spent > month.budget
     Column(
         Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp),
     ) {
-        Text(if (count == 0) "Bugun sarflangan" else "Bugun sarflangan · $count ta", style = t.labelMedium.copy(color = soft))
+        Text(if (count == 0) t("home.spent_today") else t("home.spent_today_count", count), style = ty.labelMedium.copy(color = soft))
         Spacer(Modifier.height(6.dp))
-        Money(total, style = t.displayLarge, color = c.onHero, autoSize = true)
+        Money(total, style = ty.displayLarge, color = c.onHero, autoSize = true)
         Spacer(Modifier.height(20.dp))
         if (month.budget <= 0) {
-            Text("Oy: ${formatMoney(month.spent)} UZS · Sozlamalarda byudjet belgilang", style = t.labelSmall.copy(color = soft))
+            Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))
         } else {
             LinearProgressIndicator(
                 progress = { month.progress },
@@ -122,10 +123,10 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
             )
             Spacer(Modifier.height(8.dp))
             Row {
-                Text("Oy: ${formatMoney(month.spent)} / ${formatMoney(month.budget)}", style = t.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
+                Text(t("home.month_of_budget", formatMoney(month.spent), formatMoney(month.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
                 Text(
-                    if (over) "${formatMoney(-month.remaining)} oshdi" else "${formatMoney(month.remaining)} qoldi",
-                    style = t.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
+                    if (over) t("home.over", formatMoney(-month.remaining)) else t("home.left", formatMoney(month.remaining)),
+                    style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
                 )
             }
         }

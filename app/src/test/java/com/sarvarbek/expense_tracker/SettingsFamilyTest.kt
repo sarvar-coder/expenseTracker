@@ -42,6 +42,7 @@ import com.sarvarbek.expense_tracker.services.FamilyInvite
 import com.sarvarbek.expense_tracker.services.FamilyMember
 import com.sarvarbek.expense_tracker.services.FamilyOverview
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
+import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
@@ -127,6 +128,7 @@ class SettingsScreenTest : ScreenTest() {
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("me@oila.uz"))
         rule.onNodeWithText("Ism").assertExists()
         rule.onNodeWithText("Ali").assertExists()
+        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Ma'lumotni eksport (CSV)"))
         rule.onNodeWithText("Ma'lumotni eksport (CSV)").assertExists()
     }
 

@@ -65,6 +65,7 @@ import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.LinkButton
 import com.sarvarbek.expense_tracker.ui.theme.fieldColors
 import com.sarvarbek.expense_tracker.ui.theme.fieldShape
+import com.sarvarbek.expense_tracker.ui.common.t
 
 /**
  * Oila sozlamalari (gear on the Oila tab): name, member roles, invites,
@@ -76,7 +77,7 @@ fun FamilySettingsScreen(state: FamilyState, onBack: () -> Unit) {
     val actions = rememberFamilyActions(state)
     val f = state.overview
     LaunchedEffect(f == null) { if (f == null) onBack() }
-    AppBarScaffold("Oila sozlamalari", onBack) { pad ->
+    AppBarScaffold(t("family.settings"), onBack) { pad ->
         if (f != null) LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(AppSpace.page, pad.calculateTopPadding(), AppSpace.page, AppSpace.section),
@@ -90,27 +91,27 @@ private fun FamilySettings(f: FamilyOverview, a: FamilyActions) {
     val c = AppTheme.colors
     val close = { a.show(null) }
     Column {
-        SectionLabel("Oila")
+        SectionLabel(t("family.title"))
         DividedCard(listOf(f.name)) { name ->
             IconRow(
-                if (f.isAdmin) Icons.Outlined.Edit else null, name, "Oila nomi",
+                if (f.isAdmin) Icons.Outlined.Edit else null, name, t("family.name"),
                 if (!f.isAdmin) Modifier else Modifier.clickable {
                     a.show {
-                        TextDialog("Oila nomi", "Saqlash", close, initial = name, hint = "Oila nomi") { new ->
+                        TextDialog(t("family.name"), t("common.save"), close, initial = name, hint = t("family.name")) { new ->
                             if (new.isEmpty() || new == name) close() else a.act(null) { rename(f.id, new) }
                         }
                     }
                 },
             )
         }
-        SectionLabel("A'zolar")
+        SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> RoleRow(m, f, a) }
         if (f.isAdmin) AdminSection(f, a)
         Spacer(Modifier.height(AppSpace.section))
         OutlinedButton(
             {
                 a.show {
-                    ConfirmDialog("Oiladan chiqasizmi?", "Umumiy xarajatlaringiz oila tarixida faqat o'qish uchun qoladi.", "Chiqish", close) {
+                    ConfirmDialog(t("familySettings.leave_confirm"), t("familySettings.leave_text"), t("familySettings.leave_action"), close) {
                         a.act(null) { leave() }
                     }
                 }
@@ -122,20 +123,20 @@ private fun FamilySettings(f: FamilyOverview, a: FamilyActions) {
         ) {
             Icon(Icons.AutoMirrored.Outlined.Logout, null)
             Spacer(Modifier.width(8.dp))
-            Text("Oiladan chiqish", style = MaterialTheme.typography.labelLarge.copy(color = c.danger))
+            Text(t("familySettings.leave"), style = MaterialTheme.typography.labelLarge.copy(color = c.danger))
         }
         if (f.isAdmin) {
             TextButton(
                 {
                     a.show {
-                        ConfirmDialog("Oila o'chirilsinmi?", "Barcha a'zolar chiqariladi. Xarajatlar har kimning o'zida qoladi.", "O'chirish", close) {
+                        ConfirmDialog(t("familySettings.delete_confirm"), t("familySettings.delete_text"), t("common.delete"), close) {
                             a.act(null) { deleteFamily() }
                         }
                     }
                 },
                 Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = c.danger),
-            ) { Text("Oilani o'chirish", style = MaterialTheme.typography.labelLarge.copy(color = c.danger)) }
+            ) { Text(t("familySettings.delete"), style = MaterialTheme.typography.labelLarge.copy(color = c.danger)) }
         }
     }
 }
@@ -146,38 +147,38 @@ private fun RoleRow(m: FamilyMember, f: FamilyOverview, a: FamilyActions) {
     val self = m.userId == f.myId
     var menu by remember { mutableStateOf(false) }
     val close = { a.show(null) }
-    IconRow(null, memberLabel(m, f.myId), if (m.isAdmin) "Admin" else "A'zo") {
+    IconRow(null, memberLabel(m, f.myId), if (m.isAdmin) t("familySettings.admin") else t("familySettings.member")) {
         if (f.isAdmin || self) Box {
-            IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Amallar: ${m.name}") }
+            IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, t("familySettings.actions", m.name)) }
             DropdownMenu(menu, { menu = false }, containerColor = AppTheme.colors.card) {
-                DropdownMenuItem({ Text("Oiladagi o'rni") }, {
+                DropdownMenuItem({ Text(t("familySettings.role")) }, {
                     menu = false
                     a.show {
-                        TitleDialog(m.title.orEmpty(), close) { t ->
-                            if (t == m.title.orEmpty()) close() else a.act(null) { setTitle(m.userId, t) }
+                        TitleDialog(m.title.orEmpty(), close) { v ->
+                            if (v == m.title.orEmpty()) close() else a.act(null) { setTitle(m.userId, v) }
                         }
                     }
                 })
                 if (!f.isAdmin) return@DropdownMenu
                 if (m.isAdmin) {
-                    DropdownMenuItem({ Text("Adminlikdan olish") }, {
+                    DropdownMenuItem({ Text(t("familySettings.unadmin")) }, {
                         menu = false
                         a.act(null) { setRole(m.userId, admin = false) }
                     })
                 } else {
-                    DropdownMenuItem({ Text("Admin qilish") }, {
+                    DropdownMenuItem({ Text(t("familySettings.make_admin")) }, {
                         menu = false
                         a.show {
-                            ConfirmDialog("${m.name} admin qilinsinmi?", "U ham a'zolar, takliflar va turkumlarni boshqara oladi.", "Admin qilish", close) {
+                            ConfirmDialog(t("familySettings.make_admin_confirm", m.name), t("familySettings.make_admin_text"), t("familySettings.make_admin"), close) {
                                 a.act(null) { setRole(m.userId, admin = true) }
                             }
                         }
                     })
                 }
-                if (!self) DropdownMenuItem({ Text("Oiladan chiqarish") }, {
+                if (!self) DropdownMenuItem({ Text(t("familySettings.remove")) }, {
                     menu = false
                     a.show {
-                        ConfirmDialog("${m.name} oiladan chiqarilsinmi?", "Umumiy xarajatlari oila tarixida faqat o'qish uchun qoladi.", "Chiqarish", close) {
+                        ConfirmDialog(t("familySettings.remove_confirm", m.name), t("familySettings.remove_text"), t("familySettings.remove_action"), close) {
                             a.act(null) { removeMember(m.userId) }
                         }
                     }
@@ -196,23 +197,23 @@ private fun TitleDialog(initial: String, onDismiss: () -> Unit, onDone: (String)
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Oiladagi o'rni") },
+        title = { Text(t("familySettings.role")) },
         text = {
             Column {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (t in titles) AppChip(t, text == t, { text = if (text == t) "" else t })
+                    for (ti in titles) AppChip(ti, text == ti, { text = if (text == ti) "" else ti })
                 }
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     text, { if (it.length <= 20) text = it }, Modifier.fillMaxWidth(),
-                    placeholder = { Text("Boshqa (masalan, Buvi)") }, singleLine = true,
+                    placeholder = { Text(t("familySettings.title_other")) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     shape = fieldShape, colors = fieldColors(),
                 )
             }
         },
-        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
-        confirmButton = { LinkButton({ onDone(text.trim()) }) { Text("Saqlash") } },
+        dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
+        confirmButton = { LinkButton({ onDone(text.trim()) }) { Text(t("common.save")) } },
     )
 }
 
@@ -220,31 +221,31 @@ private fun TitleDialog(initial: String, onDismiss: () -> Unit, onDone: (String)
 private fun AdminSection(f: FamilyOverview, a: FamilyActions) {
     val c = AppTheme.colors
     val close = { a.show(null) }
-    SectionLabel("Takliflar")
+    SectionLabel(t("familySettings.invites"))
     // null = the trailing "invite a member" row.
     DividedCard(f.invites + null, indent = 16.dp) { i ->
         if (i != null) {
-            IconRow(Icons.Outlined.MailOutline, i.email, "Javob kutilmoqda") {
-                IconButton({ a.act(null) { deleteInvite(i.id) } }) { Icon(Icons.Filled.Close, "Taklifni bekor qilish") }
+            IconRow(Icons.Outlined.MailOutline, i.email, t("familySettings.pending")) {
+                IconButton({ a.act(null) { deleteInvite(i.id) } }) { Icon(Icons.Filled.Close, t("familySettings.cancel_invite")) }
             }
         } else {
-            IconRow(Icons.Outlined.PersonAddAlt, "A'zo taklif qilish", null, Modifier.clickable {
+            IconRow(Icons.Outlined.PersonAddAlt, t("familySettings.invite_member"), null, Modifier.clickable {
                 a.show {
-                    TextDialog("A'zo taklif qilish", "Taklif qilish", close, hint = "email@misol.uz", keyboard = KeyboardType.Email) { email ->
-                        if (email.isEmpty()) close() else a.act("Taklif yuborildi. U kirganda ko'radi.") { invite(f.id, email) }
+                    TextDialog(t("familySettings.invite_member"), t("familySettings.invite"), close, hint = "email@misol.uz", keyboard = KeyboardType.Email) { email ->
+                        if (email.isEmpty()) close() else a.act(t("familySettings.invite_sent")) { invite(f.id, email) }
                     }
                 }
             })
         }
     }
-    SectionLabel("Turkum so'rovlari", badge = f.requests.size)
+    SectionLabel(t("familySettings.requests"), badge = f.requests.size)
     if (f.requests.isEmpty()) {
-        Text("Yangi so'rov yo'q", color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
+        Text(t("familySettings.no_requests"), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
     } else {
         DividedCard(f.requests, indent = 16.dp) { r ->
-            IconRow(null, r.name, "Hozircha \"Boshqa\"da") {
-                IconButton({ a.act(null) { rejectRequest(r.id) } }) { Icon(Icons.Filled.Close, "Rad etish") }
-                IconButton({ a.act("“${r.name}” turkumi yaratildi") { approveRequest(r.id) } }) { Icon(Icons.Filled.Check, "Tasdiqlash", tint = c.accent) }
+            IconRow(null, r.name, t("familySettings.in_other")) {
+                IconButton({ a.act(null) { rejectRequest(r.id) } }) { Icon(Icons.Filled.Close, t("family.decline")) }
+                IconButton({ a.act(t("familySettings.category_created", r.name)) { approveRequest(r.id) } }) { Icon(Icons.Filled.Check, t("auth.confirm"), tint = c.accent) }
             }
         }
     }

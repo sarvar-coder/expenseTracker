@@ -152,7 +152,7 @@ private fun TransferBadge(size: Dp = 44.dp) {
 @Composable
 fun EmptyState(icon: ImageVector, title: String, hint: String? = null) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     Column(
         Modifier.fillMaxWidth().padding(vertical = 40.dp, horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -161,10 +161,10 @@ fun EmptyState(icon: ImageVector, title: String, hint: String? = null) {
             Icon(icon, null, tint = c.accent, modifier = Modifier.size(30.dp))
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = t.titleMedium, textAlign = TextAlign.Center)
+        Text(title, style = ty.titleMedium, textAlign = TextAlign.Center)
         if (hint != null) {
             Spacer(Modifier.height(6.dp))
-            Text(hint, color = AppTheme.colors.muted, style = t.bodySmall, textAlign = TextAlign.Center)
+            Text(hint, color = AppTheme.colors.muted, style = ty.bodySmall, textAlign = TextAlign.Center)
         }
     }
 }
@@ -173,17 +173,17 @@ fun EmptyState(icon: ImageVector, title: String, hint: String? = null) {
 @Composable
 fun ConfirmDeleteDialog(description: String, onConfirm: () -> Unit, onDismiss: () -> Unit) = AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Xarajat o'chirilsinmi?") },
-    text = { Text("“$description” o'chiriladi.") },
-    dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
-    confirmButton = { LinkButton(onConfirm) { Text("O'chirish") } },
+    title = { Text(t("widgets.delete_title")) },
+    text = { Text(t("widgets.delete_body", description)) },
+    dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
+    confirmButton = { LinkButton(onConfirm) { Text(t("common.delete")) } },
 )
 
 /** Source glyph + label shown under the description. */
 fun sourceMeta(s: ExpenseSource): Pair<String, ImageVector> = when (s) {
-    ExpenseSource.typed -> "Yozilgan" to Icons.Outlined.Edit
-    ExpenseSource.voice -> "Ovozli" to Icons.Outlined.MicNone
-    ExpenseSource.manual -> "Qo'lda" to Icons.AutoMirrored.Outlined.ListAlt
+    ExpenseSource.typed -> t("widgets.source_typed") to Icons.Outlined.Edit
+    ExpenseSource.voice -> t("widgets.source_voice") to Icons.Outlined.MicNone
+    ExpenseSource.manual -> t("widgets.source_manual") to Icons.AutoMirrored.Outlined.ListAlt
 }
 
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
@@ -196,7 +196,7 @@ private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 @Composable
 fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (Expense) -> Unit) {
     val c = AppTheme.colors
-    val t = MaterialTheme.typography
+    val ty = MaterialTheme.typography
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
     var confirm by remember { mutableStateOf(false) }
@@ -208,7 +208,7 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
                 confirm = false
                 scope.launch {
                     db.deleteExpense(expense.id)
-                    toaster.show("Xarajat o'chirildi")
+                    toaster.show(t("widgets.expense_deleted"))
                 }
             },
             onDismiss = { confirm = false },
@@ -238,21 +238,21 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
             if (transfer) TransferBadge() else CategoryBadge(category)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(expense.description, style = t.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(expense.description, style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (transfer) "O'tkazma" else category?.name ?: "Turkumsiz", color = AppTheme.colors.muted, style = t.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(if (transfer) t("widgets.transfer") else category?.name ?: t("widgets.no_category"), color = AppTheme.colors.muted, style = ty.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                     Icon(srcIcon, srcLabel, tint = c.muted, modifier = Modifier.size(13.dp))
-                    if (expense.isPrivate) Icon(Icons.Outlined.VisibilityOff, "Maxfiy", tint = c.muted, modifier = Modifier.size(13.dp))
-                    if (expense.frozen) Icon(Icons.Outlined.Lock, "Faqat o'qish uchun", tint = c.muted, modifier = Modifier.size(13.dp))
+                    if (expense.isPrivate) Icon(Icons.Outlined.VisibilityOff, t("add.private"), tint = c.muted, modifier = Modifier.size(13.dp))
+                    if (expense.frozen) Icon(Icons.Outlined.Lock, t("widgets.read_only"), tint = c.muted, modifier = Modifier.size(13.dp))
                 }
             }
             Spacer(Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {
-                Text(formatMoney(expense.amount), style = t.titleSmall)
+                Text(formatMoney(expense.amount), style = ty.titleSmall)
                 Spacer(Modifier.height(2.dp))
-                Text(expense.date.toLocalDateTime().format(hhmm), color = AppTheme.colors.muted, style = t.bodySmall)
+                Text(expense.date.toLocalDateTime().format(hhmm), color = AppTheme.colors.muted, style = ty.bodySmall)
             }
         }
     }
@@ -264,7 +264,7 @@ fun ConfirmDialog(title: String, body: String?, action: String, onDismiss: () ->
     onDismissRequest = onDismiss,
     title = { Text(title) },
     text = body?.let { { Text(it) } },
-    dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+    dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
     confirmButton = { LinkButton(onConfirm) { Text(action) } },
 )
 
@@ -294,7 +294,7 @@ fun TextDialog(
                 shape = fieldShape, colors = fieldColors(),
             )
         },
-        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+        dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
         confirmButton = { LinkButton({ onDone(text.text.trim()) }) { Text(action) } },
     )
     DisposableEffect(Unit) { runCatching { focus.requestFocus() }; onDispose {} }
