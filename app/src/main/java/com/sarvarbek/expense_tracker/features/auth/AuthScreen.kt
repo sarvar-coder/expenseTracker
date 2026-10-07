@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -64,6 +65,8 @@ import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.NonCancellable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -91,6 +94,7 @@ fun authErrorText(code: String, message: String): String = when (code) {
     else -> message
 }
 
+private fun nameError(v: String) = if (v.isNotBlank()) null else "Ismingizni kiriting"
 private fun emailError(v: String) = if ('@' in v) null else "To'g'ri email kiriting"
 private fun passwordError(v: String) = if (v.length >= 6) null else "Kamida 6 belgi"
 private fun codeError(v: String) = if (Regex("""^\d{6}$""").matches(v.trim())) null else "6 ta raqam kiriting"
@@ -106,6 +110,7 @@ fun AuthScreen(auth: Auth) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var mode by rememberSaveable { mutableStateOf(Mode.SignIn) }
+    var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
@@ -132,6 +137,7 @@ fun AuthScreen(auth: Auth) {
     val needsPassword = mode in setOf(Mode.SignIn, Mode.SignUp) || (mode == Mode.Reset && code.length == 6)
     val needsCode = mode in setOf(Mode.Verify, Mode.Reset)
     val errors = listOfNotNull(
+        if (mode == Mode.SignUp) nameError(name) else null,
         if (needsEmail) emailError(email) else null,
         if (needsCode) codeError(code) else null,
         if (needsPassword || mode == Mode.Reset) passwordError(password) else null,
@@ -152,7 +158,10 @@ fun AuthScreen(auth: Auth) {
                         go(Mode.Verify)
                     }
                     Mode.SignUp -> {
-                        val user = auth.signUpWith(Email) { this.email = mail; this.password = password }
+                        val user = auth.signUpWith(Email) {
+                            this.email = mail; this.password = password
+                            data = buildJsonObject { put("name", name.trim()) } // profile display_name (signup trigger)
+                        }
                         // Already-confirmed email: Supabase sends nothing and returns a
                         // fake user with no identities (anti-enumeration).
                         if (user?.identities?.isEmpty() == true) error = authErrorText("user_already_exists", "")
@@ -205,6 +214,10 @@ fun AuthScreen(auth: Auth) {
             Spacer(Modifier.height(6.dp))
             Text(hint, style = t.bodyMedium.copy(color = c.muted))
             Spacer(Modifier.height(AppSpace.section))
+            if (mode == Mode.SignUp) {
+                Field(name, { name = it.take(40) }, "Ism", if (validate) nameError(name) else null, KeyboardType.Text, ContentType.PersonFullName, words = true)
+                Spacer(Modifier.height(12.dp))
+            }
             if (needsEmail) {
                 Field(email, { email = it }, "Email", if (validate) emailError(email) else null, KeyboardType.Email, ContentType.EmailAddress)
                 Spacer(Modifier.height(12.dp))
@@ -260,6 +273,7 @@ private fun Field(
     keyboard: KeyboardType,
     autofill: ContentType,
     obscure: Boolean = false,
+    words: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
 ) = OutlinedTextField(
     value, onChange,
@@ -269,7 +283,7 @@ private fun Field(
     supportingText = error?.let { { Text(it, color = AppTheme.colors.danger) } },
     trailingIcon = trailing,
     visualTransformation = if (obscure) PasswordVisualTransformation() else VisualTransformation.None,
-    keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+    keyboardOptions = KeyboardOptions(capitalization = if (words) KeyboardCapitalization.Words else KeyboardCapitalization.None, keyboardType = keyboard),
     singleLine = true,
     shape = fieldShape,
     colors = fieldColors(),

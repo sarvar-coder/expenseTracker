@@ -215,7 +215,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
     }
 }
 
-private val FamilyOverview.memberNames get() = members.associate { it.userId to it.name }
+private val FamilyOverview.memberNames get() = members.associate { it.userId to it.label }
 
 /** Joining or creating: share past expenses too? */
 @Composable
@@ -281,7 +281,9 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, 
         .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: "Siz") }
     // No Sana in the filter: this month.
     val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
-    val list = (mine + f.others).filter { filter.copy(range = range).matches(it.expense) }.sortedByDescending { it.expense.date }
+    // Current members' labels carry their title; ex-members keep the server name.
+    val others = f.others.map { it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
+    val list = (mine + others).filter { filter.copy(range = range).matches(it.expense) }.sortedByDescending { it.expense.date }
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
@@ -324,9 +326,10 @@ private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker
     Money(e.amount)
 }
 
-/** "Ali (siz) · admin". */
-internal fun memberLabel(m: FamilyMember, myId: String) =
-    listOfNotNull(m.name, "(siz)".takeIf { m.userId == myId }, "· admin".takeIf { m.isAdmin }).joinToString(" ")
+/** "Ali (siz) · Ota · admin". */
+internal fun memberLabel(m: FamilyMember, myId: String) = listOfNotNull(
+    m.name, "(siz)".takeIf { m.userId == myId }, m.title?.let { "· $it" }, "· admin".takeIf { m.isAdmin },
+).joinToString(" ")
 
 @Composable
 private fun MemberRow(m: FamilyMember, myId: String) = Row(

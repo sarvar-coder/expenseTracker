@@ -2,7 +2,10 @@ package com.sarvarbek.expense_tracker.features.family
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Check
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.PersonAddAlt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,9 +58,13 @@ import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.DividedCard
 import com.sarvarbek.expense_tracker.ui.common.SectionLabel
 import com.sarvarbek.expense_tracker.ui.common.TextDialog
+import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import com.sarvarbek.expense_tracker.ui.theme.LinkButton
+import com.sarvarbek.expense_tracker.ui.theme.fieldColors
+import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 
 /**
  * Oila sozlamalari (gear on the Oila tab): name, member roles, invites,
@@ -129,16 +140,25 @@ private fun FamilySettings(f: FamilyOverview, a: FamilyActions) {
     }
 }
 
-/** Member + role; admins get a menu to promote, demote or remove. */
+/** Member + role; admins get a menu to promote, demote or remove. Anyone sets their own title. */
 @Composable
 private fun RoleRow(m: FamilyMember, f: FamilyOverview, a: FamilyActions) {
     val self = m.userId == f.myId
     var menu by remember { mutableStateOf(false) }
     val close = { a.show(null) }
     IconRow(null, memberLabel(m, f.myId), if (m.isAdmin) "Admin" else "A'zo") {
-        if (f.isAdmin) Box {
+        if (f.isAdmin || self) Box {
             IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Amallar: ${m.name}") }
             DropdownMenu(menu, { menu = false }, containerColor = AppTheme.colors.card) {
+                DropdownMenuItem({ Text("Oiladagi o'rni") }, {
+                    menu = false
+                    a.show {
+                        TitleDialog(m.title.orEmpty(), close) { t ->
+                            if (t == m.title.orEmpty()) close() else a.act(null) { setTitle(m.userId, t) }
+                        }
+                    }
+                })
+                if (!f.isAdmin) return@DropdownMenu
                 if (m.isAdmin) {
                     DropdownMenuItem({ Text("Adminlikdan olish") }, {
                         menu = false
@@ -165,6 +185,35 @@ private fun RoleRow(m: FamilyMember, f: FamilyOverview, a: FamilyActions) {
             }
         }
     }
+}
+
+private val titles = listOf("Ota", "Ona", "Farzand", "Aka", "Opa", "Uka", "Singil")
+
+/** Preset chips or free text (≤20); empty clears the title. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TitleDialog(initial: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Oiladagi o'rni") },
+        text = {
+            Column {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (t in titles) AppChip(t, text == t, { text = if (text == t) "" else t })
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    text, { if (it.length <= 20) text = it }, Modifier.fillMaxWidth(),
+                    placeholder = { Text("Boshqa (masalan, Buvi)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    shape = fieldShape, colors = fieldColors(),
+                )
+            }
+        },
+        dismissButton = { LinkButton(onDismiss) { Text("Bekor qilish") } },
+        confirmButton = { LinkButton({ onDone(text.trim()) }) { Text("Saqlash") } },
+    )
 }
 
 @Composable

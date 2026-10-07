@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.MicNone
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -145,6 +146,15 @@ fun SettingsScreen(
             item {
                 SectionLabel("Hisob")
                 DividedCard(listOf<@Composable () -> Unit>({
+                    SettingRow(Icons.Outlined.Person, "Ism", s.displayName.ifEmpty { "Belgilanmagan" }) {
+                        dialog = {
+                            TextDialog("Ism", "Saqlash", close, initial = s.displayName, hint = "Oila sizni shunday ko'radi", accept = { it.length <= 40 }) { name ->
+                                close()
+                                if (name.isEmpty()) toaster.show("Ism kiriting") else if (name != s.displayName) settings.setDisplayName(name)
+                            }
+                        }
+                    }
+                }, {
                     SettingRow(Icons.AutoMirrored.Outlined.Logout, "Chiqish", email) {
                         dialog = { ConfirmDialog("Hisobdan chiqasizmi?", null, "Chiqish", close) { close(); onSignOut() } }
                     }

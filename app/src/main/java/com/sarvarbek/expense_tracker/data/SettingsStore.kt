@@ -12,6 +12,8 @@ data class Settings(
     val sttLocale: String = "uz_UZ",
     /** New expenses start private (hidden from the family) when set. */
     val defaultPrivate: Boolean = false,
+    /** Name the family sees (profiles.display_name); empty until the first sync. */
+    val displayName: String = "",
 )
 
 /** Plain settings in SharedPreferences; [settings] updates screens live. */
@@ -23,6 +25,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
         monthlyBudget = prefs.getLong(K_BUDGET, 0),
         sttLocale = prefs.getString(K_LOCALE, null) ?: "uz_UZ",
         defaultPrivate = prefs.getBoolean(K_PRIVATE, false),
+        displayName = prefs.getString(K_NAME, null) ?: "",
     )
 
     // Budget and private default also live on the server profile (the family
@@ -37,6 +40,11 @@ class SettingsStore(private val prefs: SharedPreferences) {
         state.update { it.copy(defaultPrivate = v) }
     }
 
+    fun setDisplayName(v: String) {
+        prefs.edit { putString(K_NAME, v); putBoolean(K_PROFILE_DIRTY, true) }
+        state.update { it.copy(displayName = v) }
+    }
+
     fun setLocale(v: String) {
         prefs.edit { putString(K_LOCALE, v) }
         state.update { it.copy(sttLocale = v) }
@@ -46,9 +54,9 @@ class SettingsStore(private val prefs: SharedPreferences) {
     fun markProfileClean() = prefs.edit { remove(K_PROFILE_DIRTY) }
 
     /** Server values pulled by sync; not marked for push. */
-    fun applyProfile(budget: Long, defaultPrivate: Boolean) {
-        prefs.edit { putLong(K_BUDGET, budget); putBoolean(K_PRIVATE, defaultPrivate) }
-        state.update { it.copy(monthlyBudget = budget, defaultPrivate = defaultPrivate) }
+    fun applyProfile(budget: Long, defaultPrivate: Boolean, displayName: String) {
+        prefs.edit { putLong(K_BUDGET, budget); putBoolean(K_PRIVATE, defaultPrivate); putString(K_NAME, displayName) }
+        state.update { it.copy(monthlyBudget = budget, defaultPrivate = defaultPrivate, displayName = displayName) }
     }
 
     /** Last Add mode the user picked (enum name), so Add reopens in it. */
@@ -61,6 +69,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
         private const val K_LOCALE = "sttLocale"
         private const val K_ADD_MODE = "lastAddMode"
         private const val K_PRIVATE = "defaultPrivate"
+        private const val K_NAME = "displayName"
         // 'sync.' prefix: wiped with the other sync keys when the account changes.
         private const val K_PROFILE_DIRTY = "sync.profileDirty"
     }
