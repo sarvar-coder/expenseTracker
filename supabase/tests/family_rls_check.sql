@@ -7,6 +7,7 @@ declare
   ca uuid := gen_random_uuid(); cb1 uuid := gen_random_uuid(); cb2 uuid := gen_random_uuid();
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
   eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid();
+  nb1 uuid := gen_random_uuid(); nb2 uuid := gen_random_uuid(); nb3 uuid := gen_random_uuid();
   fid uuid; inv uuid; req uuid; newcat uuid; bq uuid; n int; r record; ok boolean;
 begin
   insert into auth.users (id, email, aud, role, raw_user_meta_data) values
@@ -55,11 +56,21 @@ begin
   select count(*) into n from public.expenses where id = eb1 and family_id = fid; assert n = 1, 'family_id immutable';
   update public.expenses set description = 'stale', updated_at = now() - interval '1 day' where id = eb1;
   select count(*) into n from public.expenses where id = eb1 and description = 'bread'; assert n = 1, 'stale write dropped';
+  -- needs: one family item, one personal
+  insert into public.needs (id, family_id, text) values (nb1, fid, 'milk'), (nb2, null, 'socks');
 
   -- A: privacy, summary math, approval, admin rules
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select count(*) into n from public.expenses where owner_id = b; assert n = 0, 'A cannot read B rows directly';
   select count(*) into n from public.profiles where id = b; assert n = 0, 'A cannot read B profile/budget';
+  select count(*) into n from public.needs; assert n = 1, 'A sees family need only, got ' || n;
+  insert into public.needs (id, owner_id, family_id, text, done, updated_at)
+    values (nb1, a, null, 'milk', true, now() + interval '1 second')
+    on conflict (id) do update set done = excluded.done, family_id = excluded.family_id, updated_at = excluded.updated_at;
+  select count(*) into n from public.needs where id = nb1 and done and family_id = fid and owner_id = b;
+  assert n = 1, 'member ticks family need via upsert, owner/family kept';
+  update public.needs set done = true where id = nb2;
+  get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
   select amount, description into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount is null and r.description is null, 'private row is a tombstone';
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
@@ -119,6 +130,9 @@ begin
   select count(*) into n from public.expenses where id = eb1 and description = 'bread'; assert n = 1, 'frozen row read-only';
   select count(*) into n from public.categories where id = ca; assert n = 1, 'ex-member still sees history category';
   select count(*) into n from public.family_expenses_since('epoch'); assert n = 0, 'ex-member sees no family rows';
+  select count(*) into n from public.needs; assert n = 1, 'ex-member sees only own personal need, got ' || n;
+  insert into public.needs (id, family_id, text) values (nb3, fid, 'queued offline');
+  select count(*) into n from public.needs where id = nb3 and family_id is null; assert n = 1, 'stale family need becomes personal';
   select count(*) into n from public.categories where owner_id = b and deleted_at is null;
   assert n = 3, 'ex-member keeps Food, Boshqa, Gym as personal copies, got ' || n;
   insert into public.categories (id, owner_id, name, color_hex) values (gen_random_uuid(), b, 'Taxi', '5B8DB8');

@@ -18,6 +18,8 @@ import com.sarvarbek.expense_tracker.services.ParsedExpense
 import com.sarvarbek.expense_tracker.services.adoptLocal
 import com.sarvarbek.expense_tracker.services.applyCategories
 import com.sarvarbek.expense_tracker.services.applyExpenses
+import com.sarvarbek.expense_tracker.services.applyNeeds
+import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.services.familyErrorText
 import com.sarvarbek.expense_tracker.services.parseGeminiJson
 import com.sarvarbek.expense_tracker.services.shouldPushProfile
@@ -25,6 +27,7 @@ import com.sarvarbek.expense_tracker.ui.AuthGate
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -182,6 +185,24 @@ class BackendTest {
         applyExpenses(database, listOf(row("server", local.updatedAt + 3_600_000)))
         val e = db.getExpenses().single()
         assertEquals(Triple("server", 7000L, false), Triple(e.description, e.amount, e.dirty))
+    }
+
+    @Test fun applyNeedsNewerWinsAndForeignFamilyItemsDrop() = runBlocking {
+        val local = Need(text = "Non", familyId = "f1").also { db.insertNeed(it) }
+        fun row(id: String, text: String, updated: Long, family: String?) = obj(
+            """{"id":"$id","owner_id":"u2","family_id":${family?.let { "\"$it\"" }},"text":"$text","done":true,
+            "created_at":"2026-09-01T00:00:00Z","updated_at":"${Instant.ofEpochMilli(updated)}","deleted_at":null}""",
+        )
+        applyNeeds(database, listOf(row(local.id, "stale", local.updatedAt - 1000, "f1"), row("n2", "Sut", local.updatedAt, "f1")))
+        assertEquals(setOf("Non", "Sut"), db.watchNeeds().first().map { it.text }.toSet())
+
+        applyNeeds(database, listOf(row(local.id, "Non 2", local.updatedAt + 1000, "f1")))
+        val n = db.watchNeeds().first().single { it.id == local.id }
+        assertEquals(Triple("Non 2", true, false), Triple(n.text, n.done, n.dirty))
+
+        db.insertNeed(Need(text = "Mine"))
+        db.dropForeignNeeds(null) // left the family
+        assertEquals(listOf("Mine"), db.watchNeeds().first().map { it.text })
     }
 
     @Test fun shouldPushProfileLocalEditsAndUnsyncedBudgetsWin() {
