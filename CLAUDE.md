@@ -1,7 +1,7 @@
 # CLAUDE.md — Expense Tracker
 
-Personal + family expense tracker (Flutter, mobile). Offline-first: Drift is the
-local source of truth, synced in the background to Supabase. Sign-in required.
+Personal + family expense tracker (native Android, Kotlin + Jetpack Compose;
+migrated from Flutter in 2.0.0). Offline-first: Room is the local source of truth, synced in the background to Supabase. Sign-in required.
 
 ## Core idea
 
@@ -41,27 +41,33 @@ search, category filters, and the **Oila** (family) tab.
 - **AI parsing**: Google Gemini free tier, model `gemini-3.6-flash`, called from
   the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
   users only). Free-tier prompts may be used by Google for training (note in Settings).
-- **Voice**: on-device STT (`speech_to_text`), transcript fed to the AI parser.
-- **Database**: Drift (SQLite) — typed queries for filters/search/insights.
-- **State**: Riverpod (`flutter_riverpod`).
+- **Voice**: on-device STT (platform `SpeechRecognizer`), transcript fed to the AI parser.
+- **Database**: Room (SQLite, KSP) — Flow queries for filters/search/insights.
+- **State**: `ViewModel`/`remember` + `StateFlow`; manual DI via one `AppContainer` (no Hilt).
+- **Distribution**: family-only signed APK on GitHub Releases, same `applicationId`
+  `com.sarvarbek.expense_tracker` + keystore as the old Flutter app.
 
 ## Stack
 
-| Concern | Package |
+| Concern | Pick |
 |---|---|
-| State | `flutter_riverpod` |
-| DB | `drift`, `sqlite3_flutter_libs`, `drift_flutter`, `uuid` (dev: `drift_dev`, `build_runner`) |
-| Backend / auth / AI | `supabase_flutter` (Edge Function `supabase/functions/parse-expense`) |
-| Voice | `speech_to_text`, `permission_handler` |
-| Prefs | `shared_preferences` |
-| Formatting | `intl` |
-| Charts | `fl_chart` |
-| Export | `csv`, `share_plus` |
+| UI | Jetpack Compose + Material3, single Activity, Navigation-Compose |
+| DB | Room (KSP), epoch-millis `Long` timestamps, `Long` amounts |
+| Backend / auth / AI | supabase-kt (`auth`, `postgrest`, `functions`) + ktor okhttp, kotlinx.serialization |
+| Voice | `SpeechRecognizer`, `RECORD_AUDIO` via ActivityResult |
+| Prefs | `SharedPreferences` (`settings` file) |
+| Formatting | `DecimalFormat` space grouping, java.time (desugared) |
+| Charts | Compose `Canvas` (no chart lib) |
+| Export | hand-written CSV + `FileProvider` + `ACTION_SEND` |
+| Tests | JUnit4 + Robolectric + Compose UI test (JVM, no emulator) |
+
+AGP 9 (built-in Kotlin), Kotlin 2.4, compileSdk 37, minSdk 24, JDK 17.
 
 ## Design tokens
 
-Semantic colors live in `AppColors` (a `ThemeExtension` in `lib/app/theme.dart`)
-with light and dark sets; read them via `context.colors.x`, never hardcode.
+Semantic colors live in `AppColors` (`ui/theme/Theme.kt`, via CompositionLocal)
+with light and dark sets; read them via the theme, never hardcode. Shared
+component wrappers in `ui/theme/Components.kt`, shared widgets in `ui/common/`.
 Dark mode follows the system. Radii via `AppRadii`.
 Category colors are stored per category row (hex): Food `#E08A5B`, Groceries
 `#6FA86A`, Shopping `#C07FA6`, Transport `#5B8DB8`, Bills `#D9A24E`.
@@ -71,26 +77,23 @@ Four tabs (Asosiy, Tarix, Tahlil, Oila) + FAB; Settings opens from the Home gear
 ## Layout
 
 ```
-lib/
-  main.dart               // Supabase init + ProviderScope + auth gate
-  app/theme.dart          // colors, text styles, ThemeData
-  app/shell.dart          // bottom nav + FAB + IndexedStack
-  data/db/database.dart   // Drift @DriftDatabase + DAOs
-  data/db/tables.dart     // Categories, Expenses (Synced mixin: UUID, owner/family, dirty)
-  data/settings_store.dart
-  services/ai_parser.dart      // parse-expense fn -> {item, amount, category}
-  services/speech_service.dart
-  services/category_matcher.dart  // reuse / create / Boshqa + request
-  services/sync_service.dart      // Drift <-> Supabase
-  services/family_service.dart    // family RPCs
-  services/csv_export.dart
-  providers/providers.dart
+app/src/main/java/com/sarvarbek/expense_tracker/
+  App.kt                  // Application + AppContainer (manual DI)
+  MainActivity.kt
+  ui/AppRoot.kt           // AuthGate + Routes (nav graph)
+  ui/Shell.kt             // bottom nav + FAB + tab pages
+  ui/theme/               // AppColors, type scale, AppRadii, component wrappers
+  ui/common/              // Format.kt (money/dates), Widgets.kt (shared widgets)
+  data/                   // Room entities, AppDatabase + DAO, SettingsStore
+  services/               // AiParser, CategoryMatcher, SyncService, FamilyService,
+                          // SpeechService, CsvExport
   features/home|add|activity|insights|settings|auth|family/
-  features/common/        // shared widgets
+app/src/test/             // Robolectric + Compose tests
 supabase/
   migrations/             // schema, RLS, RPCs
   functions/parse-expense/
   tests/family_rls_check.sql
+docs/                     // privacy.html, font licence
 ```
 
 ## Data model
@@ -102,7 +105,7 @@ deletedAt (soft delete), dirty (local only).
 - **Expense**: description, amount (int, UZS), categoryId (FK), date,
   source (`typed`/`voice`/`manual`), rawInput?, isPrivate, pendingCategory?
   (awaiting admin approval), frozen (ex-member history), createdAt.
-- **Settings** (local prefs): monthlyBudget + defaultPrivate (synced to
+- **Settings** (SharedPreferences): monthlyBudget + defaultPrivate (synced to
   `profiles`), sttLocale, lastAddMode.
 - **Server only**: families, family_members(role), invites(email), category_requests.
 
@@ -113,14 +116,20 @@ deletedAt (soft delete), dirty (local only).
 - AI returns strict JSON; validate, fall back to Manual on failure.
 - Queries filter `deletedAt IS NULL`; writes set `dirty` + `updatedAt`.
 - Family access rules live in RLS / SECURITY DEFINER RPCs, not client code.
-- Lazy: no one-impl interfaces, no codegen beyond Drift, reuse `fl_chart`.
+- Lazy: no one-impl interfaces, no codegen beyond Room/KSP, no chart library.
 
 ## Commands
 
-- Codegen (after DB changes): `dart run build_runner build --delete-conflicting-outputs`
-- Run: `flutter run`
-- Analyze: `flutter analyze`
-- Test: `flutter test`
+Use JDK 17: `export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`
+(`java_home -v 17` finds nothing). Never run emulators.
+
+- Test + lint: `./gradlew :app:testDebugUnitTest :app:lintDebug`
+- Debug APK (`.dev` suffix, installs beside the real app): `./gradlew assembleDebug`
+- Release APK: `./gradlew assembleRelease` (signs with `key.properties` at repo root,
+  gitignored; keystore `~/upload-keystore.jks`). Check: `apksigner verify --print-certs` → CN=Sarvarbek.
+- Install on the attached phone: `~/Library/Android/sdk/platform-tools/adb install -r <apk>`
+- Release: bump `versionCode`/`versionName` in `app/build.gradle.kts`,
+  `gh release create vX.Y.Z Xarajatlar-X.Y.Z.apk`.
 
 ## Workflow
 
