@@ -1,0 +1,195 @@
+package com.sarvarbek.expense_tracker
+
+import android.content.Context
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
+import com.sarvarbek.expense_tracker.data.AppDatabase
+import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.data.ExpenseSource
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
+import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
+import androidx.compose.runtime.saveable.SaverScope
+import org.junit.Assert.assertEquals
+import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import com.sarvarbek.expense_tracker.ui.common.LocalToaster
+import com.sarvarbek.expense_tracker.ui.common.Toaster
+import com.sarvarbek.expense_tracker.ui.common.uzMonths
+import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.time.LocalDate
+
+/** Ports activity_screen_test and insights_screen_test. */
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w400dp-h1200dp")
+class HistoryInsightsTest {
+    @get:Rule val rule = createComposeRule()
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private lateinit var database: AppDatabase
+    private val db get() = database.dao()
+
+    @Before fun setUp() {
+        database = AppDatabase.open(context, name = null)
+    }
+
+    private fun show(content: @Composable () -> Unit) = rule.setContent {
+        AppTheme {
+            CompositionLocalProvider(LocalToaster provides Toaster(remember { SnackbarHostState() }, rememberCoroutineScope())) { content() }
+        }
+    }
+
+    private fun add(description: String, amount: Long, category: String) = runBlocking {
+        val cat = db.getCategories().first { it.name == category }
+        db.insertExpense(Expense(description = description, amount = amount, categoryId = cat.id, date = System.currentTimeMillis(), source = ExpenseSource.manual))
+    }
+
+    private fun waitFor(text: String) =
+        rule.waitUntil(5000) { rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun tap(text: String) = rule.onNode(hasText(text) and hasClickAction()).performClick()
+
+    private fun chip(label: String) = rule.onNode(hasText(label) and hasContentDescription("Olib tashlash"))
+
+    private fun removeChip() = rule.onNodeWithContentDescription("Olib tashlash").performClick()
+
+    @Test fun filterPageAndSearchFilterRowsDayTotalEmptyState() {
+        add("Coffee", 10000, "Food & dining")
+        add("Taxi", 10000, "Transport")
+        show { ActivityScreen(db, onEdit = {}) }
+        waitFor("Coffee")
+        rule.onNodeWithText("Taxi").assertExists()
+        rule.onNodeWithText("Bugun").assertExists()
+        rule.onNodeWithText("20 000").assertExists() // day total
+        rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist() // no active filters
+        rule.onNodeWithContentDescription("Filtr").assertHeightIsAtLeast(48.dp)
+
+        // Filter page: Turkum sheet -> Transport -> Tayyor -> Qo'llash.
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("Turkum")
+        waitFor("Tayyor")
+        rule.onNode(hasText("Transport") and isToggleable()).performClick()
+        tap("Tayyor")
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
+        rule.onNode(hasText("Turkum") and hasText("Transport")).assertExists() // row subtitle
+        tap("Qo'llash")
+        rule.waitForIdle()
+        rule.onNodeWithText("Coffee").assertDoesNotExist()
+        rule.onNodeWithText("Taxi").assertExists()
+        chip("Transport").assertExists()
+        rule.onNodeWithText("1").assertExists() // badge
+
+        // Removing the active chip restores the list.
+        removeChip()
+        rule.onNodeWithText("Coffee").assertExists()
+        rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
+
+        // Ko'rinish drop-down: Shaxsiy hides both (shared) rows.
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("Ko'rinish")
+        tap("Shaxsiy")
+        tap("Qo'llash")
+        rule.waitForIdle()
+        rule.onNodeWithText("Coffee").assertDoesNotExist()
+        rule.onNodeWithText("Taxi").assertDoesNotExist()
+        rule.onNodeWithText("Mos keladigani yo'q").assertExists()
+        removeChip()
+
+        val search = rule.onNode(hasSetTextAction())
+        search.performTextReplacement("cof")
+        rule.onNodeWithText("Coffee").assertExists()
+        rule.onNodeWithText("Taxi").assertDoesNotExist()
+        search.performTextReplacement("zzz")
+        rule.onNodeWithText("Mos keladigani yo'q").assertExists()
+    }
+
+    @Test fun amountFilterSwapsMinMaxAndShowsChip() {
+        add("Coffee", 10000, "Food & dining")
+        add("Laptop", 900000, "Shopping")
+        show { ActivityScreen(db, onEdit = {}) }
+        waitFor("Coffee")
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("Summa")
+        rule.onNodeWithTag("min").performTextReplacement("50000")
+        rule.onNodeWithTag("max").performTextReplacement("5000")
+        rule.onNodeWithText("50 000 – 5 000").assertExists() // live label, unswapped
+        tap("Qo'llash")
+        rule.waitForIdle()
+        rule.onNodeWithText("Laptop").assertDoesNotExist()
+        rule.onNodeWithText("Coffee").assertExists()
+        chip("5 000 – 50 000").assertExists()
+    }
+
+    @Test fun insightsTotalLegendMonthPillsYearSheetFilterSwapsPillsForChips() {
+        add("Coffee", 45000, "Food & dining")
+        show { InsightsScreen(db) }
+        val now = LocalDate.now()
+        rule.waitUntil(5000) { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Food & dining").assertExists()
+        rule.onNodeWithText("100%").assertExists()
+
+        // Current month pill selected; future months hidden.
+        rule.onNodeWithText(uzMonths[now.monthValue - 1]).assertIsSelected()
+        if (now.monthValue < 12) rule.onNodeWithText(uzMonths[now.monthValue]).assertDoesNotExist()
+
+        // Year sheet lists years; picking last year shows all 12 months, no data.
+        tap("${now.year}")
+        waitFor("${now.year - 1}")
+        tap("${now.year - 1}")
+        rule.waitUntil(5000) { rule.onAllNodesWithText("${now.year}").fetchSemanticsNodes().isEmpty() }
+        rule.onNodeWithText("${now.year - 1}").assertExists()
+        rule.onNodeWithText("Bu davrda xarajat yo'q").assertExists()
+        rule.onNodeWithText("Dekabr").assertExists()
+
+        // Filter by Ko'rinish: month pills give way to chips (period + filter).
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        rule.onNodeWithText("Turkum").assertExists()
+        tap("Ko'rinish")
+        tap("Umumiy")
+        tap("Qo'llash")
+        rule.waitForIdle()
+        rule.onNodeWithText("Dekabr").assertDoesNotExist()
+        rule.onNodeWithText("${uzMonths[now.monthValue - 1]} ${now.year - 1}").assertExists()
+        chip("Umumiy").assertExists()
+
+        // Removing the last chip brings the month pills back.
+        removeChip()
+        rule.onNodeWithText("Dekabr").assertExists()
+    }
+
+    @Test fun filterSurvivesSaveRestore() {
+        val f = ActivityFilter(setOf("a", "b"), LocalDate.of(2026, 7, 5)..LocalDate.of(2026, 7, 9), 1000, null, true)
+        val saved = with(ActivityFilterSaver) { SaverScope { true }.save(f) }!!
+        assertEquals(f, ActivityFilterSaver.restore(saved))
+        assertEquals(ActivityFilter(), ActivityFilterSaver.restore(with(ActivityFilterSaver) { SaverScope { true }.save(ActivityFilter()) }!!))
+    }
+
+    @Test fun emptyPeriodShowsEmptyState() {
+        show { InsightsScreen(db) }
+        waitFor("Bu davrda xarajat yo'q")
+    }
+}

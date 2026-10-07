@@ -11,7 +11,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import com.sarvarbek.expense_tracker.features.add.AddScreen
+import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
 import com.sarvarbek.expense_tracker.services.canCreateCategories
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
@@ -71,6 +73,8 @@ private fun Routes() {
                 ) { index, _ ->
                     when (index) {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.navigate("settings") }) { nav.navigate("edit/${it.id}") }
+                        1 -> ActivityScreen(container.db) { nav.navigate("edit/${it.id}") }
+                        2 -> InsightsScreen(container.db)
                         else -> Placeholder()
                     }
                 }
