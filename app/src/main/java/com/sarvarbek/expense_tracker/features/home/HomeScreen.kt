@@ -58,7 +58,8 @@ fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, 
     LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
         item { Header(now, onSettings) }
         item { Spacer(Modifier.height(AppSpace.gap)) }
-        item { TodayHero(today.sumOf { it.amount }, today.size, month) }
+        // Transfers stay in the list but aren't "spent".
+        item { today.filter { it.transferTo == null }.let { spent -> TodayHero(spent.sumOf { it.amount }, spent.size, month) } }
         item {
             Spacer(Modifier.height(AppSpace.section))
             Text("Bugungi xarajatlar", style = MaterialTheme.typography.titleMedium)
