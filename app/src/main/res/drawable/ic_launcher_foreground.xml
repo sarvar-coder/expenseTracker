@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- House outline whose floor carries a rising bar chart. Also used as the monochrome (themed) layer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M30,80 L30,52 L54,31 L78,52 L78,80 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37.25,80 V69 A1.5,1.5 0 0 1 38.75,67.5 H43.75 A1.5,1.5 0 0 1 45.25,69 V80 Z M50,80 V62 A1.5,1.5 0 0 1 51.5,60.5 H56.5 A1.5,1.5 0 0 1 58,62 V80 Z M62.75,80 V55 A1.5,1.5 0 0 1 64.25,53.5 H69.25 A1.5,1.5 0 0 1 70.75,55 V80 Z" />
+</vector>
