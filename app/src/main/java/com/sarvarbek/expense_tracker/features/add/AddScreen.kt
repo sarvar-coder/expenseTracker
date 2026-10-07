@@ -146,11 +146,13 @@ fun AddScreen(
     editing: Expense? = null,
     /** Other family members (id to label) for O'tkazma; empty outside a family. */
     members: List<Pair<String, String>> = emptyList(),
+    // ponytail: Type/Speak hidden for now; flip default to true to bring them back.
+    aiModes: Boolean = false,
 ) {
     val c = AppTheme.colors
-    // Editing forces Manual; otherwise reopen in the last picked mode.
+    // Editing (or AI modes off) forces Manual; otherwise reopen in the last picked mode.
     var mode by rememberSaveable {
-        mutableStateOf(if (editing != null) AddMode.manual else AddMode.entries.firstOrNull { it.name == settings.lastAddMode } ?: AddMode.type)
+        mutableStateOf(if (editing != null || !aiModes) AddMode.manual else AddMode.entries.firstOrNull { it.name == settings.lastAddMode } ?: AddMode.type)
     }
     val prefs by settings.settings.collectAsStateWithLifecycle()
     var prefill by remember { mutableStateOf(editing?.let { Prefill(it.amount.toString(), it.description, it.categoryId, it.isPrivate) }) }
@@ -170,7 +172,7 @@ fun AddScreen(
                 .padding(start = AppSpace.page, end = AppSpace.page, top = 8.dp, bottom = AppSpace.section),
         ) {
             // Labels only: the Speak form has its own mic, one mic on screen.
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            if (aiModes) SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 AddMode.entries.forEachIndexed { i, m ->
                     SegmentedButton(
                         selected = mode == m,
@@ -181,7 +183,7 @@ fun AddScreen(
                     ) { Text(t(m.label)) }
                 }
             }
-            Spacer(Modifier.height(AppSpace.gap + 4.dp))
+            if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
                     ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, prefs.defaultPrivate), members, onClose)
