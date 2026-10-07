@@ -33,7 +33,10 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         /** [name] null = in-memory (tests). */
         fun open(context: Context, name: String? = "expense_tracker.db"): AppDatabase =
+            // In-memory = tests: run queries inline. Room's pooled flow threads
+            // race Robolectric's paused looper and a first emission can get lost.
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+                .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

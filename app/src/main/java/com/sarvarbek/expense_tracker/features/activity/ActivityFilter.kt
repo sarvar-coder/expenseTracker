@@ -3,6 +3,7 @@ package com.sarvarbek.expense_tracker.features.activity
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
+import androidx.compose.runtime.saveable.listSaver
 import java.time.LocalDate
 
 /** A day's worth of expenses under a human label (Bugun / Kecha / "8 Iyul"). */
@@ -54,3 +55,16 @@ fun groupExpenses(
         .groupBy { labelFor(it.date.toLocalDate()) }
         .map { (label, items) -> DaySection(label, items) }
 }
+
+/** Keeps the filter across tab switches (the shell saves per-tab state). */
+val ActivityFilterSaver = listSaver<ActivityFilter, Any?>(
+    save = { f -> listOf(ArrayList(f.categoryIds), f.range?.start?.toEpochDay(), f.range?.endInclusive?.toEpochDay(), f.minAmount, f.maxAmount, f.isPrivate) },
+    restore = { l ->
+        @Suppress("UNCHECKED_CAST")
+        ActivityFilter(
+            (l[0] as List<String>).toSet(),
+            (l[1] as Long?)?.let { LocalDate.ofEpochDay(it)..LocalDate.ofEpochDay(l[2] as Long) },
+            l[3] as Long?, l[4] as Long?, l[5] as Boolean?,
+        )
+    },
+)
