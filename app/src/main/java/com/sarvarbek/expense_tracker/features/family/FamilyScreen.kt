@@ -165,7 +165,7 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}) {
+fun FamilyScreen(state: FamilyState, db: ExpenseDao, onNeeds: () -> Unit = {}, onSettings: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
@@ -199,9 +199,12 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act)
-                    state.loaded && f != null -> InFamily(f, db, filter) { filter = it }
-                    state.failed -> EmptyState(Icons.Outlined.WifiOff, "Oila ma'lumotini yuklab bo'lmadi", "Internetni tekshirib, pastga torting")
+                    state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, db, filter, { filter = it }) { NeedsCard(db, onNeeds) }
+                    state.failed -> Column {
+                        EmptyState(Icons.Outlined.WifiOff, "Oila ma'lumotini yuklab bo'lmadi", "Internetni tekshirib, pastga torting")
+                        NeedsCard(db, onNeeds) // local, works offline
+                    }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
             }
@@ -228,7 +231,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, needs: @Composable () -> Unit) {
     val t = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -264,13 +267,14 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act) {
             Spacer(Modifier.width(8.dp))
             Text("Oila yaratish")
         }
+        needs()
     }
 }
 
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit) {
+private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, needs: @Composable () -> Unit) {
     val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
@@ -288,6 +292,7 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, 
 
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget))
+        needs()
         SectionLabel("A'zolar")
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
         SectionLabel(if (filter.range == null) "Bu oygi umumiy xarajatlar" else "Umumiy xarajatlar")

@@ -17,6 +17,8 @@ import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
+import com.sarvarbek.expense_tracker.features.family.NeedsScreen
+import com.sarvarbek.expense_tracker.services.SyncService
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
 import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
 import kotlinx.coroutines.launch
@@ -85,7 +87,7 @@ private fun Routes() {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.navigate("settings") }) { nav.navigate("edit/${it.id}") }
                         1 -> ActivityScreen(container.db) { nav.navigate("edit/${it.id}") }
                         2 -> InsightsScreen(container.db)
-                        else -> FamilyScreen(family, container.db) { nav.navigate("family-settings") }
+                        else -> FamilyScreen(family, container.db, onNeeds = { nav.navigate("needs") }) { nav.navigate("family-settings") }
                     }
                 }
             }
@@ -112,6 +114,10 @@ private fun Routes() {
                 }
             }
             composable("family-settings") { FamilySettingsScreen(family) { nav.popBackStack() } }
+            composable("needs") {
+                val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
+                NeedsScreen(container.db, familyId, container.sync::run) { nav.popBackStack() }
+            }
             composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.popBackStack() } }
         }
     }

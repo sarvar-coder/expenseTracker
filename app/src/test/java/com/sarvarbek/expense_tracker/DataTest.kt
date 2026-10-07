@@ -7,6 +7,7 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
+import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.ResolvedCategory
 import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
@@ -41,6 +42,41 @@ class DataTest {
 
     private fun expense(desc: String, amount: Long, catId: String, date: LocalDate, source: ExpenseSource = ExpenseSource.manual) =
         Expense(description = desc, amount = amount, categoryId = catId, date = date.startMillis(), source = source)
+
+    @Test fun upgradesV1DatabaseKeepingRowsAndAddingNeeds() = runBlocking {
+        val name = "v1-upgrade.db"
+        context.deleteDatabase(name)
+        // v1 schema as Room 1 created it (copied from the generated AppDatabase_Impl).
+        android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use {
+            it.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, `icon_key` TEXT NOT NULL, `is_archived` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `description` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category_id` TEXT NOT NULL, `date` INTEGER NOT NULL, `source` TEXT NOT NULL, `raw_input` TEXT, `is_private` INTEGER NOT NULL, `pending_category` TEXT, `frozen` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_category_id` ON `expenses` (`category_id`)")
+            it.execSQL("INSERT INTO categories VALUES ('c1', 'Old', 'AAAAAA', 'category', 0, NULL, NULL, 1, NULL, 0)")
+            it.version = 1
+        }
+        val upgraded = AppDatabase.open(context, name)
+        try {
+            val dao = upgraded.dao()
+            assertEquals(listOf("Old"), dao.getCategories().map { it.name })
+            dao.insertNeed(Need(text = "Non"))
+            assertEquals(listOf("Non"), dao.watchNeeds().first().map { it.text })
+        } finally {
+            upgraded.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun needsOpenFirstSoftDeleteAndCountAsDirty() = runBlocking {
+        db.insertNeed(Need(text = "a", createdAt = 1))
+        db.insertNeed(Need(text = "b", createdAt = 2, done = true))
+        db.insertNeed(Need(text = "c", createdAt = 3))
+        assertEquals(listOf("c", "a", "b"), db.watchNeeds().first().map { it.text })
+        val c = db.watchNeeds().first().first()
+        db.deleteNeed(c.id)
+        assertEquals(listOf("a", "b"), db.watchNeeds().first().map { it.text })
+        assertTrue("deletion waits to be pushed", db.dirtyNeeds().any { it.id == c.id && it.deletedAt != null })
+        assertTrue(db.watchDirtyCount().first() >= 3)
+    }
 
     @Test fun seedsFiveDefaultCategories() = runBlocking {
         val cats = db.getCategories()

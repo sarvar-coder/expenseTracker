@@ -21,6 +21,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
@@ -180,6 +182,30 @@ class SettingsFamilyTest : ScreenTest() {
     @Test fun offlineFamilyShowsError() {
         show { FamilyScreen(FamilyState(null, load = { error("offline") }, loadInvites = { emptyList() }), db) }
         waitFor("Oila ma'lumotini yuklab bo'lmadi")
+        rule.onNodeWithText("Kerakli").assertExists() // local list still reachable offline
+    }
+
+    @Test fun needsAddTickAndFilter() {
+        show { com.sarvarbek.expense_tracker.features.family.NeedsScreen(db, familyId = "f1", onSync = {}) {} }
+        waitFor("Ro'yxat bo'sh")
+        rule.onNodeWithText("Nima kerak?").performTextInput("Non")
+        rule.onNodeWithContentDescription("Qo'shish").performClick()
+        waitFor("Non")
+        rule.onNodeWithText("Oila uchun").performClick() // next one personal
+        rule.onNodeWithText("Nima kerak?").performTextInput("Paypoq")
+        rule.onNodeWithContentDescription("Qo'shish").performClick()
+        waitFor("Paypoq")
+        val rows = runBlocking { db.watchNeeds().first() }.associateBy { it.text }
+        assertEquals("f1", rows.getValue("Non").familyId)
+        assertEquals(null, rows.getValue("Paypoq").familyId)
+
+        rule.onNodeWithText("Non").performClick() // tick
+        rule.waitUntil(5000) { runBlocking { db.watchNeeds().first() }.single { it.text == "Non" }.done }
+
+        rule.onNodeWithText("Mening").performClick()
+        rule.onNodeWithText("Non").assertDoesNotExist()
+        rule.onNodeWithText("Paypoq").assertExists()
+        assertTapTargets()
     }
 
     @Test fun inFamilyShowsBudgetMembersSharedListAndRequests() {

@@ -53,3 +53,17 @@ data class Expense(
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     val dirty: Boolean = true,
 )
+
+/** "Kerakli" item. familyId null = personal; set = the whole family sees and ticks it. */
+@Entity(tableName = "needs")
+data class Need(
+    @PrimaryKey val id: String = newId(),
+    val text: String,
+    val done: Boolean = false,
+    @ColumnInfo(name = "owner_id") val ownerId: String? = null,
+    @ColumnInfo(name = "family_id") val familyId: String? = null,
+    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
+    val dirty: Boolean = true,
+)

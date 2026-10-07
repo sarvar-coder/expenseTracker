@@ -11,6 +11,7 @@ import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
+import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -136,7 +137,7 @@ class SyncService(
         val prevFamily = prefs.getString(K_FAMILY, null)
         prefs.edit {
             if (prevFamily != null && prevFamily != (familyId ?: "")) {
-                remove("sync.categories"); remove("sync.expenses")
+                remove("sync.categories"); remove("sync.expenses"); remove("sync.needs")
             }
             putString(K_FAMILY, familyId ?: "")
             putBoolean(K_ADMIN, member?.str("role") == "admin")
@@ -156,6 +157,9 @@ class SyncService(
         push("categories", db.dirtyCategories(), Category::toJson) { db.markCategoryClean(it.id, it.updatedAt) }
         push("expenses", db.dirtyExpenses(), Expense::toJson) { db.markExpenseClean(it.id, it.updatedAt) }
         pull("expenses") { applyExpenses(database, it) }
+        push("needs", db.dirtyNeeds(), Need::toJson) { db.markNeedClean(it.id, it.updatedAt) }
+        pull("needs") { applyNeeds(database, it) }
+        db.dropForeignNeeds(familyId)
     }
 
     /**
@@ -302,6 +306,18 @@ suspend fun applyExpenses(database: AppDatabase, rows: List<JsonObject>) {
     })
 }
 
+suspend fun applyNeeds(database: AppDatabase, rows: List<JsonObject>) {
+    val db = database.dao()
+    val pending = db.dirtyNeeds().associate { it.id to it.updatedAt }
+    db.upsertNeeds(rows.filter { isFresh(it, pending) }.map { r ->
+        Need(
+            id = r.str("id")!!, ownerId = r.str("owner_id"), familyId = r.str("family_id"), text = r.str("text")!!,
+            done = r.bool("done"), createdAt = r.ts("created_at")!!, updatedAt = r.ts("updated_at")!!,
+            deletedAt = r.ts("deleted_at"), dirty = false,
+        )
+    })
+}
+
 private fun isFresh(r: JsonObject, pending: Map<String, Long>): Boolean {
     val mine = pending[r.str("id")] ?: return true
     return r.ts("updated_at")!! > mine
@@ -332,5 +348,10 @@ private fun Expense.toJson() = jsonOf(
     "id" to id, "owner_id" to ownerId, "family_id" to familyId, "category_id" to categoryId,
     "description" to description, "amount" to amount, "date" to iso(date), "source" to source.name,
     "raw_input" to rawInput, "is_private" to isPrivate, "pending_category" to pendingCategory,
+    "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
+)
+
+private fun Need.toJson() = jsonOf(
+    "id" to id, "owner_id" to ownerId, "family_id" to familyId, "text" to text, "done" to done,
     "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
 )
