@@ -96,7 +96,7 @@ abstract class ScreenTest {
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest : ScreenTest() {
     @Test fun settingsShowsUzbekRowsAndTogglesPrivateDefault() {
-        val store = SettingsStore(prefs)
+        val store = SettingsStore(prefs).apply { setDisplayName("Ali") }
         show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
 
         rule.onNodeWithText("Sozlamalar").assertExists()
@@ -123,6 +123,8 @@ class SettingsScreenTest : ScreenTest() {
         assertEquals(4_000_000L, store.settings.value.monthlyBudget)
 
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("me@oila.uz"))
+        rule.onNodeWithText("Ism").assertExists()
+        rule.onNodeWithText("Ali").assertExists()
         rule.onNodeWithText("Ma'lumotni eksport (CSV)").assertExists()
     }
 
@@ -191,7 +193,7 @@ class SettingsFamilyTest : ScreenTest() {
         }
         val overview = FamilyOverview(
             "f1", "Uy", "u1", isAdmin = true,
-            members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
+            members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000, title = "Ota"), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
             others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali")),
             requests = listOf(CategoryRequest("r1", "Dorilar")),
         )
@@ -200,7 +202,8 @@ class SettingsFamilyTest : ScreenTest() {
         waitFor("Non")
         rule.onNodeWithText("Uy").assertExists() // title = family name
         rule.onNodeWithText("Byudjet: 1 500 000").assertExists()
-        rule.onNodeWithText("Ali (siz) · admin").assertExists()
+        rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
+        rule.onNodeWithText("Ali · Ota", substring = true).assertExists() // own shared row's owner label
         rule.onNodeWithText("Taksi").assertExists()
         assertTrue("private stays hidden", rule.onAllNodesWithText("Sovg'a").fetchSemanticsNodes().isEmpty())
         assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
@@ -254,6 +257,10 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         assertTrue(rule.onAllNodesWithText("A'zo taklif qilish").fetchSemanticsNodes().isEmpty())
         assertTrue(rule.onAllNodesWithContentDescription("Amallar: Vali").fetchSemanticsNodes().isEmpty())
+        // own row: title only, no role changes
+        rule.onNodeWithContentDescription("Amallar: Ali").performClick()
+        rule.onNodeWithText("Oiladagi o'rni").assertExists()
+        assertTrue(rule.onAllNodesWithText("Adminlikdan olish").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun frozenTileCannotBeOpened() {

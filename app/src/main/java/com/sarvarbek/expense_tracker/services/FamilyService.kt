@@ -35,7 +35,18 @@ data class CategoryRequest(val id: String, val name: String)
  * One current member's month: shared spending and budget contribution
  * (personal budget minus own private spending, computed server-side).
  */
-data class FamilyMember(val userId: String, val name: String, val isAdmin: Boolean, val shared: Long, val contribution: Long)
+data class FamilyMember(
+    val userId: String,
+    val name: String,
+    val isAdmin: Boolean,
+    val shared: Long,
+    val contribution: Long,
+    /** Role in the family: Ota, Ona, Farzand… or free text; null = not set. */
+    val title: String? = null,
+) {
+    /** "Ali · Ota". */
+    val label get() = listOfNotNull(name, title).joinToString(" · ")
+}
 
 /** A shared family expense ([Expense.ownerId] set) with who added it. */
 data class FamilyExpense(val expense: Expense, val ownerName: String)
@@ -108,7 +119,7 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                 members = summary.await().map {
                     FamilyMember(
                         it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin",
-                        it.num("shared_total"), it.num("contribution"),
+                        it.num("shared_total"), it.num("contribution"), it.str("title"),
                     )
                 },
                 others = rows.await().mapNotNull { e ->
@@ -163,6 +174,11 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
     /** Admin only. Any number of admins; the last one can't step down. */
     suspend fun setRole(userId: String, admin: Boolean) {
         change { rpc("set_role", buildJsonObject { put("p_user", userId); put("p_role", if (admin) "admin" else "member") }) }
+    }
+
+    /** Own title, or anyone's for an admin. Blank clears it. */
+    suspend fun setTitle(userId: String, title: String) {
+        change { rpc("set_title", buildJsonObject { put("p_user", userId); put("p_title", title.trim()) }) }
     }
 
     /** Admin only (RLS). */
