@@ -85,6 +85,18 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   perform public.transfer_admin(a);
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  -- several admins: the last one can't step down or leave
+  begin perform public.set_role(a, 'member'); ok := false;
+  exception when others then ok := sqlerrm = 'last_admin'; end;
+  assert ok, 'last admin cannot step down';
+  perform public.set_role(b, 'admin');
+  select count(*) into n from public.family_members where role = 'admin'; assert n = 2, 'two admins';
+  perform public.set_role(b, 'member');
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  begin perform public.set_role(b, 'admin'); ok := false;
+  exception when others then ok := sqlerrm = 'not_admin'; end;
+  assert ok, 'member cannot set roles';
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   perform public.remove_member(b);
   select count(*) into n from public.family_expenses_since('epoch') where id = eb1 and frozen; assert n = 1, 'history kept frozen';
 

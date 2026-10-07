@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.FamilyRestroom
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -36,10 +37,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -122,25 +123,18 @@ class FamilyState(
     }
 }
 
-private typealias ShowDialog = ((@Composable () -> Unit)?) -> Unit
+internal typealias ShowDialog = ((@Composable () -> Unit)?) -> Unit
+internal typealias Act = (String?, suspend FamilyService.() -> Unit) -> Unit
 
-/**
- * Oila tab. Not in a family: pending invites + create. In one: this month's
- * family budget vs shared spending, members, the shared expense list, and
- * the admin's invites / category requests.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** One dialog slot plus [Act]: runs a family action, shows its error (or done text), then refetches. */
+internal class FamilyActions(val show: ShowDialog, val act: Act, val dialog: () -> (@Composable () -> Unit)?)
+
 @Composable
-fun FamilyScreen(state: FamilyState, db: ExpenseDao) {
+internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
-    val show: ShowDialog = { dialog = it }
-    LaunchedEffect(state) { state.refresh() } // every time the tab opens
-
-    /** Runs a family action, shows its error (or [done]), then refetches. */
-    fun act(done: String? = null, action: suspend FamilyService.() -> Unit) {
+    return FamilyActions({ dialog = it }, { done, action ->
         dialog = null
         scope.launch {
             try {
@@ -151,7 +145,23 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao) {
             }
             state.refresh()
         }
-    }
+    }, { dialog })
+}
+
+/**
+ * Oila tab. Not in a family: pending invites + create. In one: this month's
+ * family budget vs shared spending, members and the shared expense list.
+ * Management (roles, invites, requests, leave, delete) is behind the gear.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FamilyScreen(state: FamilyState, db: ExpenseDao, onSettings: () -> Unit = {}) {
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    val actions = rememberFamilyActions(state)
+    val show = actions.show
+    val act = actions.act
+    LaunchedEffect(state) { state.refresh() } // every time the tab opens
 
     PullToRefreshBox(
         refreshing,
@@ -164,24 +174,25 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao) {
             contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp),
         ) {
             item {
-                Text(state.overview?.name ?: "Oila", style = MaterialTheme.typography.headlineMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(state.overview?.name ?: "Oila", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    if (state.overview != null) GearButton("Oila sozlamalari", onSettings)
+                }
                 Spacer(Modifier.height(AppSpace.gap))
             }
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, ::act)
-                    state.loaded && f != null -> InFamily(f, db, show, ::act)
+                    state.loaded && f == null -> NoFamily(state.invites, show, act)
+                    state.loaded && f != null -> InFamily(f, db)
                     state.failed -> EmptyState(Icons.Outlined.WifiOff, "Oila ma'lumotini yuklab bo'lmadi", "Internetni tekshirib, pastga torting")
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
             }
         }
     }
-    dialog?.let { d -> d() }
+    actions.dialog()?.invoke()
 }
-
-private typealias Act = (String?, suspend FamilyService.() -> Unit) -> Unit
 
 /** Joining or creating: share past expenses too? */
 @Composable
@@ -236,9 +247,7 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act) {
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, db: ExpenseDao, show: ShowDialog, act: Act) {
-    val c = AppTheme.colors
-    val close = { show(null) }
+private fun InFamily(f: FamilyOverview, db: ExpenseDao) {
     val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
@@ -253,42 +262,10 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, show: ShowDialog, act: A
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget))
         SectionLabel("A'zolar")
-        DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f, show, act) }
-        if (f.isAdmin) AdminSection(f, show, act)
+        DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
         SectionLabel("Bu oygi umumiy xarajatlar")
         if (list.isEmpty()) EmptyState(Icons.Outlined.ReceiptLong, "Bu oy umumiy xarajat yo'q")
         else DividedCard(list) { e -> SharedRow(e, catById[e.categoryId]) }
-        Spacer(Modifier.height(AppSpace.section))
-        OutlinedButton(
-            {
-                show {
-                    ConfirmDialog("Oiladan chiqasizmi?", "Umumiy xarajatlaringiz oila tarixida faqat o'qish uchun qoladi.", "Chiqish", close) {
-                        act(null) { leave() }
-                    }
-                }
-            },
-            Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp),
-            shape = RoundedCornerShape(AppRadii.md),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = c.danger),
-            border = BorderStroke(1.5.dp, c.danger),
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.Logout, null)
-            Spacer(Modifier.width(8.dp))
-            Text("Oiladan chiqish", style = MaterialTheme.typography.labelLarge)
-        }
-        if (f.isAdmin) {
-            TextButton(
-                {
-                    show {
-                        ConfirmDialog("Oila o'chirilsinmi?", "Barcha a'zolar chiqariladi. Xarajatlar har kimning o'zida qoladi.", "O'chirish", close) {
-                            act(null) { deleteFamily() }
-                        }
-                    }
-                },
-                Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-                colors = ButtonDefaults.textButtonColors(contentColor = c.danger),
-            ) { Text("Oilani o'chirish", style = MaterialTheme.typography.labelLarge) }
-        }
     }
 }
 
@@ -310,100 +287,34 @@ private fun SharedRow(e: FamilyExpense, category: com.sarvarbek.expense_tracker.
     Money(e.amount)
 }
 
-@Composable
-private fun MemberRow(m: FamilyMember, f: FamilyOverview, show: ShowDialog, act: Act) {
-    val self = m.userId == f.myId
-    var menu by remember { mutableStateOf(false) }
-    val close = { show(null) }
-    Row(
-        Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(start = 16.dp, end = if (f.isAdmin && !self) 4.dp else 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-            Text(
-                listOfNotNull(m.name, "(siz)".takeIf { self }, "· admin".takeIf { m.isAdmin }).joinToString(" "),
-                style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            Text("Byudjetga hissa: ${formatMoney(m.contribution)} UZS", style = MaterialTheme.typography.bodySmall)
-        }
-        Spacer(Modifier.width(8.dp))
-        Money(m.shared)
-        if (f.isAdmin && !self) {
-            Box {
-                IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Amallar") }
-                DropdownMenu(menu, { menu = false }, containerColor = AppTheme.colors.card) {
-                    DropdownMenuItem({ Text("Admin qilish") }, {
-                        menu = false
-                        show { ConfirmDialog("${m.name} admin qilinsinmi?", "Siz oddiy a'zo bo'lasiz.", "Admin qilish", close) { act(null) { transferAdmin(m.userId) } } }
-                    })
-                    DropdownMenuItem({ Text("Oiladan chiqarish") }, {
-                        menu = false
-                        show {
-                            ConfirmDialog("${m.name} oiladan chiqarilsinmi?", "Umumiy xarajatlari oila tarixida faqat o'qish uchun qoladi.", "Chiqarish", close) {
-                                act(null) { removeMember(m.userId) }
-                            }
-                        }
-                    })
-                }
-            }
-        }
-    }
-}
+/** "Ali (siz) · admin". */
+internal fun memberLabel(m: FamilyMember, myId: String) =
+    listOfNotNull(m.name, "(siz)".takeIf { m.userId == myId }, "· admin".takeIf { m.isAdmin }).joinToString(" ")
 
 @Composable
-private fun AdminSection(f: FamilyOverview, show: ShowDialog, act: Act) {
-    val c = AppTheme.colors
-    val close = { show(null) }
-    SectionLabel("Takliflar")
-    // null = the trailing "invite a member" row.
-    DividedCard(f.invites + null, indent = 16.dp) { i ->
-        if (i != null) {
-            IconRow(Icons.Outlined.MailOutline, i.email, "Javob kutilmoqda") {
-                IconButton({ act(null) { deleteInvite(i.id) } }) { Icon(Icons.Filled.Close, "Taklifni bekor qilish") }
-            }
-        } else {
-            IconRow(Icons.Outlined.PersonAddAlt, "A'zo taklif qilish", null, Modifier.clickable {
-                show {
-                    TextDialog("A'zo taklif qilish", "Taklif qilish", close, hint = "email@misol.uz", keyboard = KeyboardType.Email) { email ->
-                        if (email.isEmpty()) close() else act("Taklif yuborildi. U kirganda ko'radi.") { invite(f.id, email) }
-                    }
-                }
-            })
-        }
-    }
-    SectionLabel("Turkum so'rovlari", badge = f.requests.size)
-    if (f.requests.isEmpty()) {
-        Text("Yangi so'rov yo'q", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
-    } else {
-        DividedCard(f.requests, indent = 16.dp) { r ->
-            IconRow(null, r.name, "Hozircha \"Boshqa\"da") {
-                IconButton({ act(null) { rejectRequest(r.id) } }) { Icon(Icons.Filled.Close, "Rad etish") }
-                IconButton({ act("“${r.name}” turkumi yaratildi") { approveRequest(r.id) } }) { Icon(Icons.Filled.Check, "Tasdiqlash", tint = c.accent) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun IconRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
-    title: String,
-    subtitle: String?,
-    modifier: Modifier = Modifier,
-    trailing: @Composable () -> Unit = {},
-) = Row(
-    modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(start = 16.dp, end = 4.dp),
+private fun MemberRow(m: FamilyMember, myId: String) = Row(
+    Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 16.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
-    if (icon != null) {
-        Icon(icon, null, tint = AppTheme.colors.muted)
-        Spacer(Modifier.width(16.dp))
+    Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+        Text(memberLabel(m, myId), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("Byudjetga hissa: ${formatMoney(m.contribution)} UZS", style = MaterialTheme.typography.bodySmall)
     }
-    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall)
-    }
-    trailing()
+    Spacer(Modifier.width(8.dp))
+    Money(m.shared)
+}
+
+/** Square outlined icon button, as on Home's header. */
+@Composable
+internal fun GearButton(label: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    OutlinedIconButton(
+        onClick,
+        Modifier.size(48.dp),
+        shape = RoundedCornerShape(AppRadii.md),
+        colors = IconButtonDefaults.outlinedIconButtonColors(containerColor = c.card, contentColor = c.text),
+        border = BorderStroke(1.dp, c.border),
+    ) { Icon(Icons.Outlined.Settings, label) }
 }
 
 /** Family budget (sum of contributions) vs shared spending this month. */

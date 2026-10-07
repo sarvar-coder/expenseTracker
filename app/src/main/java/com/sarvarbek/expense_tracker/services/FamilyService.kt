@@ -113,9 +113,11 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                     )
                 },
                 others = rows.await().mapNotNull { e ->
+                    // Private rows are tombstones (date and details null): skip before parsing.
                     val private = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
+                    if (private || e.str("deleted_at") != null) return@mapNotNull null
                     val d = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli()
-                    if (private || e.str("deleted_at") != null || d < from || d >= to) null
+                    if (d < from || d >= to) null
                     else FamilyExpense(e.str("id")!!, e.str("owner_name")!!, e.str("category_id")!!, e.str("description")!!, e.num("amount"), d)
                 },
                 invites = invites.await(),
@@ -154,7 +156,15 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 
     suspend fun removeMember(userId: String) { change { rpc("remove_member", buildJsonObject { put("p_user", userId) }) } }
 
-    suspend fun transferAdmin(userId: String) { rpc("transfer_admin", buildJsonObject { put("p_user", userId) }) }
+    /** Admin only. Any number of admins; the last one can't step down. */
+    suspend fun setRole(userId: String, admin: Boolean) {
+        change { rpc("set_role", buildJsonObject { put("p_user", userId); put("p_role", if (admin) "admin" else "member") }) }
+    }
+
+    /** Admin only (RLS). */
+    suspend fun rename(familyId: String, name: String) {
+        call { client.from("families").update(buildJsonObject { put("name", name.trim()) }) { filter { eq("id", familyId) } } }
+    }
 
     suspend fun deleteFamily() { change { rpc("delete_family") } }
 
@@ -208,7 +218,8 @@ fun familyErrorText(message: String, code: String? = null) = when {
     message == "invite_not_found" -> "Taklif topilmadi"
     message == "not_in_family" -> "Siz oilada emassiz"
     message == "not_admin" -> "Faqat admin bajara oladi"
-    message == "transfer_admin_first" -> "Avval adminlikni boshqa a'zoga bering"
+    message == "transfer_admin_first" -> "Avval boshqa a'zoni admin qiling"
+    message == "last_admin" -> "Oilada kamida bitta admin bo'lishi kerak"
     message == "cannot_remove_self" -> "O'zingizni chiqarib bo'lmaydi"
     message == "not_a_member" -> "Bu foydalanuvchi oila a'zosi emas"
     message == "request_not_found" -> "So'rov topilmadi"
