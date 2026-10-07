@@ -11,6 +11,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.sarvarbek.expense_tracker.ui.Shell
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import com.sarvarbek.expense_tracker.ui.theme.LinkButton
+import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
+import com.sarvarbek.expense_tracker.ui.theme.SecondaryButton
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -36,5 +39,25 @@ class ShellTest {
             .assertHeightIsAtLeast(56.dp).assertWidthIsAtLeast(56.dp)
             .performClick()
         assertTrue(added)
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+class ComponentsTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Test fun buttonsMeetTouchTargets() {
+        rule.setContent {
+            AppTheme {
+                androidx.compose.foundation.layout.Column {
+                    PrimaryButton({}) { androidx.compose.material3.Text("Saqlash") }
+                    SecondaryButton({}) { androidx.compose.material3.Text("Bekor") }
+                    LinkButton({}) { androidx.compose.material3.Text("Ok") }
+                }
+            }
+        }
+        rule.onNodeWithText("Saqlash").assertHeightIsAtLeast(56.dp)
+        rule.onNodeWithText("Bekor").assertHeightIsAtLeast(56.dp)
+        rule.onNodeWithText("Ok").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
     }
 }

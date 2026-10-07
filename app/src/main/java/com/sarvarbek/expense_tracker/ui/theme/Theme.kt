@@ -72,6 +72,7 @@ object AppRadii {
     val md = 16.dp
     val card = 24.dp
     val hero = 32.dp
+    val chip = 999.dp
 }
 
 /** Page gutter and vertical rhythm (8pt grid). */
