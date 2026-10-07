@@ -92,7 +92,8 @@ class HomeAddTest {
         parsed: ParsedExpense? = null,
         speech: SpeechService = FakeSpeech(context, ""),
         members: List<Pair<String, String>> = emptyList(),
-    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, canCreate = { true }, onClose = {}, editing = editing, members = members)
+        aiModes: Boolean = true,
+    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, canCreate = { true }, onClose = {}, editing = editing, members = members, aiModes = aiModes)
 
     private fun waitFor(text: String, substring: Boolean = false) =
         rule.waitUntil(5000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }
@@ -137,6 +138,14 @@ class HomeAddTest {
     }
 
     // --- add_screen_test ---
+
+    @Test fun aiModesOffShowsOnlyManual() {
+        settings.lastAddMode = "speak"
+        show { Add(aiModes = false) }
+        rule.onNodeWithText("Yozish").assertDoesNotExist()
+        rule.onNodeWithText("Aytish").assertDoesNotExist()
+        rule.onNodeWithTag("amount").assertExists()
+    }
 
     @Test fun opensInYozishThenReopensInLastPickedMode() {
         var visible by mutableStateOf(true)
