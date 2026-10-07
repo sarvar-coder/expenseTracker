@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,8 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -55,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -137,7 +132,6 @@ fun SettingsScreen(
                         }
                     },
                     { SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onClick = onCategories) },
-                    { PrivateRow(s.defaultPrivate, settings::setDefaultPrivate) },
                 )) { it() }
             }
             item {
@@ -238,23 +232,6 @@ private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onCli
     Spacer(Modifier.width(16.dp))
     RowText(title, subtitle, Modifier.weight(1f))
     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = AppTheme.colors.muted)
-}
-
-/** Whole row toggles; reads as one labelled switch. */
-@Composable
-private fun PrivateRow(on: Boolean, onChange: (Boolean) -> Unit) {
-    val c = AppTheme.colors
-    Row(
-        Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp)
-            .toggleable(on, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RowIcon(Icons.Outlined.VisibilityOff)
-        Spacer(Modifier.width(16.dp))
-        RowText(t("settings.private_title"), t("settings.private_hint"), Modifier.weight(1f))
-        Switch(on, null, colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
-    }
 }
 
 /** Single-choice dialog: [options] maps code to label; a tick marks [current]. */

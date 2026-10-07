@@ -226,29 +226,17 @@ class HomeAddTest {
         rule.onNodeWithTag("transfer").assertDoesNotExist()
     }
 
-    @Test fun maxfiyStartsFromSettingsDefaultAndIsSaved() {
+    @Test fun maxfiyHiddenAndNewRowsSharedEvenIfDefaultPrivate() {
         settings.lastAddMode = "manual"
         settings.setDefaultPrivate(true)
-        var editing by mutableStateOf<Expense?>(null)
-        var visible by mutableStateOf(true)
-        show { if (visible) Add(editing = editing) }
+        show { Add() }
 
-        maxfiy().assertIsOn()
+        maxfiy().assertDoesNotExist()
         rule.onNodeWithTag("amount").performTextInput("1000")
         rule.onNodeWithTag("desc").performTextInput("Secret")
         pickCategory("Turkum tanlang", "Food & dining")
         rule.onNodeWithText("Saqlash").tap()
         waitRows(1)
-        assertTrue(rows().single().isPrivate)
-
-        // Editing keeps the row's own flag; flip it off and save.
-        visible = false
-        rule.waitForIdle()
-        editing = rows().single()
-        visible = true
-        maxfiy().assertIsOn().performScrollTo().performClick()
-        rule.onNodeWithText("Saqlash").tap()
-        rule.waitUntil(5000) { !rows().single().isPrivate }
         assertFalse(rows().single().isPrivate)
     }
 

@@ -98,7 +98,7 @@ abstract class ScreenTest {
 // A text-field dialog never goes idle on a custom-qualifier screen here, so default size.
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest : ScreenTest() {
-    @Test fun settingsShowsUzbekRowsAndTogglesPrivateDefault() {
+    @Test fun settingsShowsUzbekRows() {
         val store = SettingsStore(prefs).apply { setDisplayName("Ali") }
         show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
 
@@ -108,9 +108,7 @@ class SettingsScreenTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Valyuta").fetchSemanticsNodes().isEmpty())
         assertTapTargets()
 
-        rule.onNodeWithText("Yangi xarajatlar maxfiy").performClick()
-        rule.waitForIdle()
-        assertTrue(prefs.getBoolean("defaultPrivate", false))
+        assertTrue(rule.onAllNodesWithText("Yangi xarajatlar maxfiy").fetchSemanticsNodes().isEmpty())
 
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("Bepul tarif", substring = true))
         rule.onNodeWithText("O'zbekcha").performClick()
