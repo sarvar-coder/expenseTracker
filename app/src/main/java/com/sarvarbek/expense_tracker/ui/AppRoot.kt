@@ -94,6 +94,9 @@ private fun Routes() {
             exitTransition = { AppMotion.pushExit },
             popEnterTransition = { AppMotion.popEnter },
             popExitTransition = { AppMotion.popExit },
+            // Back gesture/button (predictive back) uses these; default is a shrink-to-center.
+            predictivePopEnterTransition = { AppMotion.popEnter },
+            predictivePopExitTransition = { AppMotion.popExit },
         ) {
             composable("shell") {
                 Shell(
