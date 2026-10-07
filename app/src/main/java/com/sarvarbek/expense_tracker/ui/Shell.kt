@@ -67,13 +67,18 @@ private val tabs = listOf(
 
 /** Bottom-nav shell: 4 tabs (state kept per tab) + bottom-right FAB that opens Add. */
 @Composable
-fun Shell(onAdd: () -> Unit, page: @Composable (index: Int, select: (Int) -> Unit) -> Unit = { i, _ -> Placeholder(tabs[i].label) }) {
+fun Shell(
+    onAdd: () -> Unit,
+    snackbarHost: @Composable () -> Unit = {},
+    page: @Composable (index: Int, select: (Int) -> Unit) -> Unit = { i, _ -> Placeholder(tabs[i].label) },
+) {
     var index by rememberSaveable { mutableIntStateOf(0) }
     val holder = rememberSaveableStateHolder()
     Scaffold(
         containerColor = AppTheme.colors.bg,
         contentWindowInsets = WindowInsets(0),
         floatingActionButton = { Fab(onAdd) },
+        snackbarHost = snackbarHost,
         bottomBar = { NavBar(index) { index = it } },
     ) { pad ->
         Box(Modifier.padding(pad).statusBarsPadding().fillMaxSize()) {
@@ -84,7 +89,7 @@ fun Shell(onAdd: () -> Unit, page: @Composable (index: Int, select: (Int) -> Uni
 
 // ponytail: empty tab bodies until each feature step lands.
 @Composable
-private fun Placeholder(@Suppress("UNUSED_PARAMETER") label: String) = Box(Modifier.fillMaxSize())
+internal fun Placeholder(@Suppress("UNUSED_PARAMETER") label: String = "") = Box(Modifier.fillMaxSize())
 
 @Composable
 private fun NavBar(index: Int, onTap: (Int) -> Unit) {

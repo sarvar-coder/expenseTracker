@@ -95,6 +95,9 @@ abstract class ExpenseDao {
     @Query("UPDATE expenses SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
     abstract suspend fun deleteExpense(id: String, now: Long = System.currentTimeMillis()): Int
 
+    @Query("SELECT * FROM expenses WHERE id = :id AND deleted_at IS NULL")
+    abstract suspend fun getExpense(id: String): Expense?
+
     @Query("SELECT * FROM expenses WHERE deleted_at IS NULL ORDER BY date DESC")
     abstract fun watchExpenses(): Flow<List<Expense>>
 

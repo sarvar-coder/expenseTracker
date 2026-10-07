@@ -6,6 +6,7 @@ import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.AiParser
 import com.sarvarbek.expense_tracker.services.FamilyService
+import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.services.SyncService
 import com.russhwolf.settings.SharedPreferencesSettings
 import io.github.jan.supabase.auth.Auth
@@ -29,7 +30,7 @@ class AppContainer(context: Context) {
     val database = AppDatabase.open(context)
     val db = database.dao()
     // Sync keys ('sync.*') share this file so an account switch can wipe them.
-    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val settings = SettingsStore(prefs)
 
     // Publishable key is meant for clients; RLS guards the data.
@@ -49,4 +50,5 @@ class AppContainer(context: Context) {
     val sync = SyncService(database, supabase, prefs, settings)
     val family = FamilyService(supabase, sync)
     val aiParser = AiParser(supabase)
+    val speech = SpeechService(context)
 }
