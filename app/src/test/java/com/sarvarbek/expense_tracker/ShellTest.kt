@@ -19,7 +19,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.sarvarbek.expense_tracker.ui.common.Money
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.sarvarbek.expense_tracker.ui.Shell
+import com.sarvarbek.expense_tracker.ui.back
+import com.sarvarbek.expense_tracker.ui.go
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppColors
@@ -40,6 +46,21 @@ import org.robolectric.RobolectricTestRunner
 class ShellTest {
     @get:Rule val rule = createComposeRule()
 
+    @Test fun navDropsDoublePushAndNeverPopsShell() {
+        lateinit var nav: NavHostController
+        rule.setContent {
+            nav = rememberNavController()
+            NavHost(nav, "shell") { composable("shell") {}; composable("add") {} }
+        }
+        rule.runOnIdle { nav.go("add"); nav.go("add") }
+        rule.runOnIdle {
+            assertEquals("add", nav.currentDestination?.route)
+            assertEquals("shell", nav.previousBackStackEntry?.destination?.route)
+        }
+        rule.runOnIdle { nav.back(); nav.back() }
+        rule.runOnIdle { assertEquals("shell", nav.currentDestination?.route) }
+    }
+
     @Test fun tabsSwitchAndFabOpensAdd() {
         var added = false
         rule.setContent { AppTheme { Shell(onAdd = { added = true }) } }
@@ -55,6 +76,27 @@ class ShellTest {
             .assertHeightIsAtLeast(56.dp).assertWidthIsAtLeast(56.dp)
             .performClick()
         assertTrue(added)
+    }
+
+    @Test fun tabsStayAliveAndOnlyActiveIsVisible() {
+        var composed = 0
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { i, _ ->
+                    if (i == 0) {
+                        val n = androidx.compose.runtime.remember { ++composed }
+                        Text("page0 $n")
+                    } else Text("page$i")
+                }
+            }
+        }
+        rule.onNodeWithText("Tarix").performClick()
+        rule.onNodeWithText("page1").assertExists()
+        rule.onNodeWithText("page0", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Asosiy").performClick()
+        // Same `remember` instance: tab 0 was never disposed and rebuilt.
+        rule.onNodeWithText("page0 1").assertExists()
+        rule.onNodeWithText("page1").assertDoesNotExist()
     }
 }
 

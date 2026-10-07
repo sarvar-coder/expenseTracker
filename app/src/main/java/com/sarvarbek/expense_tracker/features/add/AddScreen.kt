@@ -51,7 +51,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -112,6 +111,7 @@ import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
+import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.LinkButton
 import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
@@ -393,11 +393,11 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
     val scope = rememberCoroutineScope()
     val cats by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
     var ask by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismiss, containerColor = c.card) {
+    AppSheet(onDismiss) { hide ->
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = AppSpace.section)) {
             for (cat in cats) {
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(ResolvedCategory(cat.id)) }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
+                    Modifier.fillMaxWidth().clickable { hide { onPick(ResolvedCategory(cat.id)) } }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Dot(colorFromHex(cat.colorHex))

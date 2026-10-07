@@ -1,5 +1,13 @@
 package com.sarvarbek.expense_tracker.ui.theme
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.ColumnScope
@@ -7,6 +15,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,6 +42,39 @@ import androidx.compose.ui.unit.sp
 // global component themes, so screens use these instead of the raw M3 widgets.
 
 private val md = RoundedCornerShape(AppRadii.md)
+
+/**
+ * Page motion (M3 emphasized easing, Android 14 feel). Push: new page slides in
+ * from the right, old one parallaxes a quarter left and dims. Pop is the reverse,
+ * a bit faster. Compose scales these with the system animator setting.
+ */
+object AppMotion {
+    private val decelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+    private val accelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+    private const val PUSH = 350
+    private const val POP = 300
+
+    val pushEnter: EnterTransition = slideInHorizontally(tween(PUSH, easing = decelerate)) { it }
+    val pushExit: ExitTransition = slideOutHorizontally(tween(PUSH, easing = decelerate)) { -it / 4 } +
+        fadeOut(tween(PUSH, easing = decelerate), targetAlpha = 0.6f)
+    val popEnter: EnterTransition = slideInHorizontally(tween(POP, easing = decelerate)) { -it / 4 } +
+        fadeIn(tween(POP, easing = decelerate), initialAlpha = 0.6f)
+    val popExit: ExitTransition = slideOutHorizontally(tween(POP, easing = accelerate)) { it }
+}
+
+/**
+ * Bottom sheet that opens straight to its content height: no half-height
+ * anchor, so dragging up never snaps/jumps. [content] gets `hide(then)`, which
+ * slides the sheet down before running `then` (use it for picks).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(hide: (() -> Unit) -> Unit) -> Unit) {
+    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val hide: (() -> Unit) -> Unit = { then -> scope.launch { state.hide() }.invokeOnCompletion { if (!state.isVisible) then() } }
+    ModalBottomSheet(onDismiss, sheetState = state, containerColor = AppTheme.colors.card) { content(hide) }
+}
 
 /** Primary action: accent fill, 56dp tall. */
 @Composable

@@ -29,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,6 +70,7 @@ import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
+import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
@@ -171,15 +171,14 @@ private fun MonthPills(year: Int, month: Int, onPick: (Int) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
     val ty = MaterialTheme.typography
-    ModalBottomSheet(onDismiss, containerColor = AppTheme.colors.card) {
+    AppSheet(onDismiss) { hide ->
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = AppSpace.section)) {
             for (y in LocalDate.now().year downTo FIRST_YEAR) {
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(y) }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
+                    Modifier.fillMaxWidth().clickable { hide { onPick(y) } }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("$y", style = ty.bodyLarge, modifier = Modifier.weight(1f))
