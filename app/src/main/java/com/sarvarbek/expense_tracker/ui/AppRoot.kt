@@ -14,6 +14,12 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import com.sarvarbek.expense_tracker.features.family.FamilyScreen
+import com.sarvarbek.expense_tracker.features.family.FamilyState
+import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
+import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
 import com.sarvarbek.expense_tracker.services.canCreateCategories
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
@@ -52,13 +58,16 @@ fun AuthGate(status: SessionStatus, auth: Auth, content: @Composable () -> Unit)
     SessionStatus.Initializing -> Box(Modifier.fillMaxSize().background(AppTheme.colors.bg))
 }
 
-/** Routes: shell (tabs) plus full-screen pushes (add, edit, settings). */
+/** Routes: shell (tabs) plus full-screen pushes (add, edit, settings, categories). */
 @Composable
 private fun Routes() {
     val container = (LocalContext.current.applicationContext as App).container
     val nav = rememberNavController()
-    val toaster = Toaster(remember { SnackbarHostState() }, rememberCoroutineScope())
+    val scope = rememberCoroutineScope()
+    val toaster = Toaster(remember { SnackbarHostState() }, scope)
     val canCreate = { canCreateCategories(container.prefs) }
+    // Above the tab so the last overview survives tab switches.
+    val family = remember { FamilyState(container.family) }
     @Composable
     fun Add(editing: Expense?) = AddScreen(
         container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
@@ -75,7 +84,7 @@ private fun Routes() {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.navigate("settings") }) { nav.navigate("edit/${it.id}") }
                         1 -> ActivityScreen(container.db) { nav.navigate("edit/${it.id}") }
                         2 -> InsightsScreen(container.db)
-                        else -> Placeholder()
+                        else -> FamilyScreen(family, container.db)
                     }
                 }
             }
@@ -85,8 +94,23 @@ private fun Routes() {
                 val editing by produceState<Expense?>(null, id) { value = container.db.getExpense(id) }
                 editing?.let { key(it.id) { Add(it) } }
             }
-            // ponytail: placeholder until the Settings step lands.
-            composable("settings") { Placeholder() }
+            composable("settings") {
+                SettingsScreen(
+                    container.settings, container.db,
+                    email = container.supabase.auth.currentUserOrNull()?.email.orEmpty(),
+                    onBack = { nav.popBackStack() },
+                    onCategories = { nav.navigate("categories") },
+                ) {
+                    // Routes' scope: Settings' own is cancelled by the pop below.
+                    scope.launch {
+                        // Flush unsynced edits: the next account to sign in here wipes local rows.
+                        withTimeoutOrNull(5_000) { container.sync.run() }
+                        nav.popBackStack("shell", inclusive = false)
+                        container.supabase.auth.signOut()
+                    }
+                }
+            }
+            composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.popBackStack() } }
         }
     }
 }
