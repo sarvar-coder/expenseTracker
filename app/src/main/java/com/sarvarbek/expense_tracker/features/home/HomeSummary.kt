@@ -12,10 +12,10 @@ data class HomeSummary(val spent: Long, val budget: Long) {
 
 private fun Expense.within(start: LocalDate, end: LocalDate) = date >= start.startMillis() && date < end.startMillis()
 
-/** Sums the calendar month containing [today] into a [HomeSummary]. */
+/** Sums the calendar month containing [today] into a [HomeSummary]; transfers aren't spending. */
 fun summarize(expenses: List<Expense>, budget: Long, today: LocalDate): HomeSummary {
     val start = today.withDayOfMonth(1)
-    return HomeSummary(expenses.filter { it.within(start, start.plusMonths(1)) }.sumOf { it.amount }, budget)
+    return HomeSummary(expenses.filter { it.transferTo == null && it.within(start, start.plusMonths(1)) }.sumOf { it.amount }, budget)
 }
 
 /** Expenses on the local calendar day [today], newest first. */

@@ -43,7 +43,7 @@ class DataTest {
     private fun expense(desc: String, amount: Long, catId: String, date: LocalDate, source: ExpenseSource = ExpenseSource.manual) =
         Expense(description = desc, amount = amount, categoryId = catId, date = date.startMillis(), source = source)
 
-    @Test fun upgradesV1DatabaseKeepingRowsAndAddingNeeds() = runBlocking {
+    @Test fun upgradesV1DatabaseKeepingRowsAddingNeedsAndTransfers() = runBlocking {
         val name = "v1-upgrade.db"
         context.deleteDatabase(name)
         // v1 schema as Room 1 created it (copied from the generated AppDatabase_Impl).
@@ -60,6 +60,14 @@ class DataTest {
             assertEquals(listOf("Old"), dao.getCategories().map { it.name })
             dao.insertNeed(Need(text = "Non"))
             assertEquals(listOf("Non"), dao.watchNeeds().first().map { it.text })
+            // v3: transfer_to round-trips and stays out of the sums
+            val day = LocalDate.of(2026, 10, 7)
+            dao.insertExpense(expense("gift", 500, "c1", day).copy(transferTo = "u2"))
+            dao.insertExpense(expense("bread", 20, "c1", day))
+            assertEquals(listOf("u2", null), dao.getExpenses().sortedByDescending { it.amount }.map { it.transferTo })
+            val range = day.startMillis() to day.plusDays(1).startMillis()
+            assertEquals(20L, dao.totalSpent(range.first, range.second))
+            assertEquals(mapOf("c1" to 20L), dao.categoryTotals(range.first, range.second))
         } finally {
             upgraded.close()
             context.deleteDatabase(name)

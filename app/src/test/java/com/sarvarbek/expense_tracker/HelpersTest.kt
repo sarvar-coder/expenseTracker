@@ -45,6 +45,15 @@ class HelpersTest {
         assertEquals(0f, summarize(emptyList(), 0, LocalDate.of(2026, 9, 1)).progress)
     }
 
+    @Test fun transfersAreNotSpending() {
+        val day = at(2026, 9, 10)
+        val list = listOf(exp(1, 45000, 1, day), exp(2, 500000, 1, day).copy(transferTo = "sister"))
+        assertEquals(45000L, summarize(list, 0, LocalDate.of(2026, 9, 26)).spent)
+        val data = insightsFor(list, cats, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1))
+        assertEquals(45000L, data.total)
+        assertEquals(listOf(45000L), data.slices.map { it.amount })
+    }
+
     @Test fun todayExpensesKeepsLocalTodayNewestFirst() {
         val t = todayExpenses(
             listOf(

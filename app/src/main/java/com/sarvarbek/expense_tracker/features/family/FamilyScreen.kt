@@ -281,7 +281,7 @@ private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, 
     val names = f.memberNames
     // Own shared rows come from Room (live, offline edits included); the
     // server only sends the others'.
-    val mine = expenses.filter { it.familyId == f.id && !it.isPrivate }
+    val mine = expenses.filter { it.familyId == f.id && !it.isPrivate && it.transferTo == null }
         .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: "Siz") }
     // No Sana in the filter: this month.
     val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }

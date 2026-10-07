@@ -300,6 +300,7 @@ suspend fun applyExpenses(database: AppDatabase, rows: List<JsonObject>) {
             categoryId = r.str("category_id")!!, date = r.ts("date")!!,
             source = ExpenseSource.valueOf(r.str("source")!!), rawInput = r.str("raw_input"),
             isPrivate = r.bool("is_private"), pendingCategory = r.str("pending_category"), frozen = r.bool("frozen"),
+            transferTo = r.str("transfer_to"),
             createdAt = r.ts("created_at")!!, updatedAt = r.ts("updated_at")!!, deletedAt = r.ts("deleted_at"),
             dirty = false,
         )
@@ -347,7 +348,7 @@ private fun Category.toJson() = jsonOf(
 private fun Expense.toJson() = jsonOf(
     "id" to id, "owner_id" to ownerId, "family_id" to familyId, "category_id" to categoryId,
     "description" to description, "amount" to amount, "date" to iso(date), "source" to source.name,
-    "raw_input" to rawInput, "is_private" to isPrivate, "pending_category" to pendingCategory,
+    "raw_input" to rawInput, "is_private" to isPrivate, "pending_category" to pendingCategory, "transfer_to" to transferTo,
     "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
 )
 

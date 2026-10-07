@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -142,6 +143,8 @@ fun AddScreen(
     canCreate: () -> Boolean,
     onClose: () -> Unit,
     editing: Expense? = null,
+    /** Other family members (id to label) for O'tkazma; empty outside a family. */
+    members: List<Pair<String, String>> = emptyList(),
 ) {
     val c = AppTheme.colors
     // Editing forces Manual; otherwise reopen in the last picked mode.
@@ -180,7 +183,7 @@ fun AddScreen(
             Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, prefs.defaultPrivate), onClose)
+                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, prefs.defaultPrivate), members, onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
                     TypeForm(db, settings, parse, speech, canCreate, voice = mode == AddMode.speak, onClose) { raw ->
@@ -198,7 +201,14 @@ private fun Label(text: String) =
     Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
 
 @Composable
-private fun ManualForm(db: ExpenseDao, canCreate: () -> Boolean, editing: Expense?, init: Prefill, onClose: () -> Unit) {
+private fun ManualForm(
+    db: ExpenseDao,
+    canCreate: () -> Boolean,
+    editing: Expense?,
+    init: Prefill,
+    members: List<Pair<String, String>>,
+    onClose: () -> Unit,
+) {
     val c = AppTheme.colors
     val t = MaterialTheme.typography
     val toaster = LocalToaster.current
@@ -210,6 +220,8 @@ private fun ManualForm(db: ExpenseDao, canCreate: () -> Boolean, editing: Expens
     var pending by rememberSaveable { mutableStateOf(editing?.pendingCategory) }
     var date by rememberSaveable { mutableStateOf(editing?.date?.toLocalDateTime() ?: LocalDateTime.now()) }
     var private by rememberSaveable { mutableStateOf(init.private) }
+    var transfer by rememberSaveable { mutableStateOf(editing?.transferTo != null) }
+    var transferTo by rememberSaveable { mutableStateOf(editing?.transferTo) }
     var saving by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -223,19 +235,24 @@ private fun ManualForm(db: ExpenseDao, canCreate: () -> Boolean, editing: Expens
 
     fun save() {
         val a = parseAmount(amount)
-        val d = desc.trim()
-        val cat = categoryId
+        val to = transferTo.takeIf { transfer }
+        // A transfer needs no description: "→ Singil" by default.
+        val d = desc.trim().ifEmpty { if (to != null) "→ ${members.firstOrNull { it.first == to }?.second ?: "O'tkazma"}" else "" }
         when {
             a == null || a <= 0 -> return toaster.show("To'g'ri summa kiriting")
+            transfer && to == null -> return toaster.show("Kimga berilganini tanlang")
             d.isEmpty() -> return toaster.show("Tavsif kiriting")
-            cat == null -> return toaster.show("Turkum tanlang")
+            to == null && categoryId == null -> return toaster.show("Turkum tanlang")
         }
         saving = true
         scope.launch {
+            // Transfers sit in Boshqa (no category of their own); every total skips them.
+            val cat = if (to != null) resolveCategory(db, "Boshqa", canCreate()).id else categoryId!!
+            val pend = pending.takeIf { to == null }
             if (editing != null) {
-                db.updateExpense(editing.copy(description = d, amount = a!!, categoryId = cat!!, date = date.toMillis(), isPrivate = private, pendingCategory = pending))
+                db.updateExpense(editing.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = private, pendingCategory = pend, transferTo = to))
             } else {
-                db.insertExpense(Expense(description = d, amount = a!!, categoryId = cat!!, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pending, isPrivate = private))
+                db.insertExpense(Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, isPrivate = private, transferTo = to))
             }
             onClose()
         }
@@ -269,19 +286,45 @@ private fun ManualForm(db: ExpenseDao, canCreate: () -> Boolean, editing: Expens
         shape = fieldShape, colors = fieldColors(),
     )
     Spacer(Modifier.height(AppSpace.gap))
-    Label("Turkum")
-    AppCard(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.clickable { sheet = true }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Dot(selected?.let { colorFromHex(it.colorHex) } ?: c.border)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(selected?.name ?: "Turkum tanlang", style = t.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
-                if (pending != null) Text("So'raldi: $pending — hozircha Boshqa", style = t.bodySmall)
+    if (members.isNotEmpty() || transfer) {
+        // O'tkazma: money handed to a family member, who logs what they buy with it.
+        AppCard(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.testTag("transfer").toggleable(transfer, role = Role.Switch) { transfer = it }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.SwapHoriz, null, tint = c.muted)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("O'tkazma", style = t.bodyLarge)
+                    Text("Oila a'zosiga berilgan pul — xarajatga qo'shilmaydi", style = t.bodySmall)
+                }
+                Switch(transfer, null)
             }
-            Icon(Icons.Filled.ExpandMore, null, tint = c.muted)
+        }
+        Spacer(Modifier.height(AppSpace.gap))
+    }
+    if (transfer) {
+        Label("Kimga")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            for ((id, label) in members) AppChip(label, transferTo == id, { transferTo = id })
+        }
+        if (members.isEmpty()) Text("A'zolar yuklanmadi — internetni tekshiring", style = t.bodySmall, modifier = Modifier.padding(start = 4.dp))
+    } else {
+        Label("Turkum")
+        AppCard(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.clickable { sheet = true }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Dot(selected?.let { colorFromHex(it.colorHex) } ?: c.border)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(selected?.name ?: "Turkum tanlang", style = t.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
+                    if (pending != null) Text("So'raldi: $pending — hozircha Boshqa", style = t.bodySmall)
+                }
+                Icon(Icons.Filled.ExpandMore, null, tint = c.muted)
+            }
         }
     }
     Spacer(Modifier.height(AppSpace.gap))
@@ -294,20 +337,23 @@ private fun ManualForm(db: ExpenseDao, canCreate: () -> Boolean, editing: Expens
             !isToday && !isYesterday, { picking = true },
         )
     }
-    Spacer(Modifier.height(AppSpace.gap))
     // Per-expense "hide from family" toggle; starts from the Settings default.
-    AppCard(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.toggleable(private, role = Role.Switch) { private = it }.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.VisibilityOff, null, tint = c.muted)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Maxfiy", style = t.bodyLarge)
-                Text("Oila bu xarajatni ko'rmaydi", style = t.bodySmall)
+    // Transfers never reach the family, so no toggle for them.
+    if (!transfer) {
+        Spacer(Modifier.height(AppSpace.gap))
+        AppCard(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.toggleable(private, role = Role.Switch) { private = it }.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.VisibilityOff, null, tint = c.muted)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Maxfiy", style = t.bodyLarge)
+                    Text("Oila bu xarajatni ko'rmaydi", style = t.bodySmall)
+                }
+                Switch(private, null)
             }
-            Switch(private, null)
         }
     }
     Spacer(Modifier.height(AppSpace.section))

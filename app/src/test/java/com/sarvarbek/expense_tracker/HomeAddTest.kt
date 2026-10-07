@@ -87,8 +87,12 @@ class HomeAddTest {
     }
 
     @Composable
-    private fun Add(editing: Expense? = null, parsed: ParsedExpense? = null, speech: SpeechService = FakeSpeech(context, "")) =
-        AddScreen(db, settings, { _, _ -> parsed }, speech, canCreate = { true }, onClose = {}, editing = editing)
+    private fun Add(
+        editing: Expense? = null,
+        parsed: ParsedExpense? = null,
+        speech: SpeechService = FakeSpeech(context, ""),
+        members: List<Pair<String, String>> = emptyList(),
+    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, canCreate = { true }, onClose = {}, editing = editing, members = members)
 
     private fun waitFor(text: String, substring: Boolean = false) =
         rule.waitUntil(5000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }
@@ -184,6 +188,33 @@ class HomeAddTest {
         assertEquals(groceries.id, row.categoryId)
         assertEquals(ExpenseSource.manual, row.source)
         assertEquals(LocalDate.now().minusDays(1), row.date.toLocalDate())
+    }
+
+    @Test fun transferPicksMemberSkipsCategoryAndSaves() {
+        settings.lastAddMode = "manual"
+        show { Add(members = listOf("u2" to "Malika · Singil")) }
+
+        rule.onNodeWithTag("transfer").tap()
+        rule.onNodeWithText("Turkum tanlang").assertDoesNotExist()
+        maxfiy().assertDoesNotExist()
+        rule.onNodeWithTag("amount").performTextInput("200000")
+        rule.onNodeWithText("Saqlash").tap()
+        waitFor("Kimga berilganini tanlang")
+
+        rule.onNodeWithText("Malika · Singil").tap()
+        rule.onNodeWithText("Saqlash").tap()
+        waitRows(1)
+        val row = rows().single()
+        val boshqa = runBlocking { db.getCategories() }.first { it.name == "Boshqa" }
+        assertEquals("u2", row.transferTo)
+        assertEquals("→ Malika · Singil", row.description)
+        assertEquals(boshqa.id, row.categoryId)
+    }
+
+    @Test fun noTransferToggleOutsideFamily() {
+        settings.lastAddMode = "manual"
+        show { Add() }
+        rule.onNodeWithTag("transfer").assertDoesNotExist()
     }
 
     @Test fun maxfiyStartsFromSettingsDefaultAndIsSaved() {

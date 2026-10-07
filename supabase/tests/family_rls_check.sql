@@ -6,7 +6,7 @@ declare
   a uuid := gen_random_uuid(); b uuid := gen_random_uuid();
   ca uuid := gen_random_uuid(); cb1 uuid := gen_random_uuid(); cb2 uuid := gen_random_uuid();
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
-  eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid();
+  eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid(); eb7 uuid := gen_random_uuid();
   nb1 uuid := gen_random_uuid(); nb2 uuid := gen_random_uuid(); nb3 uuid := gen_random_uuid();
   fid uuid; inv uuid; req uuid; newcat uuid; bq uuid; n int; r record; ok boolean;
 begin
@@ -36,6 +36,9 @@ begin
   select count(*) into n from public.category_requests where name = 'Gym'; assert n = 1, 'request auto-created';
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, is_private)
     values (eb4, fid, ca, 'secret', 30, now(), 'manual', true);
+  -- transfer to A: out of family totals and the family list
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source, transfer_to)
+    values (eb7, fid, ca, '-> Ali', 500, now(), 'manual', a);
   update public.profiles set budget = 1000 where id = b;
   begin
     insert into public.categories (id, family_id, name, color_hex) values (gen_random_uuid(), fid, 'X', 'AAAAAA');
@@ -73,6 +76,8 @@ begin
   get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
   select amount, description into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount is null and r.description is null, 'private row is a tombstone';
+  select amount, is_private into r from public.family_expenses_since('epoch') where id = eb7;
+  assert r.amount is null and r.is_private, 'transfer row is a tombstone';
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
   assert r.shared_total = 140, 'B shared total 140, got ' || r.shared_total;
   assert r.contribution = 970, 'B contribution 970, got ' || r.contribution;
