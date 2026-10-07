@@ -132,6 +132,19 @@ class SettingsScreenTest : ScreenTest() {
         rule.onNodeWithText("Ma'lumotni eksport (CSV)").assertExists()
     }
 
+    @Test fun languageRowSwitchesUiToCyrillic() {
+        val store = SettingsStore(prefs)
+        show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
+        try {
+            rule.onNode(hasScrollAction()).performScrollToNode(hasText("O'zbekcha (lotin)"))
+            rule.onNodeWithText("O'zbekcha (lotin)").performClick()
+            rule.onNodeWithText("Ўзбекча (кирилл)").performClick()
+            waitFor("Созламалар")
+            assertEquals("uz_cyrl", store.settings.value.uiLanguage)
+        } finally {
+            I18n.load(context, I18n.LATIN)
+        }
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
