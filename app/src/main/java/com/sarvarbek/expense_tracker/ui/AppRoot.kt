@@ -39,9 +39,12 @@ import com.sarvarbek.expense_tracker.features.auth.AuthScreen
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sarvarbek.expense_tracker.ui.theme.AppMotion
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 
 @Composable
@@ -81,21 +84,27 @@ private fun Routes() {
         val members = family.overview?.let { f -> f.members.filter { it.userId != f.myId }.map { it.userId to it.label } }.orEmpty()
         AddScreen(
             container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
-            onClose = { nav.popBackStack() }, editing = editing, members = members,
+            onClose = { nav.back() }, editing = editing, members = members,
         )
     }
     CompositionLocalProvider(LocalToaster provides toaster) {
-        NavHost(nav, startDestination = "shell") {
+        NavHost(
+            nav, startDestination = "shell",
+            enterTransition = { AppMotion.pushEnter },
+            exitTransition = { AppMotion.pushExit },
+            popEnterTransition = { AppMotion.popEnter },
+            popExitTransition = { AppMotion.popExit },
+        ) {
             composable("shell") {
                 Shell(
-                    onAdd = { nav.navigate("add") },
+                    onAdd = { nav.go("add") },
                     snackbarHost = { SnackbarHost(toaster.host) { AppSnackbar(it) } },
                 ) { index, _ ->
                     when (index) {
-                        0 -> HomeScreen(container.db, container.settings, onSettings = { nav.navigate("settings") }) { nav.navigate("edit/${it.id}") }
-                        1 -> ActivityScreen(container.db) { nav.navigate("edit/${it.id}") }
+                        0 -> HomeScreen(container.db, container.settings, onSettings = { nav.go("settings") }) { nav.go("edit/${it.id}") }
+                        1 -> ActivityScreen(container.db) { nav.go("edit/${it.id}") }
                         2 -> InsightsScreen(container.db)
-                        else -> FamilyScreen(family, container.db, onNeeds = { nav.navigate("needs") }) { nav.navigate("family-settings") }
+                        else -> FamilyScreen(family, container.db, onNeeds = { nav.go("needs") }) { nav.go("family-settings") }
                     }
                 }
             }
@@ -109,8 +118,8 @@ private fun Routes() {
                 SettingsScreen(
                     container.settings, container.db,
                     email = container.supabase.auth.currentUserOrNull()?.email.orEmpty(),
-                    onBack = { nav.popBackStack() },
-                    onCategories = { nav.navigate("categories") },
+                    onBack = { nav.back() },
+                    onCategories = { nav.go("categories") },
                 ) {
                     // Routes' scope: Settings' own is cancelled by the pop below.
                     scope.launch {
@@ -121,12 +130,24 @@ private fun Routes() {
                     }
                 }
             }
-            composable("family-settings") { FamilySettingsScreen(family) { nav.popBackStack() } }
+            composable("family-settings") { FamilySettingsScreen(family) { nav.back() } }
             composable("needs") {
                 val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
-                NeedsScreen(container.db, familyId, container.sync::run) { nav.popBackStack() }
+                NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
             }
-            composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.popBackStack() } }
+            composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.back() } }
         }
     }
+}
+
+// Only the settled (RESUMED) page may navigate: taps during a transition or a
+// second back press are dropped, so nothing pushes twice and shell never pops.
+private val NavController.settled get() = currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
+
+internal fun NavController.go(route: String) {
+    if (settled) navigate(route)
+}
+
+internal fun NavController.back() {
+    if (settled && previousBackStackEntry != null) popBackStack()
 }

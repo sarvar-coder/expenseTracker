@@ -1,6 +1,8 @@
 package com.sarvarbek.expense_tracker.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -54,6 +56,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sarvarbek.expense_tracker.ui.common.t
+import com.sarvarbek.expense_tracker.ui.theme.AppMotion
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 
@@ -83,7 +86,9 @@ fun Shell(
         bottomBar = { NavBar(index) { index = it } },
     ) { pad ->
         Box(Modifier.padding(pad).statusBarsPadding().fillMaxSize()) {
-            holder.SaveableStateProvider(index) { page(index) { index = it } }
+            AnimatedContent(index, Modifier.fillMaxSize(), transitionSpec = { AppMotion.tabIn togetherWith AppMotion.tabOut }, label = "tab") { i ->
+                holder.SaveableStateProvider(i) { page(i) { index = it } }
+            }
         }
     }
 }

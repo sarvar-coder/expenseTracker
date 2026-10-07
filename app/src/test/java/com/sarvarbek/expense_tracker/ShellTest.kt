@@ -19,7 +19,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.sarvarbek.expense_tracker.ui.common.Money
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.sarvarbek.expense_tracker.ui.Shell
+import com.sarvarbek.expense_tracker.ui.back
+import com.sarvarbek.expense_tracker.ui.go
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppColors
@@ -39,6 +45,21 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ShellTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test fun navDropsDoublePushAndNeverPopsShell() {
+        lateinit var nav: NavHostController
+        rule.setContent {
+            nav = rememberNavController()
+            NavHost(nav, "shell") { composable("shell") {}; composable("add") {} }
+        }
+        rule.runOnIdle { nav.go("add"); nav.go("add") }
+        rule.runOnIdle {
+            assertEquals("add", nav.currentDestination?.route)
+            assertEquals("shell", nav.previousBackStackEntry?.destination?.route)
+        }
+        rule.runOnIdle { nav.back(); nav.back() }
+        rule.runOnIdle { assertEquals("shell", nav.currentDestination?.route) }
+    }
 
     @Test fun tabsSwitchAndFabOpensAdd() {
         var added = false

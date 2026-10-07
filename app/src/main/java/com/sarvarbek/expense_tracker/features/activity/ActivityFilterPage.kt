@@ -1,5 +1,7 @@
 package com.sarvarbek.expense_tracker.features.activity
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,12 +46,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +72,8 @@ import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
 import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
+import com.sarvarbek.expense_tracker.ui.theme.AppMotion
+import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.LinkButton
@@ -113,8 +117,22 @@ fun ActivityFilterPage(
     onDismiss: () -> Unit,
     members: Map<String, String> = emptyMap(),
     onApply: (ActivityFilter) -> Unit,
-) = Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-    FilterPage(current, categories, members, onDismiss, onApply)
+) {
+    // Slides in like a pushed page; every close slides out first, then reports.
+    val shown = remember { MutableTransitionState(false).apply { targetState = true } }
+    var after by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun close(then: () -> Unit) {
+        after = then
+        shown.targetState = false
+    }
+    Dialog({ close(onDismiss) }, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        AnimatedVisibility(shown, enter = AppMotion.pushEnter, exit = AppMotion.popExit) {
+            FilterPage(current, categories, members, onBack = { close(onDismiss) }) { f -> close { onApply(f) } }
+        }
+    }
+    LaunchedEffect(shown.isIdle, shown.currentState) {
+        if (shown.isIdle && !shown.currentState) after?.also { after = null }?.invoke()
+    }
 }
 
 @Composable
@@ -228,12 +246,11 @@ private fun AmountField(value: String, hint: String, modifier: Modifier, onChang
 )
 
 /** Multi-select list of (id, label, dot color); "Tayyor" returns the picked ids. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PickSheet(options: List<Triple<String, String, Color?>>, selected: Set<String>, onDismiss: () -> Unit, onDone: (Set<String>) -> Unit) {
     val ty = MaterialTheme.typography
     var picked by remember { mutableStateOf(selected) }
-    ModalBottomSheet(onDismiss, containerColor = AppTheme.colors.card) {
+    AppSheet(onDismiss) { hide ->
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             for ((id, label, dot) in options) {
                 val on = id in picked
@@ -253,7 +270,7 @@ private fun PickSheet(options: List<Triple<String, String, Color?>>, selected: S
         }
         Row(Modifier.padding(start = AppSpace.page, end = AppSpace.page, top = 8.dp, bottom = AppSpace.gap), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SecondaryButton({ picked = emptySet() }, Modifier.weight(1f)) { Text(t("activity.all")) }
-            PrimaryButton({ onDone(picked) }, Modifier.weight(1f)) { Text(t("common.done")) }
+            PrimaryButton({ hide { onDone(picked) } }, Modifier.weight(1f)) { Text(t("common.done")) }
         }
     }
 }
