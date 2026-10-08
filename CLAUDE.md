@@ -25,7 +25,8 @@ search, category filters, and the **Oila** (family) tab.
   Push dirty rows, pull by `updated_at`; runs on start, after writes, and
   every 30s after a failure. Multi-device per user allowed.
 - **Family**: one family per user, one admin. Admin invites by email (in-app
-  Accept/Decline, no email sent), removes members, approves/rejects category
+  Accept/Decline, no email sent), removes members, sets members' titles (Ota,
+  Ona… — members can't set even their own), approves/rejects category
   requests, renames/archives categories, transfers admin, deletes the family.
   Admin can't edit others' expenses; must transfer admin
   before leaving; last member leaving deletes the family. Ex-member's shared

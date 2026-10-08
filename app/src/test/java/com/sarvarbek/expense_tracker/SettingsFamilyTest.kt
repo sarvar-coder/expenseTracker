@@ -307,6 +307,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithContentDescription("Amallar: Vali").performClick()
         rule.onNodeWithText("Admin qilish").assertExists()
         rule.onNodeWithText("Oiladan chiqarish").assertExists()
+        rule.onNodeWithText("Oiladagi o'rni").assertExists()
     }
 
     @Test fun memberFamilySettingsCanOnlyLeave() {
@@ -319,10 +320,8 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         assertTrue(rule.onAllNodesWithText("A'zo taklif qilish").fetchSemanticsNodes().isEmpty())
         assertTrue(rule.onAllNodesWithContentDescription("Amallar: Vali").fetchSemanticsNodes().isEmpty())
-        // own row: title only, no role changes
-        rule.onNodeWithContentDescription("Amallar: Ali").performClick()
-        rule.onNodeWithText("Oiladagi o'rni").assertExists()
-        assertTrue(rule.onAllNodesWithText("Adminlikdan olish").fetchSemanticsNodes().isEmpty())
+        // own row too: only the admin sets titles (#72)
+        assertTrue(rule.onAllNodesWithContentDescription("Amallar: Ali").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun frozenTileOpensReadOnlySheet() {
