@@ -29,12 +29,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -53,17 +52,22 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     fun start() {
         createChannels()
         // Sign-in and every start with a stored session (re-registering is a cheap upsert).
-        client.auth.sessionStatus
-            .map { (it as? SessionStatus.Authenticated)?.session?.user?.id }
-            .distinctUntilChanged().filterNotNull()
-            .onEach { register() }.launchIn(scope)
+        // Retried every 30s until it lands (offline start); a new account or sign-out cancels it.
+        scope.launch {
+            client.auth.sessionStatus
+                .map { (it as? SessionStatus.Authenticated)?.session?.user?.id }
+                .distinctUntilChanged()
+                .collectLatest { uid -> if (uid != null) while (!register()) delay(RETRY_MS) }
+        }
     }
 
-    /** Saves [token] (default: this phone's) for the signed-in user. Never throws. */
-    suspend fun register(token: String? = null) = attempt("register") {
-        if (client.auth.currentUserOrNull() == null) return@attempt
-        val t = token ?: Tasks.await(FirebaseMessaging.getInstance().token)
-        client.postgrest.rpc("register_push_token", buildJsonObject { put("p_token", t) })
+    /** Saves [token] (default: this phone's) for the signed-in user. Never throws; false = failed, try again. */
+    suspend fun register(token: String? = null): Boolean {
+        if (client.auth.currentUserOrNull() == null) return true // signed out: nothing to do
+        return attempt("register") {
+            val t = token ?: Tasks.await(FirebaseMessaging.getInstance().token)
+            client.postgrest.rpc("register_push_token", buildJsonObject { put("p_token", t) })
+        }
     }
 
     /**
@@ -112,18 +116,21 @@ class Push(private val context: Context, private val client: SupabaseClient) {
         )
     }
 
-    private suspend fun attempt(what: String, f: suspend () -> Unit) = withContext(Dispatchers.IO) {
+    private suspend fun attempt(what: String, f: suspend () -> Unit): Boolean = withContext(Dispatchers.IO) {
         try {
             f()
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "push $what failed: $e")
+            false
         }
     }
 
     companion object {
         private const val TAG = "push"
+        private const val RETRY_MS = 30_000L
         const val CH_REQUESTS = "category_requests"
         const val EXTRA_ROUTE = "route"
         const val ROUTE_REQUESTS = "family-settings"

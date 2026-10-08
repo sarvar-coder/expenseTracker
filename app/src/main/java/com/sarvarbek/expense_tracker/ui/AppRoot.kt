@@ -2,13 +2,14 @@ package com.sarvarbek.expense_tracker.ui
 
 import android.Manifest
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.core.content.edit
 import com.sarvarbek.expense_tracker.services.Push
-import com.sarvarbek.expense_tracker.services.canNotify
 import com.sarvarbek.expense_tracker.services.shouldAskNotifications
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.t
@@ -201,7 +202,10 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
 private fun AskNotifications(prefs: SharedPreferences) {
     val context = LocalContext.current
     var show by remember {
-        mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, canNotify(context), prefs.getBoolean(K_PUSH_ASKED, false)))
+        // The runtime permission only: if just the app switch is off, the system dialog can't help.
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, granted, prefs.getBoolean(K_PUSH_ASKED, false)))
     }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     if (!show) return

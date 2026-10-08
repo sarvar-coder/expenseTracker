@@ -1,0 +1,6 @@
+# Only what differs from CLI defaults. Deploy keeps these per function.
+project_id = "xgxygopxnchdobuooyzw"
+
+# Called by pg_net without a JWT; it authorizes by claiming an outbox id.
+[functions.notify]
+verify_jwt = false

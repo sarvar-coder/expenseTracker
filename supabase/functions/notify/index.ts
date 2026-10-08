@@ -64,13 +64,16 @@ Deno.serve(async (req) => {
   const id = (await req.json().catch(() => ({})))?.id;
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return new Response("bad id", { status: 400 });
 
+  // ponytail: at-most-once. The row is gone once claimed, so an OAuth/FCM
+  // outage loses that push (no retry); add a retry column if that matters.
   const targets = (await rpc("claim_push", { p_id: id })) as Target[];
   if (!SA) return ok("no FCM secret: push dropped");
   if (!targets.length) return ok("nothing to send");
 
   const at = await accessToken(JSON.parse(SA));
   const stale: string[] = [];
-  await Promise.all(targets.map(async (t) => {
+  let sent = 0;
+  await Promise.all(targets.map(async (t) => { try {
     // FCM data values must be strings. `uid` lets the app drop a push meant
     // for an account that's no longer signed in on that phone.
     const data = Object.fromEntries(Object.entries({ ...t.data, uid: t.user_id }).map(([k, v]) => [k, String(v)]));
@@ -79,12 +82,16 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${at}`, "Content-Type": "application/json" },
       body: JSON.stringify({ message: { token: t.token, data, android: { priority: "HIGH" } } }),
     });
-    if (res.ok) return;
+    if (res.ok) return void sent++;
     const err = (await res.json().catch(() => ({})))?.error;
-    const codes = [err?.status, ...(err?.details ?? []).map((d: { errorCode?: string }) => d.errorCode)];
-    if (codes.includes("UNREGISTERED") || codes.includes("NOT_FOUND")) stale.push(t.token);
+    // Gone token = 404 NOT_FOUND carrying errorCode UNREGISTERED. A bare
+    // NOT_FOUND (wrong project/config) must not wipe every token.
+    const gone = (err?.details ?? []).some((d: { errorCode?: string }) => d.errorCode === "UNREGISTERED");
+    if (gone) stale.push(t.token);
     else console.error(`fcm ${res.status}: ${JSON.stringify(err)}`);
-  }));
+  } catch (e) {
+    console.error(`fcm send failed: ${e}`); // one target's network error mustn't skip the rest
+  } }));
   if (stale.length) await rpc("drop_push_tokens", { p_tokens: stale });
-  return ok(`sent ${targets.length - stale.length}/${targets.length}, dropped ${stale.length}`);
+  return ok(`sent ${sent}/${targets.length}, dropped ${stale.length}`);
 });
