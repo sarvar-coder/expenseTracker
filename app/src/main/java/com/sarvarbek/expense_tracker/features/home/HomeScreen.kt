@@ -56,7 +56,7 @@ import kotlinx.coroutines.flow.map
  * Today: my total (plus the family's, in a family), slim personal month-budget
  * line, and today's rows from the family [feed]: mine plus other members'
  * shared ones, newest first. Not in a family the feed is just mine.
- * [offline]: others' rows are as last fetched.
+ * [offline]: others' rows are as last fetched. [inFamily]: show the family line.
  */
 @Composable
 fun HomeScreen(
@@ -64,6 +64,7 @@ fun HomeScreen(
     settings: SettingsStore,
     feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
     offline: Boolean = false,
+    inFamily: Boolean = false,
     onSettings: () -> Unit,
     onEdit: (Expense) -> Unit,
 ) {
@@ -71,12 +72,11 @@ fun HomeScreen(
     val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
     val budget by settings.settings.collectAsStateWithLifecycle()
     val now = LocalDate.now()
-    val all = rows.orEmpty()
-    val today = todayExpenses(all, now)
+    val today = remember(rows, now) { todayExpenses(rows.orEmpty(), now) }
     // The budget line stays personal.
-    val month = summarize(all.filter { it.mine }.map { it.expense }, budget.monthlyBudget, now)
-    // ponytail: "in a family" = the feed has someone else's row; a family with no one else's expenses yet shows just mine.
-    val family = all.any { !it.mine }
+    val month = remember(rows, budget.monthlyBudget, now) { summarize(rows.orEmpty().filter { it.mine }.map { it.expense }, budget.monthlyBudget, now) }
+    // Others' rows also count: the family pref can lag a join until the next recomposition.
+    val family = inFamily || today.any { !it.mine }
     val catById = categories.associateBy { it.id }
 
     // Bottom padding clears the floating add button.
@@ -92,7 +92,7 @@ fun HomeScreen(
         item {
             Spacer(Modifier.height(AppSpace.section))
             Text(t("home.today_expenses"), style = MaterialTheme.typography.titleMedium)
-            if (offline && family) {
+            if (offline) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.WifiOff, null, tint = AppTheme.colors.muted)

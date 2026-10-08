@@ -139,7 +139,7 @@ class HomeAddTest {
         )
         settings.setBudget(1_000_000)
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
-        show { HomeScreen(db, settings, feed, offline = true, onSettings = {}, onEdit = {}) }
+        show { HomeScreen(db, settings, feed, offline = true, inFamily = true, onSettings = {}, onEdit = {}) }
         waitFor("Coffee")
         rule.onNodeWithText("Bread").assertExists()
         rule.onNodeWithText("Ali ·", substring = true).assertExists()
@@ -159,11 +159,10 @@ class HomeAddTest {
     @Test fun notInFamilyHasNoFamilyLine() {
         val food = runBlocking { db.getCategories() }.first()
         runBlocking { db.insertExpense(Expense(description = "Coffee", amount = 45000, categoryId = food.id, date = System.currentTimeMillis(), source = ExpenseSource.manual)) }
-        show { HomeScreen(db, settings, offline = true, onSettings = {}, onEdit = {}) }
+        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
         waitFor("Coffee")
         rule.onNodeWithText("Bugun sarflangan · 1 ta").assertExists()
         rule.onNodeWithText("Oila bugun", substring = true).assertDoesNotExist()
-        rule.onNodeWithText("Internet yo'q", substring = true).assertDoesNotExist()
     }
 
     // --- add_screen_test ---

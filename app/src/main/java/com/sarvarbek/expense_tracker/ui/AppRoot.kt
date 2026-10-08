@@ -115,7 +115,11 @@ private fun Routes() {
                     when (index) {
                         0 -> {
                             val stale by container.family.othersStale.collectAsStateWithLifecycle()
-                            HomeScreen(container.db, container.settings, family.feed, offline = stale, onSettings = { nav.go("settings") }, onEdit = edit)
+                            HomeScreen(
+                                container.db, container.settings, family.feed, offline = stale,
+                                inFamily = !container.prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty(),
+                                onSettings = { nav.go("settings") }, onEdit = edit,
+                            )
                         }
                         1 -> InsightsScreen(
                             container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
