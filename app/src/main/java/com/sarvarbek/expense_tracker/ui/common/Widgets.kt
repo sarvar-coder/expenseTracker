@@ -201,7 +201,8 @@ private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
  */
 @Composable
 fun rememberExpenseTap(fe: FamilyExpense, category: Category?, onEdit: (Expense) -> Unit): () -> Unit {
-    var open by remember { mutableStateOf(false) }
+    // Keyed by id: a feed refresh that reorders rows must not swap the open sheet's expense.
+    var open by remember(fe.expense.id) { mutableStateOf(false) }
     if (open) ExpenseDetailSheet(fe, category) { open = false }
     return { if (fe.editable) onEdit(fe.expense) else open = true }
 }
