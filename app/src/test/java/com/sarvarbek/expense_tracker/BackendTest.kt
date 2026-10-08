@@ -263,5 +263,6 @@ class BackendTest {
         assertEquals(listOf(true, false, true), feed.map { it.mine }) // own copy wins the duplicate
         assertEquals("Mine", feed.last().expense.description)
         assertEquals(own.map { it.id }, mergeFeed(own, emptyList(), "Siz").map { it.expense.id }) // not in a family
+        assertEquals(listOf("u1", "u2", "u1"), mergeFeed(own, others, "Siz", "u1").map { it.expense.ownerId }) // unsynced own rows get my id
     }
 }

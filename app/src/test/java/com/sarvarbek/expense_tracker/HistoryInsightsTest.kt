@@ -31,6 +31,9 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import com.sarvarbek.expense_tracker.services.FamilyExpense
+import com.sarvarbek.expense_tracker.services.mergeFeed
+import kotlinx.coroutines.flow.map
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
 import com.sarvarbek.expense_tracker.ui.common.monthName
@@ -173,6 +176,53 @@ class HistoryInsightsTest {
         // Removing the last chip brings the month pills back.
         removeChip()
         rule.onNodeWithText("Dekabr").assertExists()
+    }
+
+    @Test fun insightsCountsWholeFamilyAndFiltersByMember() {
+        add("Coffee", 45000, "Food & dining") // mine, not yet synced: no ownerId
+        val transport = runBlocking { db.getCategories().first { it.name == "Transport" }.id }
+        fun other(id: String, amount: Long, owner: String) = Expense(
+            id = id, description = "Taksi", amount = amount, categoryId = transport,
+            date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = owner,
+        )
+        val others = listOf(FamilyExpense(other("o1", 30000, "u2"), "Vali"), FamilyExpense(other("o2", 5000, "u3"), "Gul"))
+        val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz", "u1") }
+        show { InsightsScreen(db, feed) }
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Transport").assertExists()
+
+        // A'zo: Vali only, total and legend follow the filtered rows.
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("A'zo")
+        waitFor("Tayyor")
+        rule.onNode(hasText("Vali") and isToggleable()).performClick()
+        tap("Tayyor")
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
+        tap("Qo'llash")
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 30 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        chip("Vali").assertExists()
+        rule.onNodeWithText("Food & dining").assertDoesNotExist()
+
+        // Me ("Siz"): my unsynced row counts under my id.
+        removeChip()
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("A'zo")
+        waitFor("Tayyor")
+        rule.onNode(hasText("Siz") and isToggleable()).performClick()
+        tap("Tayyor")
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
+        tap("Qo'llash")
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test fun insightsAloneHasNoMemberRow() {
+        add("Coffee", 45000, "Food & dining")
+        val feed = db.watchExpenses().map { mergeFeed(it, emptyList(), "Siz", "u1") }
+        show { InsightsScreen(db, feed) }
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        rule.onNodeWithText("Turkum").assertExists()
+        rule.onNodeWithText("A'zo").assertDoesNotExist()
     }
 
     @Test fun filterSurvivesSaveRestore() {
