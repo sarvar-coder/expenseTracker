@@ -2,6 +2,7 @@ package com.sarvarbek.expense_tracker.services
 
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
+import android.util.Log
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
@@ -13,6 +14,9 @@ import io.github.jan.supabase.postgrest.result.PostgrestResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -49,8 +53,11 @@ data class FamilyMember(
     val label get() = listOfNotNull(name, title).joinToString(" · ")
 }
 
-/** A shared family expense ([Expense.ownerId] set) with who added it. */
-data class FamilyExpense(val expense: Expense, val ownerName: String)
+/**
+ * A family feed row with who added it. [mine] = own row from Room (its
+ * ownerId may still be null before the first sync); others' rows are read-only.
+ */
+data class FamilyExpense(val expense: Expense, val ownerName: String, val mine: Boolean = false)
 
 data class SentInvite(val id: String, val email: String)
 
@@ -61,8 +68,6 @@ data class FamilyOverview(
     val myId: String,
     val isAdmin: Boolean,
     val members: List<FamilyMember>,
-    /** Other members' shared expenses, all time (own ones come from Room). */
-    val others: List<FamilyExpense>,
     /** Admin only: sent invites and pending category requests. */
     val invites: List<SentInvite> = emptyList(),
     val requests: List<CategoryRequest> = emptyList(),
@@ -82,11 +87,44 @@ class FamilyException(override val message: String) : Exception(message)
  */
 class FamilyService(private val client: SupabaseClient, private val sync: SyncService) {
     private val uid get() = client.auth.currentUserOrNull()!!.id
+    private val others = MutableStateFlow(emptyList<FamilyExpense>())
+
+    /**
+     * The family feed: own Room rows (live, offline edits included) plus other
+     * members' shared rows, newest first. Others' rows are refreshed in memory
+     * after every sync pass (sign-in, resume, writes, pull-to-refresh); offline
+     * they stay as last fetched. Not in a family: own rows only.
+     * ponytail: in memory, not Room; store others' rows if the offline gap hurts.
+     */
+    val feed: Flow<List<FamilyExpense>> =
+        combine(sync.database.dao().watchExpenses(), others) { own, o -> mergeFeed(own, o, t("family.you")) }
+
+    init { sync.onSynced = ::refreshOthers }
+
+    /** Never throws: a failed fetch keeps the last list. Dropped if the account changed meanwhile. */
+    private suspend fun refreshOthers(familyId: String?) {
+        val me = client.auth.currentUserOrNull()?.id
+        val rows = try {
+            if (familyId == null || me == null) emptyList() else fetchOthers(familyId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("family", "feed fetch failed: $e")
+            return
+        }
+        if (client.auth.currentUserOrNull()?.id == me) others.value = rows
+    }
+
+    private suspend fun fetchOthers(familyId: String): List<FamilyExpense> =
+        // ponytail: fetches the family's whole history each pass; add a dated
+        // RPC if families ever get big enough for that to be slow.
+        parseOthers(rpc("family_expenses_since", buildJsonObject { put("p_since", "1970-01-01T00:00:00Z") }).decodeList(), familyId)
 
     /**
      * Null when not in a family. Syncs first so the server has our latest
      * budget and expenses. Online only: the summary is computed server-side.
      * [from]/[to] (epoch millis, [to] exclusive) bound the summary only.
+     * Others' expenses come from [feed] (the sync above refreshed it).
      */
     suspend fun overview(from: Long, to: Long): FamilyOverview? {
         sync.run()
@@ -103,9 +141,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                     put("p_from", Instant.ofEpochMilli(from).toString()); put("p_to", Instant.ofEpochMilli(to).toString())
                 }).decodeList<JsonObject>()
             }
-            // ponytail: fetches the family's whole history and filters here; add a
-            // dated RPC if families ever get big enough for that to be slow.
-            val rows = async { rpc("family_expenses_since", buildJsonObject { put("p_since", "1970-01-01T00:00:00Z") }).decodeList<JsonObject>() }
             val invites = async {
                 if (!isAdmin) emptyList()
                 else call { client.from("invites").select(Columns.list("id", "email")) { filter { eq("family_id", fid) } }.decodeList<JsonObject>() }
@@ -121,19 +156,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                     FamilyMember(
                         it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin",
                         it.num("shared_total"), it.num("contribution"), it.str("title"),
-                    )
-                },
-                others = rows.await().mapNotNull { e ->
-                    // Transfers come as tombstones flagged is_private (date and details null): skip before parsing.
-                    val transfer = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
-                    if (transfer || e.str("deleted_at") != null) return@mapNotNull null
-                    FamilyExpense(
-                        Expense(
-                            id = e.str("id")!!, description = e.str("description")!!, amount = e.num("amount"),
-                            categoryId = e.str("category_id")!!, date = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli(),
-                            source = ExpenseSource.manual, ownerId = e.str("owner_id")!!, familyId = fid, dirty = false,
-                        ),
-                        e.str("owner_name")!!,
                     )
                 },
                 invites = invites.await(),
@@ -232,6 +254,28 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 }
 
 private fun JsonObject.num(k: String) = getValue(k).jsonPrimitive.long
+
+/** `family_expenses_since` rows to feed rows. Transfers (and old private rows) come as tombstones flagged is_private, details null: skipped. */
+internal fun parseOthers(rows: List<JsonObject>, familyId: String) = rows.mapNotNull { e ->
+    val hidden = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
+    if (hidden || e.str("deleted_at") != null) return@mapNotNull null
+    FamilyExpense(
+        Expense(
+            id = e.str("id")!!, description = e.str("description")!!, amount = e.num("amount"),
+            categoryId = e.str("category_id")!!, date = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli(),
+            source = ExpenseSource.manual, ownerId = e.str("owner_id")!!, familyId = familyId,
+            frozen = (e["frozen"] as? JsonPrimitive)?.booleanOrNull == true, dirty = false,
+        ),
+        e.str("owner_name")!!,
+    )
+}
+
+/** Own rows (tagged [FamilyExpense.mine], named [myName]) plus others', de-duped by id (own wins), newest first. */
+fun mergeFeed(own: List<Expense>, others: List<FamilyExpense>, myName: String): List<FamilyExpense> {
+    val ids = own.mapTo(HashSet()) { it.id }
+    return (own.map { FamilyExpense(it, myName, mine = true) } + others.filter { it.expense.id !in ids })
+        .sortedByDescending { it.expense.date }
+}
 
 /** Server error codes (raised by the RPCs) to UI text. */
 fun familyErrorText(message: String, code: String? = null) = when {

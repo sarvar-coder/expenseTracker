@@ -53,7 +53,8 @@ import java.time.OffsetDateTime
  * Push dirty rows, pull rows changed since a per-table `synced_at` cursor.
  * Conflicts: newest `updatedAt` wins (server trigger + [applyCategories]).
  *
- * Only own expenses are pulled; the Oila tab reads other members' rows live.
+ * Only own expenses are pulled; other members' rows are fetched live by
+ * [onSynced] (FamilyService's feed) at the end of each pass.
  */
 class SyncService(
     val database: AppDatabase,
@@ -67,6 +68,9 @@ class SyncService(
     private var timer: Job? = null
     private var inFlight: Deferred<Unit>? = null
 
+    /** Runs after each pass, even a failed one, with the last known family (null = none), and with null on sign-out. */
+    var onSynced: suspend (familyId: String?) -> Unit = {}
+
     /**
      * Triggers: sign-in / app start (stored session), local writes, resume.
      * ponytail: "reconnect" = retry every 30s after a failed run; add a
@@ -77,6 +81,9 @@ class SyncService(
             .map { (it as? SessionStatus.Authenticated)?.session?.user?.id }
             .distinctUntilChanged().filterNotNull()
             .onEach { schedule() }.launchIn(scope)
+        // Signed out: drop the previous account's family rows from memory.
+        client.auth.sessionStatus.filter { it is SessionStatus.NotAuthenticated }
+            .onEach { onSynced(null) }.launchIn(scope)
         // distinct: a row the server keeps refusing mustn't re-trigger forever.
         db.watchDirtyCount().distinctUntilChanged().filter { it > 0 }
             .onEach { schedule(2_000) }.launchIn(scope)
@@ -115,6 +122,7 @@ class SyncService(
             Log.w(TAG, "sync failed: $e")
             schedule(RETRY_MS)
         }
+        onSynced(prefs.getString(K_FAMILY, null)?.ifEmpty { null })
     }
 
     private suspend fun sync(uid: String) {

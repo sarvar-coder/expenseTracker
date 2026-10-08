@@ -21,6 +21,8 @@ import com.sarvarbek.expense_tracker.services.applyExpenses
 import com.sarvarbek.expense_tracker.services.applyNeeds
 import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.services.familyErrorText
+import com.sarvarbek.expense_tracker.services.mergeFeed
+import com.sarvarbek.expense_tracker.services.parseOthers
 import com.sarvarbek.expense_tracker.services.parseGeminiJson
 import com.sarvarbek.expense_tracker.services.shouldPushProfile
 import com.sarvarbek.expense_tracker.ui.AuthGate
@@ -235,5 +237,30 @@ class BackendTest {
         assertTrue("admin" in familyErrorText("last_admin"))
         assertTrue("taklif qilingan" in familyErrorText("duplicate key", "23505"))
         assertTrue("Qayta" in familyErrorText("boom"))
+    }
+
+    @Test fun familyFeedMergesMineAndOthersSkipsHiddenDedupesById() {
+        fun row(id: String, date: String?, deletedAt: String? = null) = Json.parseToJsonElement(
+            if (date == null) """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":null,"description":null,"amount":null,"date":null,"is_private":true,"frozen":false,"deleted_at":null}"""
+            else """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":"c1","description":"d","amount":5000,"date":"$date","is_private":false,"frozen":false,"deleted_at":${deletedAt?.let { "\"$it\"" }}}""",
+        ).jsonObject
+        val others = parseOthers(listOf(
+            row("o1", "2026-10-01T10:00:00Z"),
+            row("t1", null), // transfer tombstone
+            row("o2", "2026-10-02T10:00:00Z", deletedAt = "2026-10-03T10:00:00Z"),
+            row("dup", "2026-10-01T09:00:00Z"),
+        ), "f1")
+        assertEquals(listOf("o1", "dup"), others.map { it.expense.id })
+        assertTrue(others.all { !it.mine && it.ownerName == "Vali" && it.expense.familyId == "f1" })
+
+        val own = listOf(
+            Expense(id = "m1", description = "Non", amount = 1, categoryId = "c1", date = Instant.parse("2026-10-05T00:00:00Z").toEpochMilli(), source = ExpenseSource.manual),
+            Expense(id = "dup", description = "Mine", amount = 2, categoryId = "c1", date = Instant.parse("2026-09-01T00:00:00Z").toEpochMilli(), source = ExpenseSource.manual),
+        )
+        val feed = mergeFeed(own, others, "Siz")
+        assertEquals(listOf("m1", "o1", "dup"), feed.map { it.expense.id }) // newest first
+        assertEquals(listOf(true, false, true), feed.map { it.mine }) // own copy wins the duplicate
+        assertEquals("Mine", feed.last().expense.description)
+        assertEquals(own.map { it.id }, mergeFeed(own, emptyList(), "Siz").map { it.expense.id }) // not in a family
     }
 }
