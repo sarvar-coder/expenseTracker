@@ -289,6 +289,9 @@
   "push.approved": "\"%1$s\" turkumi tasdiqlandi",
   "push.rejected": "\"%1$s\" turkumi rad etildi",
   "push.ask_title": "Bildirishnomalar",
-  "push.ask_text": "Oila a'zosi yangi turkum so'raganda yoki so'rovingizga javob berilganda xabar beramiz. Ruxsat berasizmi?",
-  "push.ask_allow": "Ruxsat berish"
+  "push.ask_text": "Oila a'zosi xarajat qo'shganda, yangi turkum so'raganda yoki so'rovingizga javob berilganda xabar beramiz. Ruxsat berasizmi?",
+  "push.ask_allow": "Ruxsat berish",
+  "push.channel_expenses": "Yangi xarajatlar",
+  "push.expense_title": "Yangi xarajat",
+  "push.expense": "%1$s: %2$s — %3$s UZS"
 }

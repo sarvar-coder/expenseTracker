@@ -23,7 +23,11 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.services.FamilyExpense
+import com.sarvarbek.expense_tracker.ui.common.ExpenseDetailSheet
+import kotlinx.coroutines.flow.first
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
@@ -108,11 +112,27 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             onClose = { nav.back() }, editing = editing, members = members,
         )
     }
-    // Notification tap. The requests screen pops itself without an overview, so load it first.
+    // Notification taps: a new member expense opens read-only over any screen.
+    var pushed by remember { mutableStateOf<Pair<FamilyExpense, Category?>?>(null) }
+    var tab by remember { mutableStateOf<Int?>(null) }
+    pushed?.let { (fe, category) -> ExpenseDetailSheet(fe, category) { pushed = null } }
     LaunchedEffect(pushRoute) {
+        // The requests screen pops itself without an overview, so load it first.
         if (pushRoute == Push.ROUTE_REQUESTS) {
             family.refresh()
             if (family.overview != null && nav.currentDestination?.route != pushRoute) nav.navigate(pushRoute)
+        } else if (pushRoute?.startsWith(Push.ROUTE_EXPENSE) == true) {
+            val id = pushRoute.removePrefix(Push.ROUTE_EXPENSE)
+            suspend fun find() = family.feed.first().firstOrNull { it.expense.id == id }
+            // Others' rows arrive with a sync pass; the pushed one is usually newer than the last.
+            val fe = find() ?: run { container.sync.run(); find() }
+            if (fe != null) {
+                pushed = fe to container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
+            } else {
+                // Offline or since deleted: the Oila tab instead.
+                nav.popBackStack("shell", inclusive = false)
+                tab = 2
+            }
         }
         if (pushRoute != null) onPushRouted()
     }
@@ -130,6 +150,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             composable("shell") {
                 Shell(
                     onAdd = { nav.go("add") },
+                    tab = tab, onTab = { tab = null },
                     snackbarHost = { SnackbarHost(toaster.host) { AppSnackbar(it) } },
                 ) { index, active ->
                     when (index) {
