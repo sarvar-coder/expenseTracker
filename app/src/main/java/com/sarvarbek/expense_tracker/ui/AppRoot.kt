@@ -106,7 +106,7 @@ private fun Routes() {
                     when (index) {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.go("settings") }) { nav.go("edit/${it.id}") }
                         1 -> ActivityScreen(container.db) { nav.go("edit/${it.id}") }
-                        2 -> InsightsScreen(container.db)
+                        2 -> InsightsScreen(container.db, family.feed)
                         else -> FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = { nav.go("edit/${it.id}") }) { nav.go("family-settings") }
                     }
                 }

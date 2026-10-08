@@ -100,7 +100,7 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
      * ponytail: in memory, not Room; store others' rows if the offline gap hurts.
      */
     val feed: Flow<List<FamilyExpense>> =
-        combine(sync.database.dao().watchExpenses(), others) { own, o -> mergeFeed(own, o, t("family.you")) }
+        combine(sync.database.dao().watchExpenses(), others) { own, o -> mergeFeed(own, o, t("family.you"), client.auth.currentUserOrNull()?.id) }
 
     init { sync.onSynced = ::refreshOthers }
 
@@ -275,10 +275,13 @@ internal fun parseOthers(rows: List<JsonObject>, familyId: String) = rows.mapNot
     )
 }
 
-/** Own rows (tagged [FamilyExpense.mine], named [myName]) plus others', de-duped by id (own wins), newest first. */
-fun mergeFeed(own: List<Expense>, others: List<FamilyExpense>, myName: String): List<FamilyExpense> {
+/**
+ * Own rows (tagged [FamilyExpense.mine], named [myName]) plus others', de-duped by id (own wins), newest first.
+ * Own rows not yet synced get [myId] as owner, so a member filter sees them.
+ */
+fun mergeFeed(own: List<Expense>, others: List<FamilyExpense>, myName: String, myId: String? = null): List<FamilyExpense> {
     val ids = own.mapTo(HashSet()) { it.id }
-    return (own.map { FamilyExpense(it, myName, mine = true) } + others.filter { it.expense.id !in ids })
+    return (own.map { FamilyExpense(if (it.ownerId == null && myId != null) it.copy(ownerId = myId) else it, myName, mine = true) } + others.filter { it.expense.id !in ids })
         .sortedByDescending { it.expense.date }
 }
 

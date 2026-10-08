@@ -60,6 +60,8 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterPage
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
 import com.sarvarbek.expense_tracker.features.activity.FilterButton
+import com.sarvarbek.expense_tracker.services.FamilyExpense
+import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.ui.common.CategoryBadge
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.colorFromHex
@@ -72,7 +74,9 @@ import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 
 private const val FIRST_YEAR = 2020 // same floor as the add screen's date picker
@@ -84,27 +88,37 @@ private fun lastMonth(year: Int): Int = LocalDate.now().let { if (year == it.yea
  * Tahlil: category-share donut with a center total + ranked legend, over a
  * month of the chosen year, narrowed by the same filter page Tarix uses (its
  * Sana range replaces the month). Aggregation lives in the pure [insightsFor].
+ * Data is the family [feed]: all my rows plus other members' shared rows
+ * (others' as last fetched when offline); not in a family, just mine.
  */
 @Composable
-fun InsightsScreen(db: ExpenseDao) {
+fun InsightsScreen(
+    db: ExpenseDao,
+    feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
+) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
-    val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
-    val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
+    val rows by feed.collectAsStateWithLifecycle(emptyList())
+    // Archived too: past spend in an archived category still gets its slice.
+    val categories by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val now = LocalDate.now()
     var year by rememberSaveable { mutableIntStateOf(now.year) }
     var month by rememberSaveable { mutableIntStateOf(now.monthValue) }
-    var filter by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
+    var saved by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
     var filterOpen by remember { mutableStateOf(false) }
     var yearSheet by remember { mutableStateOf(false) }
 
+    // Everyone in the feed, ex-members' history included; A'zo row only with someone besides me.
+    val members = rows.mapNotNull { r -> r.expense.ownerId?.let { it to r.ownerName } }.toMap()
+    // A picked member who left the feed (left the family) stops filtering instead of hiding everything.
+    val filter = saved.copy(memberIds = saved.memberIds.filterTo(HashSet()) { it in members })
     val range = filter.range
     val (start, end) = if (range == null) {
         LocalDate.of(year, month, 1).let { it to it.plusMonths(1) }
     } else {
         range.start to range.endInclusive.plusDays(1) // end day inclusive
     }
-    val data = insightsFor(expenses, categories, start, end, filter)
+    val data = insightsFor(rows.map { it.expense }, categories, start, end, filter)
 
     // Bottom padding clears the floating add button.
     LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
@@ -120,7 +134,7 @@ fun InsightsScreen(db: ExpenseDao) {
             Spacer(Modifier.height(AppSpace.gap))
             if (!filter.isEmpty) {
                 ActiveFilters(
-                    filter, categories.associateBy { it.id }, onChange = { filter = it },
+                    filter, categories.associateBy { it.id }, onChange = { saved = it }, members = members,
                     // No Sana in the filter: the month still applies, so show it.
                     leading = if (range == null) {
                         { SuggestionChip({}, { Text("${monthName(month)} $year") }) }
@@ -148,7 +162,10 @@ fun InsightsScreen(db: ExpenseDao) {
         }
     }
     if (filterOpen) {
-        ActivityFilterPage(filter, categories, onDismiss = { filterOpen = false }) { filter = it; filterOpen = false }
+        ActivityFilterPage(
+            filter, categories.filter { !it.isArchived }, onDismiss = { filterOpen = false },
+            members = if (members.size > 1) members else emptyMap(),
+        ) { saved = it; filterOpen = false }
     }
 }
 
