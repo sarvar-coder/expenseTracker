@@ -9,6 +9,7 @@ import com.sarvarbek.expense_tracker.ui.common.startMillis
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.features.home.summarize
 import com.sarvarbek.expense_tracker.features.home.todayExpenses
+import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.expensesCsv
 import com.sarvarbek.expense_tracker.ui.common.I18n
@@ -67,10 +68,10 @@ class HelpersTest {
                 exp(2, 1, 1, at(2026, 9, 25, 23, 59)), // yesterday: out
                 exp(3, 1, 1, at(2026, 9, 26, 12)),
                 exp(4, 1, 1, at(2026, 9, 27)), // tomorrow: out
-            ),
+            ).map { FamilyExpense(it, "") },
             LocalDate.of(2026, 9, 26),
         )
-        assertEquals(listOf("3", "1"), t.map { it.id })
+        assertEquals(listOf("3", "1"), t.map { it.expense.id })
     }
 
     // --- insights_data ---

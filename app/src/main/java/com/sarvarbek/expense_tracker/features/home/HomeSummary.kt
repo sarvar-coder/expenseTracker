@@ -1,6 +1,7 @@
 package com.sarvarbek.expense_tracker.features.home
 
 import com.sarvarbek.expense_tracker.data.Expense
+import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.ui.common.startMillis
 import java.time.LocalDate
 
@@ -18,6 +19,6 @@ fun summarize(expenses: List<Expense>, budget: Long, today: LocalDate): HomeSumm
     return HomeSummary(expenses.filter { it.transferTo == null && it.within(start, start.plusMonths(1)) }.sumOf { it.amount }, budget)
 }
 
-/** Expenses on the local calendar day [today], newest first. */
-fun todayExpenses(expenses: List<Expense>, today: LocalDate): List<Expense> =
-    expenses.filter { it.within(today, today.plusDays(1)) }.sortedByDescending { it.date }
+/** Feed rows (mine and others') on the local calendar day [today], newest first. */
+fun todayExpenses(rows: List<FamilyExpense>, today: LocalDate): List<FamilyExpense> =
+    rows.filter { it.expense.within(today, today.plusDays(1)) }.sortedByDescending { it.expense.date }
