@@ -1,11 +1,12 @@
 -- New shared expense (#79): every other family member gets a push. Reuses
 -- private.push (20261009180000). INSERT only: edits, deletes and the join
 -- merge (accept_invite moves rows with UPDATE) never notify. Transfers don't.
--- Bulk guard, per statement: the sync pushes dirty rows as one upsert of up
--- to 500, so an owner inserting more than 3 rows at once (first-sign-in
--- upload, a long offline queue) sends nothing, and rows created more than a
--- day ago (old local history) never do. Upserts that hit an existing row are
--- updates and don't appear in the INSERT transition table.
+-- Bulk guard: rows created more than a day ago (old local history) never
+-- notify, and nothing does while the owner has written more than 3 rows in
+-- the last minute (synced_at, indexed per owner). That covers the sync's
+-- 500-row upserts (first-sign-in upload, a long offline queue) and its
+-- row-by-row retry of a refused chunk (at most 3 pushes get out). Upserts
+-- that hit an existing row are updates, not in the INSERT transition table.
 -- Additive: old APKs ignore the unknown `expense` type.
 
 create function private.notify_new_expenses()
@@ -19,14 +20,19 @@ begin
     left join public.profiles p on p.id = n.owner_id
     where n.family_id is not null and n.transfer_to is null and n.deleted_at is null
       and n.created_at > now() - interval '1 day'
-      -- ponytail: fixed threshold; a 4-row offline queue is treated as bulk too.
-      and (select count(*) from new_rows b where b.owner_id = n.owner_id) <= 3
+      -- ponytail: fixed threshold; a 4-row offline queue (or edits right before) counts as bulk too.
+      and (select count(*) from public.expenses b
+           where b.owner_id = n.owner_id and b.synced_at > now() - interval '1 minute') <= 3
   loop
-    perform private.push(
-      array(select user_id from public.family_members where family_id = r.family_id and user_id <> r.owner_id),
-      jsonb_build_object('type', 'expense', 'id', r.id, 'owner', r.owner_id, 'name', r.who,
-                         'description', r.description, 'amount', r.amount)
-    );
+    begin
+      perform private.push(
+        array(select user_id from public.family_members where family_id = r.family_id and user_id <> r.owner_id),
+        jsonb_build_object('type', 'expense', 'id', r.id, 'owner', r.owner_id, 'name', r.who,
+                           'description', r.description, 'amount', r.amount)
+      );
+    exception when others then
+      raise warning 'expense push: %', sqlerrm; -- a lost push must never fail the expense write
+    end;
   end loop;
   return null;
 end $$;
