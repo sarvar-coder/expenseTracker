@@ -14,7 +14,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import com.sarvarbek.expense_tracker.features.add.AddScreen
+import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
+import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.setValue
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
@@ -65,7 +71,7 @@ fun AuthGate(status: SessionStatus, auth: Auth, content: @Composable () -> Unit)
     SessionStatus.Initializing -> Box(Modifier.fillMaxSize().background(AppTheme.colors.bg))
 }
 
-/** Routes: shell (tabs) plus full-screen pushes (add, edit, settings, categories). */
+/** Routes: shell (tabs) plus full-screen pushes (add, edit, settings, categories, one category's expenses). */
 @Composable
 private fun Routes() {
     val container = (LocalContext.current.applicationContext as App).container
@@ -75,6 +81,10 @@ private fun Routes() {
     val canCreate = { canCreateCategories(container.prefs) }
     // Above the tab so the last overview survives tab switches.
     val family = remember { FamilyState(container.family) }
+    // Activity-scoped ViewModel: survives rotation / theme switch. Holds a lambda, so not process death: then the route pops.
+    val picked = viewModel<Picked>()
+    val openCategory = { p: CategoryPick -> picked.pick = p; nav.go("category") }
+    val edit = { e: Expense -> nav.go("edit/${e.id}") }
     @Composable
     fun Add(editing: Expense?) {
         // O'tkazma recipients come from the Oila overview; fetch it if the tab wasn't opened yet.
@@ -106,8 +116,11 @@ private fun Routes() {
                     when (index) {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.go("settings") }) { nav.go("edit/${it.id}") }
                         1 -> ActivityScreen(container.db) { nav.go("edit/${it.id}") }
-                        2 -> InsightsScreen(container.db, family.feed)
-                        else -> FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = { nav.go("edit/${it.id}") }) { nav.go("family-settings") }
+                        2 -> InsightsScreen(
+                            container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
+                            onCategory = openCategory, onEdit = edit,
+                        )
+                        else -> FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory) { nav.go("family-settings") }
                     }
                 }
             }
@@ -139,9 +152,23 @@ private fun Routes() {
                 val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
                 NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
             }
+            composable("category") {
+                val p = picked.pick
+                if (p == null) {
+                    LaunchedEffect(Unit) { nav.popBackStack() }
+                } else {
+                    val stale by container.family.othersStale.collectAsStateWithLifecycle()
+                    CategoryExpensesScreen(container.db, family.feed, p, offline = stale, onBack = { nav.back() }, onEdit = edit)
+                }
+            }
             composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.back() } }
         }
     }
+}
+
+/** The category the category route shows ([CategoryPick] holds the source screen's selector). */
+class Picked : ViewModel() {
+    var pick by mutableStateOf<CategoryPick?>(null)
 }
 
 // Only the settled (RESUMED) page may navigate: taps during a transition or a

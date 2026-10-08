@@ -16,6 +16,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -91,6 +92,10 @@ class FamilyException(override val message: String) : Exception(message)
 class FamilyService(private val client: SupabaseClient, private val sync: SyncService) {
     private val uid get() = client.auth.currentUserOrNull()!!.id
     private val others = MutableStateFlow(emptyList<FamilyExpense>())
+    private val stale = MutableStateFlow(false)
+
+    /** The last fetch of others' rows failed (offline): [feed] shows them as last fetched. */
+    val othersStale: StateFlow<Boolean> = stale
 
     /**
      * The family feed: own Room rows (live, offline edits included) plus other
@@ -113,9 +118,10 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
             throw e
         } catch (e: Exception) {
             Log.w("family", "feed fetch failed: $e")
+            stale.value = true
             return
         }
-        if (client.auth.currentUserOrNull()?.id == me) others.value = rows
+        if (client.auth.currentUserOrNull()?.id == me) { others.value = rows; stale.value = false }
     }
 
     private suspend fun fetchOthers(familyId: String): List<FamilyExpense> =

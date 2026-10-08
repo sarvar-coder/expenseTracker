@@ -34,6 +34,7 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
+import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
@@ -240,7 +241,8 @@ class SettingsFamilyTest : ScreenTest() {
         val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         var edited: Expense? = null
-        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db, onEdit = { edited = it }) }
+        var pick: CategoryPick? = null
+        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db, onEdit = { edited = it }, onCategory = { pick = it }) }
 
         waitFor("Non")
         rule.onNodeWithText("Uy").assertExists() // title = family name
@@ -254,6 +256,13 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
+
+        // Category tap: the pick narrows the feed to exactly the Oila list (family rows, member labels).
+        rule.onNodeWithContentDescription("Groceries, 40 000 UZS, 100%").performSemanticsAction(SemanticsActions.OnClick)
+        val picked = runBlocking { pick!!.select(feed.first()) }
+        assertEquals(cat, pick!!.categoryId)
+        assertEquals(setOf("Non", "Sovg'a", "Taksi"), picked.map { it.expense.description }.toSet())
+        assertEquals(40_000L, picked.sumOf { it.expense.amount })
         assertTapTargets()
 
         // Tap routing: own row opens edit, Vali's opens the read-only sheet.

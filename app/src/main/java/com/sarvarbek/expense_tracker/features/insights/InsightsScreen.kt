@@ -54,7 +54,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sarvarbek.expense_tracker.data.Category
+import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
+import com.sarvarbek.expense_tracker.features.activity.groupExpenses
+import com.sarvarbek.expense_tracker.ui.common.Money
+import com.sarvarbek.expense_tracker.ui.common.startMillis
+import com.sarvarbek.expense_tracker.ui.theme.fieldColors
+import com.sarvarbek.expense_tracker.ui.theme.fieldShape
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.ui.semantics.semantics
 import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterPage
@@ -85,16 +100,23 @@ private const val FIRST_YEAR = 2020 // same floor as the add screen's date picke
 private fun lastMonth(year: Int): Int = LocalDate.now().let { if (year == it.year) it.monthValue else 12 }
 
 /**
- * Tahlil: category-share donut with a center total + ranked legend, over a
- * month of the chosen year, narrowed by the same filter page Tarix uses (its
- * Sana range replaces the month). Aggregation lives in the pure [insightsFor].
- * Data is the family [feed]: all my rows plus other members' shared rows
- * (others' as last fetched when offline); not in a family, just mine.
+ * Tahlil: the period total, then Ro'yxat (search + day-grouped rows) or
+ * Turkumlar (category-share donut + ranked legend; a row opens
+ * [CategoryExpensesScreen] via [onCategory]). Period is a month of the chosen
+ * year, narrowed by the same filter page Tarix uses (its Sana range replaces
+ * the month); both modes see the same rows. Aggregation lives in the pure
+ * [insightsFor]. Data is the family [feed]: all my rows plus other members'
+ * shared rows (others' as last fetched when offline); not in a family, just mine.
+ * [showList]/[onMode]: the remembered mode (SettingsStore.insightsList).
  */
 @Composable
 fun InsightsScreen(
     db: ExpenseDao,
     feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
+    showList: Boolean = true,
+    onMode: (Boolean) -> Unit = {},
+    onCategory: (CategoryPick) -> Unit = {},
+    onEdit: (Expense) -> Unit = {},
 ) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
@@ -106,6 +128,8 @@ fun InsightsScreen(
     var month by rememberSaveable { mutableIntStateOf(now.monthValue) }
     var saved by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
     var filterOpen by remember { mutableStateOf(false) }
+    var list by rememberSaveable { mutableStateOf(showList) }
+    var query by rememberSaveable { mutableStateOf("") }
     var yearSheet by remember { mutableStateOf(false) }
 
     // Everyone in the feed, ex-members' history included; A'zo row only with someone besides me.
@@ -118,7 +142,11 @@ fun InsightsScreen(
     } else {
         range.start to range.endInclusive.plusDays(1) // end day inclusive
     }
-    val data = insightsFor(rows.map { it.expense }, categories, start, end, filter)
+    val from = start.startMillis()
+    val to = end.startMillis()
+    val inPeriod = { fe: FamilyExpense -> fe.expense.date in from until to && filter.matches(fe.expense) }
+    val visible = rows.filter(inPeriod)
+    val data = insightsFor(visible.map { it.expense }, categories, start, end)
 
     // Bottom padding clears the floating add button.
     LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
@@ -146,11 +174,48 @@ fun InsightsScreen(
                 MonthPills(year, month) { month = it }
             }
             Spacer(Modifier.height(AppSpace.gap))
+            Column(Modifier.clearAndSetSemantics { contentDescription = t("insights.total_a11y", formatMoney(data.total)) }) {
+                Text(t("insights.total"), color = c.muted, style = ty.labelMedium)
+                Money(data.total, style = ty.headlineMedium, autoSize = true)
+            }
+            Spacer(Modifier.height(12.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(true to "insights.list", false to "insights.categories").forEachIndexed { i, (isList, label) ->
+                    SegmentedButton(
+                        selected = list == isList,
+                        onClick = { list = isList; onMode(isList) },
+                        shape = SegmentedButtonDefaults.itemShape(i, 2),
+                        icon = {},
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                    ) { Text(t(label), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+            }
+            Spacer(Modifier.height(AppSpace.gap))
         }
-        if (data.slices.isEmpty()) {
+        if (list) {
+            item {
+                OutlinedTextField(
+                    query, { query = it }, Modifier.fillMaxWidth(),
+                    placeholder = { Text(t("activity.search")) },
+                    leadingIcon = { Icon(Icons.Outlined.Search, null, tint = c.muted) },
+                    singleLine = true, shape = fieldShape, colors = fieldColors(),
+                )
+            }
+            // Transfers listed (own, tappable) but left out of the day totals, like the total above.
+            val sections = groupExpenses(visible.map { it.expense }, query, today = now)
+            when {
+                visible.isEmpty() -> item { EmptyState(Icons.Outlined.ReceiptLong, t("insights.empty_title"), t("insights.empty_body")) }
+                sections.isEmpty() -> item { EmptyState(Icons.Outlined.SearchOff, t("activity.no_match"), t("activity.no_match_body")) }
+                else -> daySections(sections, visible.associateBy { it.expense.id }, categories.associateBy { it.id }, db, onEdit)
+            }
+        } else if (data.slices.isEmpty()) {
             item { EmptyState(Icons.Outlined.DonutLarge, t("insights.empty_title"), t("insights.empty_body")) }
         } else {
-            item { CategoryBreakdown(data) }
+            item {
+                CategoryBreakdown(data) { cat ->
+                    onCategory(CategoryPick(cat.id, periodLabel(range, LocalDate.of(year, month, 1))) { it.filter(inPeriod) })
+                }
+            }
         }
     }
 
@@ -206,9 +271,9 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
     }
 }
 
-/** Donut card, then "Turkumlar" with one share row per category. Shared with Oila. */
+/** Donut card, then "Turkumlar" with one share row per category; [onClick] opens a category. Shared with Oila. */
 @Composable
-internal fun CategoryBreakdown(data: InsightsData) {
+internal fun CategoryBreakdown(data: InsightsData, onClick: (Category) -> Unit) {
     AppCard(Modifier.fillMaxWidth()) { Donut(data) }
     Spacer(Modifier.height(AppSpace.section))
     Text(t("insights.categories"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
@@ -217,7 +282,7 @@ internal fun CategoryBreakdown(data: InsightsData) {
         Column(Modifier.padding(vertical = 6.dp)) {
             data.slices.forEachIndexed { i, s ->
                 if (i > 0) HorizontalDivider(Modifier.padding(start = 74.dp, end = 16.dp), color = AppTheme.colors.border)
-                LegendRow(s, data.fraction(s.amount))
+                LegendRow(s, data.fraction(s.amount)) { onClick(s.category) }
             }
         }
     }
@@ -262,11 +327,17 @@ private fun Donut(data: InsightsData) {
     }
 }
 
-/** Badge; name + amount over a share bar in the category color + percent. */
+/** Badge; name + amount over a share bar in the category color + percent. Read as "Name, 1 200 UZS, 34%". */
 @Composable
-private fun LegendRow(slice: Slice, fraction: Double) {
+private fun LegendRow(slice: Slice, fraction: Double, onClick: () -> Unit) {
     val ty = MaterialTheme.typography
-    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    val percent = "${Math.round(fraction * 100)}%"
+    Row(
+        Modifier.fillMaxWidth().clickable(onClickLabel = t("insights.open_category"), onClick = onClick)
+            .semantics { contentDescription = t("insights.legend_a11y", slice.category.name, formatMoney(slice.amount), percent) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         CategoryBadge(slice.category)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -279,13 +350,14 @@ private fun LegendRow(slice: Slice, fraction: Double) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LinearProgressIndicator(
                     progress = { fraction.toFloat() },
-                    modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(AppRadii.chip)),
+                    // The row's label already says the percent.
+                    modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(AppRadii.chip)).clearAndSetSemantics {},
                     color = colorFromHex(slice.category.colorHex),
                     trackColor = AppTheme.colors.border,
                     gapSize = 0.dp,
                     drawStopIndicator = {},
                 )
-                Text("${Math.round(fraction * 100)}%", color = AppTheme.colors.muted, style = ty.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+                Text(percent, color = AppTheme.colors.muted, style = ty.bodySmall.copy(fontWeight = FontWeight.SemiBold), textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
             }
         }
     }

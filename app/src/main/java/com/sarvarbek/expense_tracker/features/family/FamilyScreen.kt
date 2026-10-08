@@ -70,6 +70,8 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
 import com.sarvarbek.expense_tracker.features.activity.FilterButton
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
 import com.sarvarbek.expense_tracker.features.insights.CategoryBreakdown
+import com.sarvarbek.expense_tracker.features.insights.CategoryPick
+import com.sarvarbek.expense_tracker.features.insights.periodLabel
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.FamilyException
 import com.sarvarbek.expense_tracker.services.FamilyExpense
@@ -172,7 +174,15 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onNeeds: () -> Unit = {}, onEdit: (Expense) -> Unit = {}, onSettings: () -> Unit = {}) {
+fun FamilyScreen(
+    state: FamilyState,
+    db: ExpenseDao,
+    active: Boolean = true,
+    onNeeds: () -> Unit = {},
+    onEdit: (Expense) -> Unit = {},
+    onCategory: (CategoryPick) -> Unit = {},
+    onSettings: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
@@ -207,7 +217,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onN
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit, onCategory) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -281,7 +291,16 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, onEdit: (Expense) -> Unit, needs: @Composable () -> Unit) {
+private fun InFamily(
+    f: FamilyOverview,
+    feed: Flow<List<FamilyExpense>>,
+    db: ExpenseDao,
+    filter: ActivityFilter,
+    onFilter: (ActivityFilter) -> Unit,
+    onEdit: (Expense) -> Unit,
+    onCategory: (CategoryPick) -> Unit,
+    needs: @Composable () -> Unit,
+) {
     val rows by feed.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
@@ -290,9 +309,13 @@ private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: Exp
     val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
     // Own rows: only the family's, no transfers; ownerId set so the member filter sees them.
     // Current members' labels carry their title; ex-members keep the server name.
-    val list = rows.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
-        .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
-        .filter { filter.copy(range = range).matches(it.expense) }
+    // Also the category screen's [CategoryPick.select], so its rows and total match this screen.
+    val select = { all: List<FamilyExpense> ->
+        all.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
+            .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
+            .filter { filter.copy(range = range).matches(it.expense) }
+    }
+    val list = select(rows)
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
@@ -309,7 +332,7 @@ private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: Exp
             if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
             else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
         } else {
-            CategoryBreakdown(data)
+            CategoryBreakdown(data) { onCategory(CategoryPick(it.id, periodLabel(filter.range, monthStart()), select)) }
             SectionLabel(t("family.list"))
             // ponytail: whole list in one lazy item; fine for a family's month, page it if wide ranges get slow.
             DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId], onEdit) }
