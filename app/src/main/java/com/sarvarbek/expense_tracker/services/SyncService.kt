@@ -68,7 +68,7 @@ class SyncService(
     private var timer: Job? = null
     private var inFlight: Deferred<Unit>? = null
 
-    /** Runs at the end of each pass with the current family (null = none), and with null on sign-out. A throw fails the pass (retried). */
+    /** Runs after each pass, even a failed one, with the last known family (null = none), and with null on sign-out. */
     var onSynced: suspend (familyId: String?) -> Unit = {}
 
     /**
@@ -122,6 +122,7 @@ class SyncService(
             Log.w(TAG, "sync failed: $e")
             schedule(RETRY_MS)
         }
+        onSynced(prefs.getString(K_FAMILY, null)?.ifEmpty { null })
     }
 
     private suspend fun sync(uid: String) {
@@ -167,7 +168,6 @@ class SyncService(
         push("needs", db.dirtyNeeds(), Need::toJson) { db.markNeedClean(it.id, it.updatedAt) }
         pull("needs") { applyNeeds(database, it) }
         db.dropForeignNeeds(familyId)
-        onSynced(familyId)
     }
 
     /**

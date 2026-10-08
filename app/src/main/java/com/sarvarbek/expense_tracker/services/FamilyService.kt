@@ -2,6 +2,7 @@ package com.sarvarbek.expense_tracker.services
 
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
+import android.util.Log
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
@@ -98,8 +99,20 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
     val feed: Flow<List<FamilyExpense>> =
         combine(sync.database.dao().watchExpenses(), others) { own, o -> mergeFeed(own, o, t("family.you")) }
 
-    init {
-        sync.onSynced = { familyId -> others.value = if (familyId == null) emptyList() else fetchOthers(familyId) }
+    init { sync.onSynced = ::refreshOthers }
+
+    /** Never throws: a failed fetch keeps the last list. Dropped if the account changed meanwhile. */
+    private suspend fun refreshOthers(familyId: String?) {
+        val me = client.auth.currentUserOrNull()?.id
+        val rows = try {
+            if (familyId == null || me == null) emptyList() else fetchOthers(familyId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("family", "feed fetch failed: $e")
+            return
+        }
+        if (client.auth.currentUserOrNull()?.id == me) others.value = rows
     }
 
     private suspend fun fetchOthers(familyId: String): List<FamilyExpense> =
