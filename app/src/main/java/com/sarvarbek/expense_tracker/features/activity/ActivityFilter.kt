@@ -65,7 +65,7 @@ val ActivityFilterSaver = listSaver<ActivityFilter, Any?>(
         ActivityFilter(
             (l[0] as List<String>).toSet(),
             (l[1] as Long?)?.let { LocalDate.ofEpochDay(it)..LocalDate.ofEpochDay(l[2] as Long) },
-            l[3] as Long?, l[4] as Long?, (l[5] as List<String>).toSet(),
+            l[3] as Long?, l[4] as Long?, (l.last() as List<String>).toSet(), // last: a 2.0.x bundle had isPrivate before it
         )
     },
 )
