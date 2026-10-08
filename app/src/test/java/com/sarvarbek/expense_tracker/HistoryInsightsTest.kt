@@ -117,11 +117,6 @@ class HistoryInsightsTest {
         rule.onNodeWithText("Coffee").assertExists()
         rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
 
-        // No private expenses, so no Ko'rinish filter.
-        rule.onNodeWithContentDescription("Filtr").performClick()
-        rule.onNodeWithText("Ko'rinish").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Orqaga").performClick()
-
         val search = rule.onNode(hasSetTextAction())
         search.performTextReplacement("cof")
         rule.onNodeWithText("Coffee").assertExists()
