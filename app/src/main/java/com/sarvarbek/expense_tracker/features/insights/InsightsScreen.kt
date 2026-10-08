@@ -104,10 +104,14 @@ fun InsightsScreen(
     val now = LocalDate.now()
     var year by rememberSaveable { mutableIntStateOf(now.year) }
     var month by rememberSaveable { mutableIntStateOf(now.monthValue) }
-    var filter by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
+    var saved by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
     var filterOpen by remember { mutableStateOf(false) }
     var yearSheet by remember { mutableStateOf(false) }
 
+    // Everyone in the feed, ex-members' history included; A'zo row only with someone besides me.
+    val members = rows.mapNotNull { r -> r.expense.ownerId?.let { it to r.ownerName } }.toMap()
+    // A picked member who left the feed (left the family) stops filtering instead of hiding everything.
+    val filter = saved.copy(memberIds = saved.memberIds.filterTo(HashSet()) { it in members })
     val range = filter.range
     val (start, end) = if (range == null) {
         LocalDate.of(year, month, 1).let { it to it.plusMonths(1) }
@@ -115,8 +119,6 @@ fun InsightsScreen(
         range.start to range.endInclusive.plusDays(1) // end day inclusive
     }
     val data = insightsFor(rows.map { it.expense }, categories, start, end, filter)
-    // Everyone in the feed, ex-members' history included; A'zo row only with someone besides me.
-    val members = rows.mapNotNull { r -> r.expense.ownerId?.let { it to r.ownerName } }.toMap()
 
     // Bottom padding clears the floating add button.
     LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
@@ -132,7 +134,7 @@ fun InsightsScreen(
             Spacer(Modifier.height(AppSpace.gap))
             if (!filter.isEmpty) {
                 ActiveFilters(
-                    filter, categories.associateBy { it.id }, onChange = { filter = it }, members = members,
+                    filter, categories.associateBy { it.id }, onChange = { saved = it }, members = members,
                     // No Sana in the filter: the month still applies, so show it.
                     leading = if (range == null) {
                         { SuggestionChip({}, { Text("${monthName(month)} $year") }) }
@@ -163,7 +165,7 @@ fun InsightsScreen(
         ActivityFilterPage(
             filter, categories.filter { !it.isArchived }, onDismiss = { filterOpen = false },
             members = if (members.size > 1) members else emptyMap(),
-        ) { filter = it; filterOpen = false }
+        ) { saved = it; filterOpen = false }
     }
 }
 

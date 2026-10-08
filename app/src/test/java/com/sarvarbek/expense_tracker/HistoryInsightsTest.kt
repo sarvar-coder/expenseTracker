@@ -33,6 +33,8 @@ import org.junit.Assert.assertEquals
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.mergeFeed
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
@@ -185,8 +187,8 @@ class HistoryInsightsTest {
             id = id, description = "Taksi", amount = amount, categoryId = transport,
             date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = owner,
         )
-        val others = listOf(FamilyExpense(other("o1", 30000, "u2"), "Vali"), FamilyExpense(other("o2", 5000, "u3"), "Gul"))
-        val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz", "u1") }
+        val others = MutableStateFlow(listOf(FamilyExpense(other("o1", 30000, "u2"), "Vali"), FamilyExpense(other("o2", 5000, "u3"), "Gul")))
+        val feed = combine(db.watchExpenses(), others) { own, o -> mergeFeed(own, o, "Siz", "u1") }
         show { InsightsScreen(db, feed) }
         rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Transport").assertExists()
@@ -213,6 +215,20 @@ class HistoryInsightsTest {
         rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
         tap("Qo'llash")
         rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+
+        // Vali picked, then Vali leaves the feed: the stale pick stops filtering.
+        removeChip()
+        rule.onNodeWithContentDescription("Filtr").performClick()
+        tap("A'zo")
+        waitFor("Tayyor")
+        rule.onNode(hasText("Vali") and isToggleable()).performClick()
+        tap("Tayyor")
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
+        tap("Qo'llash")
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 30 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        others.value = others.value.filter { it.ownerName != "Vali" }
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 50 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
     }
 
     @Test fun insightsAloneHasNoMemberRow() {
