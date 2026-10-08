@@ -18,6 +18,8 @@ import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.setValue
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
@@ -79,9 +81,9 @@ private fun Routes() {
     val canCreate = { canCreateCategories(container.prefs) }
     // Above the tab so the last overview survives tab switches.
     val family = remember { FamilyState(container.family) }
-    // Not saveable (holds a lambda): after process death the category route just pops.
-    var pick by remember { mutableStateOf<CategoryPick?>(null) }
-    val openCategory = { p: CategoryPick -> pick = p; nav.go("category") }
+    // Activity-scoped ViewModel: survives rotation / theme switch. Holds a lambda, so not process death: then the route pops.
+    val picked = viewModel<Picked>()
+    val openCategory = { p: CategoryPick -> picked.pick = p; nav.go("category") }
     val edit = { e: Expense -> nav.go("edit/${e.id}") }
     @Composable
     fun Add(editing: Expense?) {
@@ -151,18 +153,22 @@ private fun Routes() {
                 NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
             }
             composable("category") {
-                val p = pick
+                val p = picked.pick
                 if (p == null) {
                     LaunchedEffect(Unit) { nav.popBackStack() }
                 } else {
-                    // Others' rows are as last fetched when the Oila overview couldn't load.
-                    val inFamily = !container.prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty()
-                    CategoryExpensesScreen(container.db, family.feed, p, offline = inFamily && family.failed, onBack = { nav.back() }, onEdit = edit)
+                    val stale by container.family.othersStale.collectAsStateWithLifecycle()
+                    CategoryExpensesScreen(container.db, family.feed, p, offline = stale, onBack = { nav.back() }, onEdit = edit)
                 }
             }
             composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.back() } }
         }
     }
+}
+
+/** The category the category route shows ([CategoryPick] holds the source screen's selector). */
+class Picked : ViewModel() {
+    var pick by mutableStateOf<CategoryPick?>(null)
 }
 
 // Only the settled (RESUMED) page may navigate: taps during a transition or a

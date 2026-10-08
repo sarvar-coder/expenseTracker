@@ -5,6 +5,8 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.groupExpenses
+import com.sarvarbek.expense_tracker.ui.common.startMillis
+import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.features.home.summarize
 import com.sarvarbek.expense_tracker.features.home.todayExpenses
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
@@ -130,6 +132,13 @@ class HelpersTest {
         val sections = groupExpenses(expenses, today = today)
         assertEquals(listOf("Bugun", "Kecha", "5 Iyul"), sections.map { it.label })
         assertEquals("Bon Cafe", sections.first().items.single().description)
+    }
+
+    @Test fun sameDayMonthInTwoYearsStaysTwoSections() {
+        val last = expenses.last()
+        val yearAgo = last.copy(id = "y", date = last.date.toLocalDate().minusYears(1).startMillis())
+        val sections = groupExpenses(expenses + yearAgo, today = today)
+        assertEquals(listOf("5 Iyul", "5 Iyul"), sections.takeLast(2).map { it.label })
     }
 
     @Test fun queryNarrowsCaseInsensitive() {

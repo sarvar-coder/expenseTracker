@@ -8,7 +8,7 @@ import androidx.compose.runtime.saveable.listSaver
 import java.time.LocalDate
 
 /** A day's worth of expenses under a human label (Bugun / Kecha / "8 Iyul"). */
-data class DaySection(val label: String, val items: List<Expense>)
+data class DaySection(val day: LocalDate, val label: String, val items: List<Expense>)
 
 /** Tarix sheet filters. Empty/null fields mean "no constraint". */
 data class ActivityFilter(
@@ -50,11 +50,11 @@ fun groupExpenses(
         today.minusDays(1) -> t("activity.yesterday")
         else -> uzDayMonth(d)
     }
-    // groupBy keeps first-seen order; input is already date-desc.
+    // groupBy keeps first-seen order; input is already date-desc. By date, not label: "8 Iyul" recurs every year.
     return expenses
         .filter { filter.matches(it) && (q.isEmpty() || it.description.lowercase().contains(q)) }
-        .groupBy { labelFor(it.date.toLocalDate()) }
-        .map { (label, items) -> DaySection(label, items) }
+        .groupBy { it.date.toLocalDate() }
+        .map { (day, items) -> DaySection(day, labelFor(day), items) }
 }
 
 /** Keeps the filter across tab switches (the shell saves per-tab state). */

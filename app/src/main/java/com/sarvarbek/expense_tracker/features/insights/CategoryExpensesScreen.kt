@@ -119,7 +119,7 @@ internal fun LazyListScope.daySections(
     catById: Map<String, Category>,
     db: ExpenseDao,
     onEdit: (Expense) -> Unit,
-) = items(sections, key = { it.label }) { section ->
+) = items(sections, key = { it.day.toEpochDay() }) { section ->
     val ty = MaterialTheme.typography
     Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 20.dp, bottom = 8.dp)) {
         Text(section.label, style = ty.titleMedium, modifier = Modifier.weight(1f))
