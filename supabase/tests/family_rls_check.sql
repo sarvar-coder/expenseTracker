@@ -61,6 +61,26 @@ begin
   -- transfer to A: out of family totals and the family list
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, transfer_to, raw_input)
     values (eb7, fid, ca, '-> Ali', 500, now(), 'typed', a, 'Aliga 500');
+  -- new-expense push (#79): eb4 only; owner excluded; transfer, edit, delete, bulk and old rows don't enqueue
+  update public.expenses set description = 'secret2', updated_at = now() + interval '2 second' where id = eb4;
+  update public.expenses set deleted_at = now(), updated_at = now() + interval '3 second' where id = eb2;
+  update public.expenses set deleted_at = null, updated_at = now() + interval '4 second' where id = eb2;
+  -- A (1 row so far): an old row stays silent, then 4 at once is bulk (A's last-minute writes > 3)
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source, created_at)
+    values (gen_random_uuid(), fid, ca, 'old', 1, now() - interval '2 day', 'manual', now() - interval '2 day');
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source)
+    select gen_random_uuid(), fid, ca, 'bulk', 1, now(), 'manual' from generate_series(1, 4);
+  update public.expenses set deleted_at = now(), updated_at = now() + interval '5 second' where description in ('bulk', 'old');
+  execute 'reset role';
+  select count(*) into n from private.push_outbox where data->>'type' = 'expense' and user_ids && array[a, b];
+  assert n = 1, 'one expense push (eb4), got ' || n;
+  select count(*) into n from private.push_outbox
+  where data->>'type' = 'expense' and user_ids = array[a] and data->>'id' = eb4::text and data->>'owner' = b::text
+    and data->>'name' = 'b' and data->>'description' = 'secret' and data->>'amount' = '30';
+  assert n = 1, 'A (not owner B) gets the eb4 push';
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   update public.profiles set budget = 1000 where id = b;
   begin
     insert into public.categories (id, family_id, name, color_hex) values (gen_random_uuid(), fid, 'X', 'AAAAAA');
@@ -97,7 +117,7 @@ begin
   update public.needs set done = true where id = nb2;
   get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
   select amount, description, is_private, source, raw_input into r from public.family_expenses_since('epoch') where id = eb4;
-  assert r.amount = 30 and r.description = 'secret' and not r.is_private, 'no private: row shared with the family';
+  assert r.amount = 30 and r.description = 'secret2' and not r.is_private, 'no private: row shared with the family';
   assert r.source = 'typed' and r.raw_input = 'secret 30', 'feed carries source + raw input (read-only sheet)';
   select amount, is_private, raw_input into r from public.family_expenses_since('epoch') where id = eb7;
   assert r.amount is null and r.is_private and r.raw_input is null, 'transfer row is a tombstone';

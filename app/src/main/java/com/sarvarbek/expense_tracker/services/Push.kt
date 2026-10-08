@@ -19,6 +19,7 @@ import com.google.firebase.messaging.RemoteMessage
 import com.sarvarbek.expense_tracker.App
 import com.sarvarbek.expense_tracker.MainActivity
 import com.sarvarbek.expense_tracker.R
+import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.t
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -88,32 +89,15 @@ class Push(private val context: Context, private val client: SupabaseClient) {
             withTimeoutOrNull(5_000) { client.auth.sessionStatus.first { it !is SessionStatus.Initializing } }
             client.auth.currentUserOrNull()?.id
         }
-        val p = pushContent(data, uid) ?: return
-        if (!canNotify(context)) return
-        val open = Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            .apply { p.route?.let { putExtra(EXTRA_ROUTE, it) } }
-        val id = p.tag.hashCode()
-        val n = NotificationCompat.Builder(context, p.channel)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(p.title)
-            .setContentText(p.text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(p.text))
-            .setAutoCancel(true)
-            .setContentIntent(PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-            .build()
-        try {
-            NotificationManagerCompat.from(context).notify(id, n)
-        } catch (e: SecurityException) {
-            Log.w(TAG, "notify: $e") // permission revoked in between
-        }
+        pushContent(data, uid)?.let { post(context, it) }
     }
 
     private fun createChannels() {
         if (Build.VERSION.SDK_INT < 26) return
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(
+        context.getSystemService(NotificationManager::class.java).createNotificationChannels(listOf(
             NotificationChannel(CH_REQUESTS, t("push.channel_requests"), NotificationManager.IMPORTANCE_DEFAULT),
-        )
+            NotificationChannel(CH_EXPENSES, t("push.channel_expenses"), NotificationManager.IMPORTANCE_DEFAULT),
+        ))
     }
 
     private suspend fun attempt(what: String, f: suspend () -> Unit): Boolean = withContext(Dispatchers.IO) {
@@ -132,16 +116,23 @@ class Push(private val context: Context, private val client: SupabaseClient) {
         private const val TAG = "push"
         private const val RETRY_MS = 30_000L
         const val CH_REQUESTS = "category_requests"
+        const val CH_EXPENSES = "new_expenses"
         const val EXTRA_ROUTE = "route"
         const val ROUTE_REQUESTS = "family-settings"
+        /** `expense/<id>`: that expense's read-only sheet. */
+        const val ROUTE_EXPENSE = "expense/"
+        private val expenseRoute = Regex("expense/[0-9a-fA-F-]{36}")
 
         /** Tap targets a notification may open; anything else in the intent is ignored. */
-        fun route(intent: Intent?) = intent?.getStringExtra(EXTRA_ROUTE)?.takeIf { it == ROUTE_REQUESTS }
+        fun route(intent: Intent?) = intent?.getStringExtra(EXTRA_ROUTE)?.takeIf { it == ROUTE_REQUESTS || expenseRoute.matches(it) }
     }
 }
 
-/** What to show for a data push, or null: not for the signed-in account, or a type this version doesn't know. */
-data class PushContent(val channel: String, val title: String, val text: String, val route: String?, val tag: String)
+/**
+ * What to show for a data push, or null: not for the signed-in account, or a type this version doesn't know.
+ * [group]: pushes sharing it stack under one summary (new expenses: one per member who added them).
+ */
+data class PushContent(val channel: String, val title: String, val text: String, val route: String?, val tag: String, val group: String? = null)
 
 fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
     if (signedInUid == null || data["uid"] != signedInUid) return null
@@ -156,7 +147,46 @@ fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
             t(if (data["status"] == "approved") "push.approved" else "push.rejected", category),
             null, "resolved:$category",
         )
+        "expense" -> {
+            val id = data["id"] ?: return null
+            val name = data["name"].orEmpty()
+            PushContent(
+                Push.CH_EXPENSES, t("push.expense_title"),
+                t("push.expense", name, data["description"].orEmpty(), formatMoney(data["amount"]?.toLongOrNull() ?: 0)),
+                Push.ROUTE_EXPENSE + id, "expense:$id", "expenses:${data["owner"].orEmpty()}",
+            )
+        }
         else -> null
+    }
+}
+
+/** Shows [p]; grouped pushes also get (or refresh) their group's summary. Tapping opens [PushContent.route]. */
+internal fun post(context: Context, p: PushContent) {
+    if (!canNotify(context)) return
+    fun tap(route: String?, code: Int) = PendingIntent.getActivity(
+        context, code,
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .apply { route?.let { putExtra(Push.EXTRA_ROUTE, it) } },
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+    fun builder() = NotificationCompat.Builder(context, p.channel)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle(p.title)
+        .setContentText(p.text)
+        .setAutoCancel(true)
+        .setGroup(p.group)
+    val id = p.tag.hashCode()
+    val nm = NotificationManagerCompat.from(context)
+    try {
+        nm.notify(id, builder().setStyle(NotificationCompat.BigTextStyle().bigText(p.text)).setContentIntent(tap(p.route, id)).build())
+        // Summary: no sound of its own; tapping it (where shown collapsed) just opens the app.
+        if (p.group != null) {
+            val sid = p.group.hashCode()
+            nm.notify(sid, builder().setGroupSummary(true).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN).setContentIntent(tap(null, sid)).build())
+        }
+    } catch (e: SecurityException) {
+        Log.w("push", "notify: $e") // permission revoked in between
     }
 }
 

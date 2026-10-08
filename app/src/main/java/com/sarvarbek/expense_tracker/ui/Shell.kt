@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -78,11 +79,15 @@ private val tabs = listOf(
 fun Shell(
     onAdd: () -> Unit,
     snackbarHost: @Composable () -> Unit = {},
+    /** Switch to this tab once (a notification tap), then [onTab]. */
+    tab: Int? = null,
+    onTab: () -> Unit = {},
     page: @Composable (index: Int, active: Boolean) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
     // Keys name the 3-tab layout: a state saved by the old 4-tab build (index 3) is ignored, not restored.
     var index by rememberSaveable(key = "tab3") { mutableIntStateOf(0) }
     var visited by rememberSaveable(key = "visited3") { mutableStateOf(listOf(0)) }
+    LaunchedEffect(tab) { if (tab != null) { index = tab; onTab() } }
     if (index !in visited) visited = visited + index
     Scaffold(
         containerColor = AppTheme.colors.bg,
