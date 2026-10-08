@@ -34,7 +34,7 @@ data class CategoryRequest(val id: String, val name: String)
 
 /**
  * One current member's month: shared spending and budget contribution
- * (personal budget minus own private spending, computed server-side).
+ * (the member's personal budget, computed server-side).
  */
 data class FamilyMember(
     val userId: String,
@@ -124,9 +124,9 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                     )
                 },
                 others = rows.await().mapNotNull { e ->
-                    // Private rows are tombstones (date and details null): skip before parsing.
-                    val private = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
-                    if (private || e.str("deleted_at") != null) return@mapNotNull null
+                    // Transfers come as tombstones flagged is_private (date and details null): skip before parsing.
+                    val transfer = (e["is_private"] as? JsonPrimitive)?.booleanOrNull == true
+                    if (transfer || e.str("deleted_at") != null) return@mapNotNull null
                     FamilyExpense(
                         Expense(
                             id = e.str("id")!!, description = e.str("description")!!, amount = e.num("amount"),

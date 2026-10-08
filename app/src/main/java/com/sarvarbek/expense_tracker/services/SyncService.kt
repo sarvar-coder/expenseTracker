@@ -122,7 +122,7 @@ class SyncService(
         if (prev != null && prev != uid) {
             // Another account on this device: its rows are not ours to show or push.
             db.resetLocal()
-            settings.applyProfile(budget = 0, defaultPrivate = false, displayName = "")
+            settings.applyProfile(budget = 0, displayName = "")
             prefs.edit { prefs.all.keys.filter { it.startsWith("sync.") }.forEach { remove(it) } }
         }
         prefs.edit { putString(K_UID, uid) }
@@ -163,18 +163,17 @@ class SyncService(
     }
 
     /**
-     * Budget, private default and name: push a local edit, otherwise take the server's
+     * Budget and name: push a local edit, otherwise take the server's
      * (another device may have changed them).
      */
     private suspend fun syncProfile(uid: String) {
         val server = if (settings.profileDirty) null else client.from("profiles")
-            .select(Columns.list("budget", "default_private", "display_name")) { filter { eq("id", uid) } }
+            .select(Columns.list("budget", "display_name")) { filter { eq("id", uid) } }
             .decodeSingle<JsonObject>()
         val local = settings.load()
         if (shouldPushProfile(settings.profileDirty, server?.get("budget")?.jsonPrimitive?.long, local.monthlyBudget)) {
             client.from("profiles").update(buildJsonObject {
                 put("budget", local.monthlyBudget)
-                put("default_private", local.defaultPrivate)
                 // Blank = never pulled on this device; keep the server's.
                 if (local.displayName.isNotBlank()) put("display_name", local.displayName)
                 put("updated_at", Instant.now().toString())
@@ -182,8 +181,7 @@ class SyncService(
             settings.markProfileClean()
         } else {
             settings.applyProfile(
-                server!!.getValue("budget").jsonPrimitive.long, server.getValue("default_private").jsonPrimitive.boolean,
-                server.str("display_name") ?: "",
+                server!!.getValue("budget").jsonPrimitive.long, server.str("display_name") ?: "",
             )
         }
     }

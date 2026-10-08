@@ -27,9 +27,9 @@ class HelpersTest {
 
     private fun at(y: Int, m: Int, d: Int, h: Int = 0, min: Int = 0) = LocalDateTime.of(y, m, d, h, min).toMillis()
 
-    private fun exp(id: Int, amount: Long, catId: Int, date: Long, desc: String = "x", isPrivate: Boolean = false) =
+    private fun exp(id: Int, amount: Long, catId: Int, date: Long, desc: String = "x") =
         Expense(id = "$id", description = desc, amount = amount, categoryId = "$catId", date = date,
-            source = ExpenseSource.manual, isPrivate = isPrivate, dirty = false)
+            source = ExpenseSource.manual, dirty = false)
 
     // --- home_summary ---
     @Test fun summarizeSumsCurrentMonthAgainstBudget() {
@@ -156,16 +156,9 @@ class HelpersTest {
         assertEquals(listOf("Yandex Go"), names(ActivityFilter(minAmount = 2000, maxAmount = 2000)))
     }
 
-    @Test fun privateShared() {
-        val list = listOf(exp(1, 1, 10, at(2026, 7, 8, 9), "Gift", isPrivate = true), exp(2, 1, 10, at(2026, 7, 8, 8), "Bread"))
-        assertEquals(listOf("Gift"), names(ActivityFilter(isPrivate = true), list))
-        assertEquals(listOf("Bread"), names(ActivityFilter(isPrivate = false), list))
-        assertEquals(listOf("Gift", "Bread"), names(ActivityFilter(), list))
-    }
-
     @Test fun countAndIsEmpty() {
         assertTrue(ActivityFilter().isEmpty)
-        assertEquals(3, ActivityFilter(categoryIds = setOf("1", "2"), minAmount = 1, maxAmount = 2, isPrivate = true).count)
+        assertEquals(2, ActivityFilter(categoryIds = setOf("1", "2"), minAmount = 1, maxAmount = 2).count)
         assertEquals(1, ActivityFilter(memberIds = setOf("u1", "u2")).count)
     }
 

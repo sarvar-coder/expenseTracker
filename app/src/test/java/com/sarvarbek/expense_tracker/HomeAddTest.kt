@@ -226,9 +226,8 @@ class HomeAddTest {
         rule.onNodeWithTag("transfer").assertDoesNotExist()
     }
 
-    @Test fun maxfiyHiddenAndNewRowsSharedEvenIfDefaultPrivate() {
+    @Test fun noMaxfiyAndNewRowsShared() {
         settings.lastAddMode = "manual"
-        settings.setDefaultPrivate(true)
         show { Add() }
 
         maxfiy().assertDoesNotExist()

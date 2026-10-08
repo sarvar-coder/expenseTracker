@@ -18,6 +18,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -224,10 +225,10 @@ class SettingsFamilyTest : ScreenTest() {
     @Test fun inFamilyShowsBudgetMembersSharedListAndRequests() {
         val cat = runBlocking { db.getCategories().first { it.name == "Groceries" }.id }
         runBlocking {
-            fun e(desc: String, family: String?, private: Boolean = false) =
-                Expense(description = desc, amount = 10_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, familyId = family, isPrivate = private)
+            fun e(desc: String, family: String?, legacyPrivate: Boolean = false) =
+                Expense(description = desc, amount = 10_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, familyId = family, isPrivate = legacyPrivate)
             db.insertExpense(e("Non", "f1"))
-            db.insertExpense(e("Sovg'a", "f1", private = true))
+            db.insertExpense(e("Sovg'a", "f1", legacyPrivate = true))
             db.insertExpense(e("Shaxsiy", null))
         }
         val overview = FamilyOverview(
@@ -242,14 +243,14 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Uy").assertExists() // title = family name
         rule.onNodeWithText("Byudjet: 1 500 000").assertExists()
         rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
-        rule.onNodeWithText("Ali · Ota", substring = true).assertExists() // own shared row's owner label
+        rule.onAllNodesWithText("Ali · Ota", substring = true).onFirst().assertExists() // own shared row's owner label
         rule.onNodeWithText("Taksi").assertExists()
-        assertTrue("private stays hidden", rule.onAllNodesWithText("Sovg'a").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("Sovg'a").assertExists() // old private row: no private any more, shared
         assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
         // management lives behind the gear now
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
-        rule.onNodeWithContentDescription("Jami 30 000 UZS").assertExists() // donut over the shared list
+        rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
         assertTapTargets()
 
         // Filter by member: only Vali's row stays; Ko'rinish is hidden (all shared).

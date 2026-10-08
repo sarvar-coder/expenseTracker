@@ -215,9 +215,9 @@ class DataTest {
         assertTrue(store.profileDirty)
 
         store.markProfileClean()
-        store.applyProfile(budget = 1000, defaultPrivate = true, displayName = "Ali")
+        store.applyProfile(budget = 1000, displayName = "Ali")
         assertFalse("pulled values aren't pushed back", store.profileDirty)
-        assertEquals(Triple(1000L, true, "Ali"), store.settings.value.let { Triple(it.monthlyBudget, it.defaultPrivate, it.displayName) })
+        assertEquals(1000L to "Ali", store.settings.value.let { it.monthlyBudget to it.displayName })
 
         store.markProfileClean()
         store.setDisplayName("Vali")

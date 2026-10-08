@@ -108,7 +108,6 @@ fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier
  * Tarix filter page, full screen over the shell. [onApply] gets the new
  * filter on Qo'llash; [onDismiss] on back. Non-empty [members] (id to name)
  * means the Oila list: adds an A'zo row.
- * ponytail: Ko'rinish (Shaxsiy/Umumiy) row hidden while Maxfiy is off.
  */
 @Composable
 fun ActivityFilterPage(
@@ -142,7 +141,6 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
     val ty = MaterialTheme.typography
     var cats by remember { mutableStateOf(current.categoryIds) }
     var range by remember { mutableStateOf(current.range) }
-    var private by remember { mutableStateOf(current.isPrivate) }
     var who by remember { mutableStateOf(current.memberIds) }
     var min by remember { mutableStateOf(current.minAmount?.toString().orEmpty()) }
     var max by remember { mutableStateOf(current.maxAmount?.toString().orEmpty()) }
@@ -155,7 +153,7 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
         var lo = parseAmount(min)
         var hi = parseAmount(max)
         if (lo != null && hi != null && lo > hi) lo = hi.also { hi = lo }
-        onApply(ActivityFilter(cats, range, lo, hi, private, who))
+        onApply(ActivityFilter(cats, range, lo, hi, who))
     }
 
     val catLabel = when (cats.size) {
@@ -175,7 +173,7 @@ private fun FilterPage(current: ActivityFilter, categories: List<Category>, memb
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, t("common.back")) }
             Text(t("activity.filter"), style = ty.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
             LinkButton({
-                cats = emptySet(); range = null; private = null; who = emptySet(); min = ""; max = ""
+                cats = emptySet(); range = null; who = emptySet(); min = ""; max = ""
             }) { Text(t("activity.clear")) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
@@ -340,6 +338,5 @@ fun ActiveFilters(
         }
         f.range?.let { Chip(rangeLabel(it), f.copy(range = null)) }
         if (f.minAmount != null || f.maxAmount != null) Chip(amountLabel(f.minAmount, f.maxAmount), f.copy(minAmount = null, maxAmount = null))
-        f.isPrivate?.let { Chip(if (it) t("activity.personal") else t("activity.shared"), f.copy(isPrivate = null)) }
     }
 }
