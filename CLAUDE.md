@@ -72,7 +72,7 @@ Dark mode follows the system. Radii via `AppRadii`.
 Category colors are stored per category row (hex): Food `#E08A5B`, Groceries
 `#6FA86A`, Shopping `#C07FA6`, Transport `#5B8DB8`, Bills `#D9A24E`.
 Currency is **UZS only** (whole units, no decimals). UI language is Uzbek.
-Four tabs (Asosiy, Tarix, Tahlil, Oila) + FAB; Settings opens from the Home gear.
+Three tabs (Asosiy, Tahlil, Oila) + FAB; Settings opens from the Home gear.
 
 ## Layout
 

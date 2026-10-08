@@ -10,7 +10,7 @@ import java.time.LocalDate
 /** A day's worth of expenses under a human label (Bugun / Kecha / "8 Iyul"). */
 data class DaySection(val day: LocalDate, val label: String, val items: List<Expense>)
 
-/** Tarix sheet filters. Empty/null fields mean "no constraint". */
+/** Tahlil / Oila filters. Empty/null fields mean "no constraint". */
 data class ActivityFilter(
     val categoryIds: Set<String> = emptySet(),
     val range: ClosedRange<LocalDate>? = null, // whole days, end inclusive

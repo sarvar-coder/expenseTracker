@@ -65,11 +65,12 @@ class ShellTest {
         var added = false
         rule.setContent { AppTheme { Shell(onAdd = { added = true }) } }
 
-        for (label in listOf("Asosiy", "Tarix", "Tahlil", "Oila")) {
+        for (label in listOf("Asosiy", "Tahlil", "Oila")) {
             rule.onNodeWithText(label, useUnmergedTree = true).assertExists()
         }
-        rule.onNodeWithText("Tarix").assertIsNotSelected().performClick()
-        rule.onNodeWithText("Tarix").assertIsSelected()
+        rule.onNodeWithText("Tarix", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithText("Tahlil").assertIsNotSelected().performClick()
+        rule.onNodeWithText("Tahlil").assertIsSelected()
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
 
         rule.onNodeWithContentDescription("Xarajat qo'shish")
@@ -90,7 +91,7 @@ class ShellTest {
                 }
             }
         }
-        rule.onNodeWithText("Tarix").performClick()
+        rule.onNodeWithText("Tahlil").performClick()
         rule.onNodeWithText("page1").assertExists()
         rule.onNodeWithText("page0", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Asosiy").performClick()

@@ -103,7 +103,7 @@ private fun lastMonth(year: Int): Int = LocalDate.now().let { if (year == it.yea
  * Tahlil: the period total, then Ro'yxat (search + day-grouped rows) or
  * Turkumlar (category-share donut + ranked legend; a row opens
  * [CategoryExpensesScreen] via [onCategory]). Period is a month of the chosen
- * year, narrowed by the same filter page Tarix uses (its Sana range replaces
+ * year, narrowed by the shared filter page (its Sana range replaces
  * the month); both modes see the same rows. Aggregation lives in the pure
  * [insightsFor]. Data is the family [feed]: all my rows plus other members'
  * shared rows (others' as last fetched when offline); not in a family, just mine.

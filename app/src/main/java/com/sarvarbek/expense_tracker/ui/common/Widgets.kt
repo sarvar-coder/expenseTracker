@@ -249,7 +249,7 @@ fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> 
 
 /**
  * One expense row. Tap goes through [rememberExpenseTap]; swipe left deletes
- * after confirm, own non-frozen rows only. Used by Home (today), Tarix and Tahlil.
+ * after confirm, own non-frozen rows only. Used by Home (today), the Tahlil list and the category screen.
  */
 @Composable
 fun ExpenseTile(fe: FamilyExpense, category: Category?, db: ExpenseDao, onEdit: (Expense) -> Unit) {
