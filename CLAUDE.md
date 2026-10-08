@@ -27,17 +27,17 @@ search, category filters, and the **Oila** (family) tab.
 - **Family**: one family per user, one admin. Admin invites by email (in-app
   Accept/Decline, no email sent), removes members, approves/rejects category
   requests, renames/archives categories, transfers admin, deletes the family.
-  Admin can't edit others' expenses or see private ones; must transfer admin
+  Admin can't edit others' expenses; must transfer admin
   before leaving; last member leaving deletes the family. Ex-member's shared
   expenses stay in family history as read-only (`frozen`).
 - **Categories** are shared per family; only the admin creates them directly.
   On join, same-name categories merge; unmatched ones go to Boshqa + requests.
-- **Private toggle** per expense (default in Settings, initially shared).
-  Private = invisible to the family and excluded from family spending.
-- **Budget**: personal budget per member. Family contribution =
-  `budget − own private spending this month` (may go negative; no budget → 0).
-  Family budget = sum of contributions, computed server-side
-  (`family_summary` RPC) so raw budgets and private amounts never leave.
+- **No private expenses** (2.1.0): every family member's expense is shared and
+  counts in family spending. `is_private` stays in Room/sync (always false; a
+  server trigger forces it) and `profiles.default_private` stays for old APKs.
+- **Budget**: personal budget per member. Family contribution = `budget`
+  (no budget → 0). Family budget = sum of contributions, computed server-side
+  (`family_summary` RPC).
 - **AI parsing**: Google Gemini free tier, model `gemini-3.6-flash`, called from
   the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
   users only). Free-tier prompts may be used by Google for training (note in Settings).
@@ -103,10 +103,10 @@ deletedAt (soft delete), dirty (local only).
 - **Category**: name (unique per scope, case-insensitive), iconKey, colorHex,
   isArchived. Seed: Food & dining, Groceries, Shopping, Transport, Bills. AI adds more.
 - **Expense**: description, amount (int, UZS), categoryId (FK), date,
-  source (`typed`/`voice`/`manual`), rawInput?, isPrivate, pendingCategory?
+  source (`typed`/`voice`/`manual`), rawInput?, isPrivate (always false, legacy), pendingCategory?
   (awaiting admin approval), frozen (ex-member history), createdAt.
-- **Settings** (SharedPreferences): monthlyBudget + defaultPrivate (synced to
-  `profiles`), sttLocale, lastAddMode.
+- **Settings** (SharedPreferences): monthlyBudget + displayName (synced to
+  `profiles`), uiLanguage, sttLocale, lastAddMode.
 - **Server only**: families, family_members(role), invites(email), category_requests.
 
 ## Conventions

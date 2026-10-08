@@ -127,7 +127,7 @@ import java.time.ZoneOffset
 enum class AddMode(val label: String) { type("add.mode.type"), speak("add.mode.speak"), manual("add.mode.manual") }
 
 /** Manual form start values (edit, or a failed parse dropping into Manual). */
-private data class Prefill(val amount: String, val desc: String, val categoryId: String?, val private: Boolean)
+private data class Prefill(val amount: String, val desc: String, val categoryId: String?)
 
 /**
  * Pushed from the shell FAB (new) or an expense row ([editing]). Segmented
@@ -153,7 +153,7 @@ fun AddScreen(
     var mode by rememberSaveable {
         mutableStateOf(if (editing != null || !aiModes) AddMode.manual else AddMode.entries.firstOrNull { it.name == settings.lastAddMode } ?: AddMode.type)
     }
-    var prefill by remember { mutableStateOf(editing?.let { Prefill(it.amount.toString(), it.description, it.categoryId, it.isPrivate) }) }
+    var prefill by remember { mutableStateOf(editing?.let { Prefill(it.amount.toString(), it.description, it.categoryId) }) }
     Scaffold(
         containerColor = c.bg,
         topBar = {
@@ -184,11 +184,11 @@ fun AddScreen(
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null, false), members, onClose)
+                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null), members, onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
                     TypeForm(db, settings, parse, speech, canCreate, voice = mode == AddMode.speak, onClose) { raw ->
-                        prefill = Prefill("", raw, null, false)
+                        prefill = Prefill("", raw, null)
                         mode = AddMode.manual
                     }
                 }
@@ -220,8 +220,6 @@ private fun ManualForm(
     // Requested (not yet approved) category name; expense sits in Boshqa meanwhile.
     var pending by rememberSaveable { mutableStateOf(editing?.pendingCategory) }
     var date by rememberSaveable { mutableStateOf(editing?.date?.toLocalDateTime() ?: LocalDateTime.now()) }
-    // ponytail: Maxfiy toggle hidden for now; new rows shared, edits keep their own flag.
-    val private = init.private
     var transfer by rememberSaveable { mutableStateOf(editing?.transferTo != null) }
     var transferTo by rememberSaveable { mutableStateOf(editing?.transferTo) }
     var saving by remember { mutableStateOf(false) }
@@ -252,9 +250,9 @@ private fun ManualForm(
             val cat = if (to != null) resolveCategory(db, "Boshqa", canCreate()).id else categoryId!!
             val pend = pending.takeIf { to == null }
             if (editing != null) {
-                db.updateExpense(editing.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = private, pendingCategory = pend, transferTo = to))
+                db.updateExpense(editing.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = pend, transferTo = to))
             } else {
-                db.insertExpense(Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, isPrivate = private, transferTo = to))
+                db.insertExpense(Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, transferTo = to))
             }
             onClose()
         }

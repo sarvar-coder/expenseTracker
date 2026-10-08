@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.update
 data class Settings(
     val monthlyBudget: Long = 0,
     val sttLocale: String = "uz_UZ",
-    /** New expenses start private (hidden from the family) when set. */
-    val defaultPrivate: Boolean = false,
     /** Name the family sees (profiles.display_name); empty until the first sync. */
     val displayName: String = "",
     /** UI script: "uz" (Latin) or "uz_cyrl" (Cyrillic). Local only. */
@@ -26,21 +24,15 @@ class SettingsStore(private val prefs: SharedPreferences) {
     fun load() = Settings(
         monthlyBudget = prefs.getLong(K_BUDGET, 0),
         sttLocale = prefs.getString(K_LOCALE, null) ?: "uz_UZ",
-        defaultPrivate = prefs.getBoolean(K_PRIVATE, false),
         displayName = prefs.getString(K_NAME, null) ?: "",
         uiLanguage = prefs.getString(K_UI_LANG, null) ?: "uz",
     )
 
-    // Budget and private default also live on the server profile (the family
-    // contribution needs the budget), so edits wait there for the next sync.
+    // Budget also lives on the server profile (the family budget needs it),
+    // so edits wait there for the next sync.
     fun setBudget(v: Long) {
         prefs.edit { putLong(K_BUDGET, v); putBoolean(K_PROFILE_DIRTY, true) }
         state.update { it.copy(monthlyBudget = v) }
-    }
-
-    fun setDefaultPrivate(v: Boolean) {
-        prefs.edit { putBoolean(K_PRIVATE, v); putBoolean(K_PROFILE_DIRTY, true) }
-        state.update { it.copy(defaultPrivate = v) }
     }
 
     fun setDisplayName(v: String) {
@@ -62,9 +54,9 @@ class SettingsStore(private val prefs: SharedPreferences) {
     fun markProfileClean() = prefs.edit { remove(K_PROFILE_DIRTY) }
 
     /** Server values pulled by sync; not marked for push. */
-    fun applyProfile(budget: Long, defaultPrivate: Boolean, displayName: String) {
-        prefs.edit { putLong(K_BUDGET, budget); putBoolean(K_PRIVATE, defaultPrivate); putString(K_NAME, displayName) }
-        state.update { it.copy(monthlyBudget = budget, defaultPrivate = defaultPrivate, displayName = displayName) }
+    fun applyProfile(budget: Long, displayName: String) {
+        prefs.edit { putLong(K_BUDGET, budget); putString(K_NAME, displayName) }
+        state.update { it.copy(monthlyBudget = budget, displayName = displayName) }
     }
 
     /** Last Add mode the user picked (enum name), so Add reopens in it. */
@@ -76,7 +68,6 @@ class SettingsStore(private val prefs: SharedPreferences) {
         private const val K_BUDGET = "monthlyBudget"
         private const val K_LOCALE = "sttLocale"
         private const val K_ADD_MODE = "lastAddMode"
-        private const val K_PRIVATE = "defaultPrivate"
         private const val K_NAME = "displayName"
         private const val K_UI_LANG = "uiLanguage"
         // 'sync.' prefix: wiped with the other sync keys when the account changes.
