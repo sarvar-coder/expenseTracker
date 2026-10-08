@@ -12,7 +12,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import com.sarvarbek.expense_tracker.data.Expense
-import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
@@ -115,8 +114,7 @@ private fun Routes() {
                 ) { index, active ->
                     when (index) {
                         0 -> HomeScreen(container.db, container.settings, onSettings = { nav.go("settings") }) { nav.go("edit/${it.id}") }
-                        1 -> ActivityScreen(container.db) { nav.go("edit/${it.id}") }
-                        2 -> InsightsScreen(
+                        1 -> InsightsScreen(
                             container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
                             onCategory = openCategory, onEdit = edit,
                         )

@@ -28,11 +28,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DonutLarge
 import androidx.compose.material.icons.outlined.FamilyRestroom
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.rounded.DonutLarge
 import androidx.compose.material.icons.rounded.FamilyRestroom
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -66,13 +64,12 @@ private data class Tab(val labelKey: String, val icon: ImageVector, val selected
 
 private val tabs = listOf(
     Tab("shell.home", Icons.Outlined.Home, Icons.Rounded.Home),
-    Tab("shell.history", Icons.Outlined.ReceiptLong, Icons.Rounded.ReceiptLong),
     Tab("shell.insights", Icons.Outlined.DonutLarge, Icons.Rounded.DonutLarge),
     Tab("shell.family", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
 )
 
 /**
- * Bottom-nav shell: 4 tabs + bottom-right FAB that opens Add. Visited tabs stay
+ * Bottom-nav shell: 3 tabs + bottom-right FAB that opens Add. Visited tabs stay
  * composed, so a switch is a 150 ms crossfade of ready content: no data reload,
  * no empty-state flash, scroll kept. [page] gets whether its tab is showing.
  * ponytail: hidden tabs keep collecting their flows; unload if a tab gets heavy.
@@ -83,8 +80,9 @@ fun Shell(
     snackbarHost: @Composable () -> Unit = {},
     page: @Composable (index: Int, active: Boolean) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    var visited by rememberSaveable { mutableStateOf(listOf(0)) }
+    // Keys name the 3-tab layout: a state saved by the old 4-tab build (index 3) is ignored, not restored.
+    var index by rememberSaveable(key = "tab3") { mutableIntStateOf(0) }
+    var visited by rememberSaveable(key = "visited3") { mutableStateOf(listOf(0)) }
     if (index !in visited) visited = visited + index
     Scaffold(
         containerColor = AppTheme.colors.bg,

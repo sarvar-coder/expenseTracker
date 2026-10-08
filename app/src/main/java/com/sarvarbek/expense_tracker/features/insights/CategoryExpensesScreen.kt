@@ -112,7 +112,7 @@ fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick
     }
 }
 
-/** Day headers with the day's total (transfers left out), then the rows in a card. Tahlil list, Tarix and this screen. */
+/** Day headers with the day's total (transfers left out), then the rows in a card. Tahlil list and this screen. */
 internal fun LazyListScope.daySections(
     sections: List<DaySection>,
     rows: Map<String, FamilyExpense>,

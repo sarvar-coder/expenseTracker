@@ -27,7 +27,6 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
-import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
 import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
@@ -90,7 +89,7 @@ class HistoryInsightsTest {
     @Test fun filterPageAndSearchFilterRowsDayTotalEmptyState() {
         add("Coffee", 10000, "Food & dining")
         add("Taxi", 10000, "Transport")
-        show { ActivityScreen(db, onEdit = {}) }
+        show { InsightsScreen(db) }
         waitFor("Coffee")
         rule.onNodeWithText("Taxi").assertExists()
         rule.onNodeWithText("Bugun").assertExists()
@@ -134,7 +133,7 @@ class HistoryInsightsTest {
     @Test fun amountFilterSwapsMinMaxAndShowsChip() {
         add("Coffee", 10000, "Food & dining")
         add("Laptop", 900000, "Shopping")
-        show { ActivityScreen(db, onEdit = {}) }
+        show { InsightsScreen(db) }
         waitFor("Coffee")
         rule.onNodeWithContentDescription("Filtr").performClick()
         tap("Summa")

@@ -96,7 +96,7 @@ fun amountLabel(min: Long?, max: Long?) = when {
     else -> t("activity.amount_to", formatMoney(max!!))
 }
 
-/** Tune icon with the active-group count badge. Shared by Tarix and Tahlil. */
+/** Tune icon with the active-group count badge. Shared by Tahlil and Oila. */
 @Composable
 fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier.size(48.dp)) {
     BadgedBox(badge = { if (count > 0) Badge { Text("$count") } }) {
@@ -105,7 +105,7 @@ fun FilterButton(count: Int, onClick: () -> Unit) = IconButton(onClick, Modifier
 }
 
 /**
- * Tarix filter page, full screen over the shell. [onApply] gets the new
+ * Filter page (Tahlil, Oila), full screen over the shell. [onApply] gets the new
  * filter on Qo'llash; [onDismiss] on back. Non-empty [members] (id to name)
  * means the Oila list: adds an A'zo row.
  */
