@@ -20,12 +20,26 @@ begin
   insert into public.categories (id, owner_id, name, color_hex) values (ca, a, 'Food', 'E08A5B');
   insert into public.expenses (id, category_id, description, amount, date, source) values (e1, ca, 'lunch', 100, now(), 'manual');
   fid := public.create_family('Fam', true);
+  perform public.register_push_token('tok-a');
   select count(*) into n from public.categories where family_id = fid; assert n = 2, 'family has Food + Boshqa';
   insert into public.invites (family_id, email, invited_by) values (fid, 'b@test.uz', a) returning id into inv;
 
   -- B: personal data, joins with history
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   insert into public.categories (id, owner_id, name, color_hex) values (cb1, b, 'food', 'E08A5B'), (cb2, b, 'Gym', '5B8DB8');
+  -- push tokens: own rows only; a phone's token moves to whoever signs in on it
+  perform public.register_push_token('tok-b');
+  perform public.register_push_token('tok-b');
+  select count(*) into n from public.device_tokens; assert n = 1, 'B sees only own token (upsert, no dupe), got ' || n;
+  begin
+    insert into public.device_tokens (token, user_id) values ('tok-x', a); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'B cannot add a token for A';
+  delete from public.device_tokens where token = 'tok-a';
+  get diagnostics n = row_count; assert n = 0, 'B cannot delete A token';
+  begin perform public.claim_push(gen_random_uuid()); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'clients cannot claim pushes';
   insert into public.expenses (id, category_id, description, amount, date, source) values
     (eb1, cb1, 'bread', 50, now(), 'manual'), (eb2, cb2, 'gym', 70, now(), 'manual');
   select count(*) into n from public.invites; assert n = 1, 'B sees own invite';
@@ -34,6 +48,11 @@ begin
   select category_id into newcat from public.expenses where id = eb1; assert newcat = ca, 'food merged into Food';
   select count(*) into n from public.expenses where id = eb2 and pending_category = 'Gym'; assert n = 1, 'Gym pending in Boshqa';
   select count(*) into n from public.category_requests where name = 'Gym'; assert n = 1, 'request auto-created';
+  execute 'reset role';
+  select count(*) into n from private.push_outbox
+  where user_ids = array[a] and data->>'type' = 'category_request' and data->>'category' = 'Gym' and data->>'name' = 'b';
+  assert n = 1, 'admin A gets a push for the Gym request';
+  execute 'set local role authenticated';
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, is_private, raw_input)
     values (eb4, fid, ca, 'secret', 30, now(), 'typed', true, 'secret 30');
   select count(*) into n from public.expenses where id = eb4 and not is_private; assert n = 1, 'old APK is_private forced false';
@@ -90,6 +109,14 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   select count(*) into n from public.expenses where id = eb2 and category_id = newcat and pending_category is null;
   assert n = 1, 'approval moved Gym expense';
+  execute 'reset role';
+  select count(*) into n from private.push_outbox
+  where user_ids = array[b] and data->>'type' = 'category_resolved' and data->>'status' = 'approved';
+  assert n = 1, 'requester B gets a push for the approval';
+  execute 'set local role authenticated';
+  perform public.register_push_token('tok-a'); -- B signs in on A's phone
+  select count(*) into n from public.device_tokens where token = 'tok-a'; assert n = 1, 'token taken over by B';
+  delete from public.device_tokens where token = 'tok-a'; -- B signs out there
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select id into req from public.category_requests where name = 'Taxi' and status = 'pending';
   perform public.reject_category_request(req);
@@ -155,6 +182,7 @@ begin
 
   -- A leaves last: family closes
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from public.device_tokens; assert n = 0, 'A lost tok-a to B, got ' || n;
   perform public.leave_family();
   select count(*) into n from public.families; assert n = 0, 'last member leaving closes family';
 

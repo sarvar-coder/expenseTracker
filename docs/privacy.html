@@ -20,6 +20,7 @@
   <li><b>Xarajatlar:</b> summa, tavsif, kategoriya, sana, oila a'zoligi va oylik byudjet. Ular qurilmada saqlanadi va Supabase serveriga sinxronlanadi.</li>
   <li><b>Yozilgan yoki aytilgan matn:</b> xarajatni ajratish uchun Google Gemini sun'iy intellektiga yuboriladi. Bepul tarifda Google bu matndan o'z modellarini o'qitish uchun foydalanishi mumkin.</li>
   <li><b>Mikrofon:</b> faqat ovozli kiritishda, nutq qurilmaning o'zida matnga aylantiriladi. Ovoz yozuvlari saqlanmaydi va yuborilmaydi.</li>
+  <li><b>Bildirishnomalar:</b> qurilmaning Firebase Cloud Messaging (Google) tokeni hisobingizga bog'lab Supabase'da saqlanadi va faqat oila bildirishnomalarini yuborish uchun ishlatiladi. Hisobdan chiqqanda o'chiriladi.</li>
 </ul>
 
 <h2>Kimlar ko'radi</h2>
@@ -39,6 +40,7 @@
   <li><b>Expenses:</b> amount, description, category, date, family membership and monthly budget. Stored on the device and synced to Supabase.</li>
   <li><b>Typed or spoken text:</b> sent to Google Gemini AI to parse the expense. On the free tier Google may use this text to improve its models.</li>
   <li><b>Microphone:</b> used only for voice input; speech is converted to text on the device. Audio is never stored or uploaded.</li>
+  <li><b>Notifications:</b> the device's Firebase Cloud Messaging (Google) token is stored in Supabase with your account and used only to send family notifications. It is deleted when you sign out.</li>
 </ul>
 
 <h2>Who sees it</h2>

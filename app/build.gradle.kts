@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services) // reads google-services.json (FCM only)
 }
 
 // Release signing reads key.properties (gitignored; same keystore as the Flutter
@@ -85,6 +86,8 @@ dependencies {
     implementation(libs.ktor.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.lifecycle.process)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     coreLibraryDesugaring(libs.desugar)
     debugImplementation(libs.compose.tooling)
     debugImplementation(libs.compose.test.manifest)

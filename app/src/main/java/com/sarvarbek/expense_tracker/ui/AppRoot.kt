@@ -1,6 +1,17 @@
 package com.sarvarbek.expense_tracker.ui
 
+import android.Manifest
+import android.content.SharedPreferences
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.core.content.edit
+import com.sarvarbek.expense_tracker.services.Push
+import com.sarvarbek.expense_tracker.services.canNotify
+import com.sarvarbek.expense_tracker.services.shouldAskNotifications
+import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
+import com.sarvarbek.expense_tracker.ui.common.t
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -53,10 +64,10 @@ import com.sarvarbek.expense_tracker.ui.theme.AppMotion
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 
 @Composable
-fun AppRoot() {
+fun AppRoot(pushRoute: String? = null, onPushRouted: () -> Unit = {}) {
     val auth = (LocalContext.current.applicationContext as App).container.supabase.auth
     val status by auth.sessionStatus.collectAsStateWithLifecycle()
-    AppTheme { AuthGate(status, auth) { Routes() } }
+    AppTheme { AuthGate(status, auth) { Routes(pushRoute, onPushRouted) } }
 }
 
 /**
@@ -72,7 +83,7 @@ fun AuthGate(status: SessionStatus, auth: Auth, content: @Composable () -> Unit)
 
 /** Routes: shell (tabs) plus full-screen pushes (add, edit, settings, categories, one category's expenses). */
 @Composable
-private fun Routes() {
+private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     val container = (LocalContext.current.applicationContext as App).container
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -95,6 +106,14 @@ private fun Routes() {
             container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
             onClose = { nav.back() }, editing = editing, members = members,
         )
+    }
+    // Notification tap. The requests screen pops itself without an overview, so load it first.
+    LaunchedEffect(pushRoute) {
+        if (pushRoute == Push.ROUTE_REQUESTS) {
+            family.refresh()
+            if (family.overview != null && nav.currentDestination?.route != pushRoute) nav.navigate(pushRoute)
+        }
+        if (pushRoute != null) onPushRouted()
     }
     CompositionLocalProvider(LocalToaster provides toaster) {
         NavHost(
@@ -125,7 +144,11 @@ private fun Routes() {
                             container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
                             onCategory = openCategory, onEdit = edit,
                         )
-                        else -> FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory) { nav.go("family-settings") }
+                        else -> {
+                            FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory) { nav.go("family-settings") }
+                            // In a family is when pushes start to matter (requests, later new expenses).
+                            if (active && family.overview != null) AskNotifications(container.prefs)
+                        }
                     }
                 }
             }
@@ -146,6 +169,8 @@ private fun Routes() {
                     scope.launch {
                         // Flush unsynced edits: the next account to sign in here wipes local rows.
                         withTimeoutOrNull(5_000) { container.sync.run() }
+                        // No pushes for this account on this phone after sign-out.
+                        withTimeoutOrNull(5_000) { container.push.unregister() }
                         nav.popBackStack("shell", inclusive = false)
                         container.supabase.auth.signOut()
                     }
@@ -170,6 +195,24 @@ private fun Routes() {
         }
     }
 }
+
+/** Android 13+: explain, then ask for POST_NOTIFICATIONS once ever (either answer counts). */
+@Composable
+private fun AskNotifications(prefs: SharedPreferences) {
+    val context = LocalContext.current
+    var show by remember {
+        mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, canNotify(context), prefs.getBoolean(K_PUSH_ASKED, false)))
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    if (!show) return
+    val done = { show = false; prefs.edit { putBoolean(K_PUSH_ASKED, true) } }
+    ConfirmDialog(t("push.ask_title"), t("push.ask_text"), t("push.ask_allow"), onDismiss = done) {
+        done()
+        if (Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
+
+private const val K_PUSH_ASKED = "push.asked"
 
 /** The category the category route shows ([CategoryPick] holds the source screen's selector). */
 class Picked : ViewModel() {

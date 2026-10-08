@@ -282,5 +282,13 @@
   "svc.family.request_not_found": "Сўров топилмади",
   "svc.family.already_invited": "Бу email аллақачон таклиф қилинган",
   "svc.family.unknown": "Хатолик юз берди. Қайта уриниб кўринг",
-  "svc.csv.share_text": "Харажатлар экспорти"
+  "svc.csv.share_text": "Харажатлар экспорти",
+  "push.channel_requests": "Туркум сўровлари",
+  "push.request_title": "Туркум сўрови",
+  "push.request": "%1$s янги туркум сўради: %2$s",
+  "push.approved": "\"%1$s\" туркуми тасдиқланди",
+  "push.rejected": "\"%1$s\" туркуми рад этилди",
+  "push.ask_title": "Билдиришномалар",
+  "push.ask_text": "Оила аъзоси янги туркум сўраганда ёки сўровингизга жавоб берилганда хабар берамиз. Рухсат берасизми?",
+  "push.ask_allow": "Рухсат бериш"
 }
