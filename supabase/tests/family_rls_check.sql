@@ -112,19 +112,26 @@ begin
   perform public.set_role(b, 'admin');
   select count(*) into n from public.family_members where role = 'admin'; assert n = 2, 'two admins';
   perform public.set_role(b, 'member');
-  -- titles: self or admin; family_summary returns them
+  -- titles: admin only (own included); family_summary returns them
+  perform public.set_title(a, 'Ota');
   perform public.set_title(b, ' Uka ');
-  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   perform public.set_title(b, 'Singil');
-  begin perform public.set_title(a, 'Ota'); ok := false;
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  begin perform public.set_title(b, 'Aka'); ok := false;
+  exception when others then ok := sqlerrm = 'not_admin'; end;
+  assert ok, 'member cannot set own title';
+  begin perform public.set_title(a, 'Ona'); ok := false;
   exception when others then ok := sqlerrm = 'not_admin'; end;
   assert ok, 'member cannot set others title';
   update public.profiles set display_name = 'Bobur' where id = b;
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
   assert r.title = 'Singil' and r.display_name = 'Bobur', 'summary has title + name, got ' || r.title || ' ' || r.display_name;
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   perform public.set_title(b, '');
   select title into r from public.family_members where user_id = b;
   assert r.title is null, 'blank clears title';
+  select title into r from public.family_members where user_id = a;
+  assert r.title = 'Ota', 'admin sets own title';
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   begin perform public.set_role(b, 'admin'); ok := false;
   exception when others then ok := sqlerrm = 'not_admin'; end;

@@ -141,14 +141,14 @@ private fun FamilySettings(f: FamilyOverview, a: FamilyActions) {
     }
 }
 
-/** Member + role; admins get a menu to promote, demote or remove. Anyone sets their own title. */
+/** Member + role; admins get a menu to set titles, promote, demote or remove. */
 @Composable
 private fun RoleRow(m: FamilyMember, f: FamilyOverview, a: FamilyActions) {
     val self = m.userId == f.myId
     var menu by remember { mutableStateOf(false) }
     val close = { a.show(null) }
     IconRow(null, memberLabel(m, f.myId), if (m.isAdmin) t("familySettings.admin") else t("familySettings.member")) {
-        if (f.isAdmin || self) Box {
+        if (f.isAdmin) Box {
             IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, t("familySettings.actions", m.name)) }
             DropdownMenu(menu, { menu = false }, containerColor = AppTheme.colors.card) {
                 DropdownMenuItem({ Text(t("familySettings.role")) }, {
@@ -159,7 +159,6 @@ private fun RoleRow(m: FamilyMember, f: FamilyOverview, a: FamilyActions) {
                         }
                     }
                 })
-                if (!f.isAdmin) return@DropdownMenu
                 if (m.isAdmin) {
                     DropdownMenuItem({ Text(t("familySettings.unadmin")) }, {
                         menu = false
