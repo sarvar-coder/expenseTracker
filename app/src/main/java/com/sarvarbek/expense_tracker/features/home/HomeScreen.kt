@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -23,7 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.SettingsStore
+import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.services.FamilyExpense
@@ -44,16 +49,34 @@ import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import java.time.LocalDate
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-/** Today: big total, slim month-budget line, today's expenses. */
+/**
+ * Today: my total (plus the family's, in a family), slim personal month-budget
+ * line, and today's rows from the family [feed]: mine plus other members'
+ * shared ones, newest first. Not in a family the feed is just mine.
+ * [offline]: others' rows are as last fetched.
+ */
 @Composable
-fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, onEdit: (Expense) -> Unit) {
-    val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
+fun HomeScreen(
+    db: ExpenseDao,
+    settings: SettingsStore,
+    feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
+    offline: Boolean = false,
+    onSettings: () -> Unit,
+    onEdit: (Expense) -> Unit,
+) {
+    val rows by feed.collectAsStateWithLifecycle(null) // null = loading
     val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
     val budget by settings.settings.collectAsStateWithLifecycle()
     val now = LocalDate.now()
-    val today = todayExpenses(expenses, now)
-    val month = summarize(expenses, budget.monthlyBudget, now)
+    val all = rows.orEmpty()
+    val today = todayExpenses(all, now)
+    // The budget line stays personal.
+    val month = summarize(all.filter { it.mine }.map { it.expense }, budget.monthlyBudget, now)
+    // ponytail: "in a family" = the feed has someone else's row; a family with no one else's expenses yet shows just mine.
+    val family = all.any { !it.mine }
     val catById = categories.associateBy { it.id }
 
     // Bottom padding clears the floating add button.
@@ -61,18 +84,30 @@ fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, 
         item { Header(now, onSettings) }
         item { Spacer(Modifier.height(AppSpace.gap)) }
         // Transfers stay in the list but aren't "spent".
-        item { today.filter { it.transferTo == null }.let { spent -> TodayHero(spent.sumOf { it.amount }, spent.size, month) } }
+        item {
+            val spent = today.filter { it.expense.transferTo == null }
+            val mine = spent.filter { it.mine }
+            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount })
+        }
         item {
             Spacer(Modifier.height(AppSpace.section))
             Text(t("home.today_expenses"), style = MaterialTheme.typography.titleMedium)
+            if (offline && family) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.WifiOff, null, tint = AppTheme.colors.muted)
+                    Spacer(Modifier.width(8.dp))
+                    Text(t("insights.offline"), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             Spacer(Modifier.height(10.dp))
         }
         item {
-            if (today.isEmpty()) {
-                EmptyState(Icons.Outlined.ReceiptLong, t("home.empty_title"), t("home.empty_body"))
-            } else {
-                AppCard {
-                    for (e in today) ExpenseTile(FamilyExpense(e, t("family.you"), mine = true), catById[e.categoryId], db, onEdit)
+            when {
+                rows == null -> Unit // loading: Room answers in a frame, no spinner flash
+                today.isEmpty() -> EmptyState(Icons.Outlined.ReceiptLong, t("home.empty_title"), t("home.empty_body"))
+                else -> AppCard {
+                    for (fe in today) key(fe.expense.id) { ExpenseTile(fe, catById[fe.expense.categoryId], db, onEdit) }
                 }
             }
         }
@@ -99,7 +134,8 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
+/** [familyTotal]: today's family spend (mine included), null when not in a family. */
+private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -107,9 +143,18 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
     Column(
         Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp),
     ) {
-        Text(if (count == 0) t("home.spent_today") else t("home.spent_today_count", count), style = ty.labelMedium.copy(color = soft))
+        val label = when {
+            familyTotal != null -> t("home.mine_today", count)
+            count == 0 -> t("home.spent_today")
+            else -> t("home.spent_today_count", count)
+        }
+        Text(label, style = ty.labelMedium.copy(color = soft))
         Spacer(Modifier.height(6.dp))
         Money(total, style = ty.displayLarge, color = c.onHero, autoSize = true)
+        if (familyTotal != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(t("home.family_today", formatMoney(familyTotal)), style = ty.labelMedium.copy(color = c.onHero))
+        }
         Spacer(Modifier.height(20.dp))
         if (month.budget <= 0) {
             Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))

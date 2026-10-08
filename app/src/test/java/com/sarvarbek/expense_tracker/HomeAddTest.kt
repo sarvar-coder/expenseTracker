@@ -35,13 +35,16 @@ import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
+import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.ParsedExpense
+import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
 import com.sarvarbek.expense_tracker.ui.common.startMillis
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -129,12 +132,38 @@ class HomeAddTest {
             db.insertExpense(Expense(description = "Coffee", amount = 45000, categoryId = food.id, date = now, source = ExpenseSource.manual))
             db.insertExpense(Expense(description = "Old taxi", amount = 30000, categoryId = food.id, date = now - 40L * 86_400_000, source = ExpenseSource.manual))
         }
+        // Another member's shared rows, as FamilyService.feed delivers them.
+        val others = listOf(
+            FamilyExpense(Expense(description = "Bread", amount = 10000, categoryId = food.id, date = now - 1000, source = ExpenseSource.manual, ownerId = "ali"), "Ali"),
+            FamilyExpense(Expense(description = "Old bread", amount = 5000, categoryId = food.id, date = now - 40L * 86_400_000, source = ExpenseSource.manual, ownerId = "ali"), "Ali"),
+        )
         settings.setBudget(1_000_000)
-        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
+        val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
+        show { HomeScreen(db, settings, feed, offline = true, onSettings = {}, onEdit = {}) }
         waitFor("Coffee")
+        rule.onNodeWithText("Bread").assertExists()
+        rule.onNodeWithText("Ali ·", substring = true).assertExists()
         rule.onNodeWithText("Old taxi").assertDoesNotExist()
+        rule.onNodeWithText("Old bread").assertDoesNotExist()
         rule.onNodeWithText("Bugun hali xarajat yo'q").assertDoesNotExist()
+        // Hero: mine big, family's line; budget line stays personal.
+        rule.onNodeWithText("Men · bugun · 1 ta").assertExists()
+        rule.onNodeWithText("Oila bugun: 55 000 UZS").assertExists()
         rule.onNodeWithText("Oy: 45 000 / 1 000 000", substring = true).assertExists()
+        rule.onNodeWithText("Internet yo'q", substring = true).assertExists()
+        // Others' row opens the read-only sheet, not edit.
+        rule.onNodeWithText("Bread").performClick()
+        waitFor("Faqat o'qish uchun")
+    }
+
+    @Test fun notInFamilyHasNoFamilyLine() {
+        val food = runBlocking { db.getCategories() }.first()
+        runBlocking { db.insertExpense(Expense(description = "Coffee", amount = 45000, categoryId = food.id, date = System.currentTimeMillis(), source = ExpenseSource.manual)) }
+        show { HomeScreen(db, settings, offline = true, onSettings = {}, onEdit = {}) }
+        waitFor("Coffee")
+        rule.onNodeWithText("Bugun sarflangan · 1 ta").assertExists()
+        rule.onNodeWithText("Oila bugun", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Internet yo'q", substring = true).assertDoesNotExist()
     }
 
     // --- add_screen_test ---
