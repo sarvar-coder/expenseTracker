@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Search
@@ -29,11 +27,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
-import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.services.FamilyExpense
-import com.sarvarbek.expense_tracker.ui.common.formatMoney
+import com.sarvarbek.expense_tracker.features.insights.daySections
 import com.sarvarbek.expense_tracker.ui.common.t
-import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.fieldColors
@@ -80,15 +76,7 @@ fun ActivityScreen(db: ExpenseDao, onEdit: (Expense) -> Unit) {
                 }
             }
         }
-        items(sections, key = { it.label }) { section ->
-            Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 20.dp, bottom = 8.dp)) {
-                Text(section.label, style = ty.titleMedium, modifier = Modifier.weight(1f))
-                Text(formatMoney(section.items.filter { it.transferTo == null }.sumOf { it.amount }), color = AppTheme.colors.muted, style = ty.labelMedium)
-            }
-            AppCard(Modifier.fillMaxWidth()) {
-                for (e in section.items) ExpenseTile(FamilyExpense(e, t("family.you"), mine = true), catById[e.categoryId], db, onEdit)
-            }
-        }
+        daySections(sections, expenses.associate { it.id to FamilyExpense(it, t("family.you"), mine = true) }, catById, db, onEdit)
     }
 
     if (filterOpen) {

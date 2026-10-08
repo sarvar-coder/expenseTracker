@@ -30,7 +30,12 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
 import com.sarvarbek.expense_tracker.features.activity.ActivityScreen
 import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.assertEquals
+import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
+import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.mergeFeed
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,7 +150,7 @@ class HistoryInsightsTest {
 
     @Test fun insightsTotalLegendMonthPillsYearSheetFilterSwapsPillsForChips() {
         add("Coffee", 45000, "Food & dining")
-        show { InsightsScreen(db) }
+        show { InsightsScreen(db, showList = false) }
         val now = LocalDate.now()
         rule.waitUntil(5000) { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Food & dining").assertExists()
@@ -189,7 +194,7 @@ class HistoryInsightsTest {
         )
         val others = MutableStateFlow(listOf(FamilyExpense(other("o1", 30000, "u2"), "Vali"), FamilyExpense(other("o2", 5000, "u3"), "Gul")))
         val feed = combine(db.watchExpenses(), others) { own, o -> mergeFeed(own, o, "Siz", "u1") }
-        show { InsightsScreen(db, feed) }
+        show { InsightsScreen(db, feed, showList = false) }
         rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Transport").assertExists()
 
@@ -229,6 +234,50 @@ class HistoryInsightsTest {
         others.value = others.value.filter { it.ownerName != "Vali" }
         rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 50 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
+    }
+
+    @Test fun insightsListByDefaultToggleAndCategoryTapOpenItsExpenses() {
+        add("Coffee", 45000, "Food & dining")
+        add("Bus", 5000, "Transport")
+        val food = runBlocking { db.getCategories().first { it.name == "Food & dining" }.id }
+        val others = listOf(FamilyExpense(Expense(id = "o1", description = "Plov", amount = 30000, categoryId = food, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
+        val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz", "u1") }
+        var pick by mutableStateOf<CategoryPick?>(null)
+        val modes = mutableListOf<Boolean>()
+        var edited: Expense? = null
+        show {
+            pick?.let { CategoryExpensesScreen(db, feed, it, onBack = { pick = null }) { e -> edited = e } }
+                ?: InsightsScreen(db, feed, onMode = { modes += it }, onCategory = { pick = it }, onEdit = { edited = it })
+        }
+
+        // List mode: every row, others with their owner; top total = sum of the rows.
+        waitFor("Plov")
+        rule.onNodeWithText("Ro'yxat").assertIsSelected()
+        rule.onNodeWithText("Coffee").assertExists()
+        rule.onNodeWithText("Vali · Food & dining").assertExists()
+        rule.onNodeWithContentDescription("Jami 80 000 UZS").assertExists()
+        rule.onNodeWithText("Coffee").performClick()
+        assertEquals("Coffee", edited?.description)
+
+        // Search narrows; no match shows its empty state.
+        rule.onNode(hasSetTextAction()).performTextReplacement("zzz")
+        waitFor("Mos keladigani yo'q")
+        rule.onNode(hasSetTextAction()).performTextReplacement("")
+
+        // Categories: same total, legend row read as one label.
+        tap("Turkumlar")
+        assertEquals(listOf(false), modes)
+        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Food & dining, 75 000 UZS, 94%")).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().let { assertEquals(2, it.size) } // header + donut
+        rule.onNode(hasContentDescription("Food & dining, 75 000 UZS, 94%")).performClick()
+
+        // Category screen: only its rows, total = legend amount; back returns.
+        waitFor("Plov")
+        rule.onNodeWithContentDescription("${monthName(LocalDate.now().monthValue)} ${LocalDate.now().year}, Jami 75 000 UZS").assertExists()
+        rule.onNodeWithText("Bus").assertDoesNotExist()
+        rule.onNodeWithText("Coffee").assertExists()
+        rule.onNodeWithContentDescription("Orqaga").performClick()
+        waitFor("Ro'yxat") // back on Tahlil (this test host doesn't save its state; the nav back stack does)
     }
 
     @Test fun insightsAloneHasNoMemberRow() {

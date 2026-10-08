@@ -249,7 +249,7 @@ fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> 
 
 /**
  * One expense row. Tap goes through [rememberExpenseTap]; swipe left deletes
- * after confirm, own non-frozen rows only. Used by Home (today) and Tarix.
+ * after confirm, own non-frozen rows only. Used by Home (today), Tarix and Tahlil.
  */
 @Composable
 fun ExpenseTile(fe: FamilyExpense, category: Category?, db: ExpenseDao, onEdit: (Expense) -> Unit) {
@@ -301,7 +301,9 @@ fun ExpenseTile(fe: FamilyExpense, category: Category?, db: ExpenseDao, onEdit: 
                 Text(expense.description, style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (transfer) t("widgets.transfer") else category?.name ?: t("widgets.no_category"), color = AppTheme.colors.muted, style = ty.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    // Others' rows lead with who added them.
+                    val what = if (transfer) t("widgets.transfer") else category?.name ?: t("widgets.no_category")
+                    Text(if (fe.mine) what else "${fe.ownerName} · $what", color = AppTheme.colors.muted, style = ty.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(4.dp))
                     Icon(srcIcon, srcLabel, tint = c.muted, modifier = Modifier.size(13.dp))
                     if (expense.frozen) Icon(Icons.Outlined.Lock, t("widgets.read_only"), tint = c.muted, modifier = Modifier.size(13.dp))

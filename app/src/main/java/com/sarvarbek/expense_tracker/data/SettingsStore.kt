@@ -64,10 +64,16 @@ class SettingsStore(private val prefs: SharedPreferences) {
         get() = prefs.getString(K_ADD_MODE, null)
         set(v) = prefs.edit { putString(K_ADD_MODE, v) }
 
+    /** Tahlil's last mode: list (default) or categories. */
+    var insightsList: Boolean
+        get() = prefs.getBoolean(K_INSIGHTS_LIST, true)
+        set(v) = prefs.edit { putBoolean(K_INSIGHTS_LIST, v) }
+
     companion object {
         private const val K_BUDGET = "monthlyBudget"
         private const val K_LOCALE = "sttLocale"
         private const val K_ADD_MODE = "lastAddMode"
+        private const val K_INSIGHTS_LIST = "insightsList"
         private const val K_NAME = "displayName"
         private const val K_UI_LANG = "uiLanguage"
         // 'sync.' prefix: wiped with the other sync keys when the account changes.
