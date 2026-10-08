@@ -34,14 +34,14 @@ begin
   select category_id into newcat from public.expenses where id = eb1; assert newcat = ca, 'food merged into Food';
   select count(*) into n from public.expenses where id = eb2 and pending_category = 'Gym'; assert n = 1, 'Gym pending in Boshqa';
   select count(*) into n from public.category_requests where name = 'Gym'; assert n = 1, 'request auto-created';
-  insert into public.expenses (id, family_id, category_id, description, amount, date, source, is_private)
-    values (eb4, fid, ca, 'secret', 30, now(), 'manual', true);
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source, is_private, raw_input)
+    values (eb4, fid, ca, 'secret', 30, now(), 'typed', true, 'secret 30');
   select count(*) into n from public.expenses where id = eb4 and not is_private; assert n = 1, 'old APK is_private forced false';
   update public.expenses set is_private = true, updated_at = now() + interval '1 second' where id = eb4;
   select count(*) into n from public.expenses where id = eb4 and not is_private; assert n = 1, 'is_private stays false on update';
   -- transfer to A: out of family totals and the family list
-  insert into public.expenses (id, family_id, category_id, description, amount, date, source, transfer_to)
-    values (eb7, fid, ca, '-> Ali', 500, now(), 'manual', a);
+  insert into public.expenses (id, family_id, category_id, description, amount, date, source, transfer_to, raw_input)
+    values (eb7, fid, ca, '-> Ali', 500, now(), 'typed', a, 'Aliga 500');
   update public.profiles set budget = 1000 where id = b;
   begin
     insert into public.categories (id, family_id, name, color_hex) values (gen_random_uuid(), fid, 'X', 'AAAAAA');
@@ -77,10 +77,11 @@ begin
   assert n = 1, 'member ticks family need via upsert, owner/family kept';
   update public.needs set done = true where id = nb2;
   get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
-  select amount, description, is_private into r from public.family_expenses_since('epoch') where id = eb4;
+  select amount, description, is_private, source, raw_input into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount = 30 and r.description = 'secret' and not r.is_private, 'no private: row shared with the family';
-  select amount, is_private into r from public.family_expenses_since('epoch') where id = eb7;
-  assert r.amount is null and r.is_private, 'transfer row is a tombstone';
+  assert r.source = 'typed' and r.raw_input = 'secret 30', 'feed carries source + raw input (read-only sheet)';
+  select amount, is_private, raw_input into r from public.family_expenses_since('epoch') where id = eb7;
+  assert r.amount is null and r.is_private and r.raw_input is null, 'transfer row is a tombstone';
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
   assert r.shared_total = 170, 'B shared total 170, got ' || r.shared_total;
   assert r.contribution = 1000, 'B contribution = budget 1000, got ' || r.contribution;

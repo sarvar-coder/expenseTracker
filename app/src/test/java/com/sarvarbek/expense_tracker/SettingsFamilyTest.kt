@@ -9,7 +9,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -22,6 +21,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -239,7 +239,8 @@ class SettingsFamilyTest : ScreenTest() {
         )
         val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
-        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db) }
+        var edited: Expense? = null
+        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db, onEdit = { edited = it }) }
 
         waitFor("Non")
         rule.onNodeWithText("Uy").assertExists() // title = family name
@@ -254,6 +255,17 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
         assertTapTargets()
+
+        // Tap routing: own row opens edit, Vali's opens the read-only sheet.
+        // Rows sit below the fold in the lazy column: click via semantics.
+        rule.onNodeWithText("Non").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals("Non", edited?.description)
+        edited = null
+        rule.onNodeWithText("Taksi").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Kim qo'shgan").assertExists()
+        assertEquals(null, edited)
+        rule.onNodeWithText("Yopish").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
 
         // Filter by member: only Vali's row stays; Ko'rinish is hidden (all shared).
         rule.onNodeWithContentDescription("Filtr").performClick()
@@ -304,14 +316,37 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Adminlikdan olish").fetchSemanticsNodes().isEmpty())
     }
 
-    @Test fun frozenTileCannotBeOpened() {
-        val frozen = Expense(description = "Non", amount = 5_000, categoryId = "c", date = System.currentTimeMillis(), source = ExpenseSource.manual, frozen = true)
+    @Test fun frozenTileOpensReadOnlySheet() {
+        val frozen = Expense(description = "Non", amount = 5_000, categoryId = "c", date = System.currentTimeMillis(), source = ExpenseSource.voice, rawInput = "non besh ming", frozen = true)
         var opened = false
-        show { ExpenseTile(frozen, null, db) { opened = true } }
+        show { ExpenseTile(FamilyExpense(frozen, "Siz", mine = true), null, db) { opened = true } }
 
         rule.onNodeWithContentDescription("Faqat o'qish uchun").assertExists()
-        rule.onNode(hasClickAction() and hasText("Non", substring = true)).assertIsNotEnabled()
         rule.onNodeWithText("Non").performClick()
-        assertFalse(opened)
+        assertFalse("frozen never opens edit", opened)
+        rule.onNodeWithText("Kim qo'shgan").assertExists()
+        rule.onNodeWithText("non besh ming").assertExists() // raw input
+        rule.onNodeWithText("Ovozli").assertExists() // source
+        assertTrue("no delete in the sheet", rule.onAllNodesWithText("O'chirish").fetchSemanticsNodes().isEmpty())
+        assertTapTargets()
+        rule.onNodeWithText("Yopish").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun ownTileOpensEditOthersOpenReadOnlyWithName() {
+        val e = Expense(description = "Non", amount = 5_000, categoryId = "c", date = System.currentTimeMillis(), source = ExpenseSource.manual)
+        var edited: Expense? = null
+        show {
+            androidx.compose.foundation.layout.Column {
+                ExpenseTile(FamilyExpense(e, "Siz", mine = true), null, db) { edited = it }
+                ExpenseTile(FamilyExpense(e.copy(id = "o1", description = "Taksi", ownerId = "u2"), "Vali"), null, db) { edited = it }
+            }
+        }
+        rule.onNodeWithText("Non").performClick()
+        assertEquals(e.id, edited?.id)
+        edited = null
+        rule.onNodeWithText("Taksi").performClick()
+        rule.onNodeWithText("Vali").assertExists()
+        assertEquals("others never open edit", null, edited)
     }
 }

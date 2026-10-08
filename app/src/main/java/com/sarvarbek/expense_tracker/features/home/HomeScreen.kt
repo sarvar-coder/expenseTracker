@@ -34,6 +34,7 @@ import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
+import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.ui.common.Money
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.t
@@ -71,7 +72,7 @@ fun HomeScreen(db: ExpenseDao, settings: SettingsStore, onSettings: () -> Unit, 
                 EmptyState(Icons.Outlined.ReceiptLong, t("home.empty_title"), t("home.empty_body"))
             } else {
                 AppCard {
-                    for (e in today) ExpenseTile(e, catById[e.categoryId], db, onEdit)
+                    for (e in today) ExpenseTile(FamilyExpense(e, t("family.you"), mine = true), catById[e.categoryId], db, onEdit)
                 }
             }
         }

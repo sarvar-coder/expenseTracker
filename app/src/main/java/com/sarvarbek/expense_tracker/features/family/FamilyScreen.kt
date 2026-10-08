@@ -61,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
@@ -77,6 +78,7 @@ import com.sarvarbek.expense_tracker.services.FamilyMember
 import com.sarvarbek.expense_tracker.services.FamilyOverview
 import com.sarvarbek.expense_tracker.services.FamilyService
 import com.sarvarbek.expense_tracker.ui.common.CategoryBadge
+import com.sarvarbek.expense_tracker.ui.common.rememberExpenseTap
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.DividedCard
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
@@ -170,7 +172,7 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onNeeds: () -> Unit = {}, onSettings: () -> Unit = {}) {
+fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onNeeds: () -> Unit = {}, onEdit: (Expense) -> Unit = {}, onSettings: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
@@ -205,7 +207,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onN
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -279,7 +281,7 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, needs: @Composable () -> Unit) {
+private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, onEdit: (Expense) -> Unit, needs: @Composable () -> Unit) {
     val rows by feed.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
@@ -310,14 +312,14 @@ private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: Exp
             CategoryBreakdown(data)
             SectionLabel(t("family.list"))
             // ponytail: whole list in one lazy item; fine for a family's month, page it if wide ranges get slow.
-            DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId]) }
+            DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId], onEdit) }
         }
     }
 }
 
 @Composable
-private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?) = Row(
-    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?, onEdit: (Expense) -> Unit) = Row(
+    Modifier.fillMaxWidth().clickable(onClick = rememberExpenseTap(fe, category, onEdit)).padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
     val e = fe.expense
