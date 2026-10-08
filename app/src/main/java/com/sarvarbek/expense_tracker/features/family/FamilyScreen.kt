@@ -98,6 +98,8 @@ import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
 import com.sarvarbek.expense_tracker.ui.common.t
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -112,6 +114,8 @@ class FamilyState(
     val service: FamilyService?,
     private val load: suspend () -> FamilyOverview? = { monthStart().let { service!!.overview(it.startMillis(), it.plusMonths(1).startMillis()) } },
     private val loadInvites: suspend () -> List<FamilyInvite> = { service!!.myInvites() },
+    /** Own + others' expenses ([FamilyService.feed]). */
+    val feed: Flow<List<FamilyExpense>> = service?.feed ?: flowOf(emptyList()),
 ) {
     var loaded by mutableStateOf(false); private set
     var overview by mutableStateOf<FamilyOverview?>(null); private set
@@ -201,7 +205,7 @@ fun FamilyScreen(state: FamilyState, db: ExpenseDao, active: Boolean = true, onN
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, db, filter, { filter = it }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -275,20 +279,18 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(f: FamilyOverview, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, needs: @Composable () -> Unit) {
-    val expenses by remember(db) { db.watchExpenses() }.collectAsStateWithLifecycle(emptyList())
+private fun InFamily(f: FamilyOverview, feed: Flow<List<FamilyExpense>>, db: ExpenseDao, filter: ActivityFilter, onFilter: (ActivityFilter) -> Unit, needs: @Composable () -> Unit) {
+    val rows by feed.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
     val names = f.memberNames
-    // Own shared rows come from Room (live, offline edits included); the
-    // server only sends the others'.
-    val mine = expenses.filter { it.familyId == f.id && it.transferTo == null }
-        .map { FamilyExpense(it.copy(ownerId = f.myId), names[f.myId] ?: t("family.you")) }
     // No Sana in the filter: this month.
     val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
+    // Own rows: only the family's, no transfers; ownerId set so the member filter sees them.
     // Current members' labels carry their title; ex-members keep the server name.
-    val others = f.others.map { it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
-    val list = (mine + others).filter { filter.copy(range = range).matches(it.expense) }.sortedByDescending { it.expense.date }
+    val list = rows.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
+        .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
+        .filter { filter.copy(range = range).matches(it.expense) }
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {

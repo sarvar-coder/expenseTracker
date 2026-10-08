@@ -24,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
@@ -42,6 +43,7 @@ import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.FamilyInvite
 import com.sarvarbek.expense_tracker.services.FamilyMember
 import com.sarvarbek.expense_tracker.services.FamilyOverview
+import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
@@ -176,8 +178,7 @@ class SettingsFamilyTest : ScreenTest() {
         val f = FamilyOverview(
             "f1", "Uy", "u1", false,
             members = listOf(FamilyMember("u1", "Ali", true, 300_000, 1_000_000), FamilyMember("u2", "Vali", false, 200_000, -50_000)),
-            others = emptyList(),
-        )
+            )
         assertEquals(950_000L, f.budget)
         assertEquals(500_000L, f.spent)
     }
@@ -234,10 +235,11 @@ class SettingsFamilyTest : ScreenTest() {
         val overview = FamilyOverview(
             "f1", "Uy", "u1", isAdmin = true,
             members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000, title = "Ota"), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
-            others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali")),
             requests = listOf(CategoryRequest("r1", "Dorilar")),
         )
-        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }), db) }
+        val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
+        val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
+        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db) }
 
         waitFor("Non")
         rule.onNodeWithText("Uy").assertExists() // title = family name
@@ -268,7 +270,6 @@ class SettingsFamilyTest : ScreenTest() {
     private fun overview(admin: Boolean) = FamilyOverview(
         "f1", "Uy", "u1", isAdmin = admin,
         members = listOf(FamilyMember("u1", "Ali", admin, 0, 0), FamilyMember("u2", "Vali", !admin, 0, 0)),
-        others = emptyList(),
         requests = if (admin) listOf(CategoryRequest("r1", "Dorilar")) else emptyList(),
     )
 
