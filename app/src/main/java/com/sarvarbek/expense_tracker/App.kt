@@ -6,6 +6,7 @@ import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.AiParser
 import com.sarvarbek.expense_tracker.services.FamilyService
+import com.sarvarbek.expense_tracker.services.Push
 import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.services.SyncService
 import com.sarvarbek.expense_tracker.ui.common.I18n
@@ -27,6 +28,7 @@ class App : Application() {
         File(filesDir.parentFile, "app_flutter").deleteRecursively()
         I18n.load(this, container.settings.settings.value.uiLanguage)
         container.sync.start()
+        container.push.start()
     }
 }
 
@@ -56,4 +58,5 @@ class AppContainer(context: Context) {
     val family = FamilyService(supabase, sync)
     val aiParser = AiParser(supabase)
     val speech = SpeechService(context)
+    val push = Push(context, supabase)
 }

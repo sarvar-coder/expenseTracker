@@ -42,6 +42,14 @@ search, category filters, and the **Oila** (family) tab.
 - **AI parsing**: Google Gemini free tier, model `gemini-3.6-flash`, called from
   the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
   users only). Free-tier prompts may be used by Google for training (note in Settings).
+- **Push**: Firebase Cloud Messaging only (project `xarajatlar-app`, free).
+  Devices register tokens in `device_tokens` (own rows; `register_push_token`
+  moves a phone's token to whoever signs in; sign-out deletes it). DB triggers
+  call `private.push(users, data)` → outbox row + pg_net → Edge Function
+  `notify` (verify_jwt off; it only gets an outbox id and claims the row with
+  the service role) → FCM HTTP v1 with secret `FCM_SERVICE_ACCOUNT`. Data-only
+  messages; the app localizes text, drops pushes for another account, picks the
+  channel and tap route by `type`.
 - **Voice**: on-device STT (platform `SpeechRecognizer`), transcript fed to the AI parser.
 - **Database**: Room (SQLite, KSP) — Flow queries for filters/search/insights.
 - **State**: `ViewModel`/`remember` + `StateFlow`; manual DI via one `AppContainer` (no Hilt).
@@ -55,6 +63,7 @@ search, category filters, and the **Oila** (family) tab.
 | UI | Jetpack Compose + Material3, single Activity, Navigation-Compose |
 | DB | Room (KSP), epoch-millis `Long` timestamps, `Long` amounts |
 | Backend / auth / AI | supabase-kt (`auth`, `postgrest`, `functions`) + ktor okhttp, kotlinx.serialization |
+| Push | `firebase-messaging` (BoM, no analytics) + google-services plugin, `services/Push.kt` |
 | Voice | `SpeechRecognizer`, `RECORD_AUDIO` via ActivityResult |
 | Prefs | `SharedPreferences` (`settings` file) |
 | Formatting | `DecimalFormat` space grouping, java.time (desugared) |
@@ -87,12 +96,13 @@ app/src/main/java/com/sarvarbek/expense_tracker/
   ui/common/              // Format.kt (money/dates), Widgets.kt (shared widgets)
   data/                   // Room entities, AppDatabase + DAO, SettingsStore
   services/               // AiParser, CategoryMatcher, SyncService, FamilyService,
-                          // SpeechService, CsvExport
+                          // SpeechService, CsvExport, Push (FCM)
   features/home|add|activity|insights|settings|auth|family/
 app/src/test/             // Robolectric + Compose tests
 supabase/
   migrations/             // schema, RLS, RPCs
   functions/parse-expense/
+  functions/notify/       // FCM sender, called by pg_net
   tests/family_rls_check.sql
 docs/                     // privacy.html, font licence
 ```
@@ -108,7 +118,8 @@ deletedAt (soft delete), dirty (local only).
   (awaiting admin approval), frozen (ex-member history), createdAt.
 - **Settings** (SharedPreferences): monthlyBudget + displayName (synced to
   `profiles`), uiLanguage, sttLocale, lastAddMode.
-- **Server only**: families, family_members(role), invites(email), category_requests.
+- **Server only**: families, family_members(role), invites(email), category_requests,
+  device_tokens, private.push_outbox.
 
 ## Conventions
 
