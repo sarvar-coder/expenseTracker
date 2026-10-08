@@ -242,7 +242,7 @@ class BackendTest {
     @Test fun familyFeedMergesMineAndOthersSkipsHiddenDedupesById() {
         fun row(id: String, date: String?, deletedAt: String? = null) = Json.parseToJsonElement(
             if (date == null) """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":null,"description":null,"amount":null,"date":null,"is_private":true,"frozen":false,"deleted_at":null}"""
-            else """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":"c1","description":"d","amount":5000,"date":"$date","is_private":false,"frozen":false,"deleted_at":${deletedAt?.let { "\"$it\"" }}}""",
+            else """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":"c1","description":"d","amount":5000,"date":"$date","source":"voice","raw_input":"d 5000","is_private":false,"frozen":false,"deleted_at":${deletedAt?.let { "\"$it\"" }}}""",
         ).jsonObject
         val others = parseOthers(listOf(
             row("o1", "2026-10-01T10:00:00Z"),
@@ -252,6 +252,7 @@ class BackendTest {
         ), "f1")
         assertEquals(listOf("o1", "dup"), others.map { it.expense.id })
         assertTrue(others.all { !it.mine && it.ownerName == "Vali" && it.expense.familyId == "f1" })
+        assertTrue(others.all { it.expense.source == ExpenseSource.voice && it.expense.rawInput == "d 5000" && !it.editable })
 
         val own = listOf(
             Expense(id = "m1", description = "Non", amount = 1, categoryId = "c1", date = Instant.parse("2026-10-05T00:00:00Z").toEpochMilli(), source = ExpenseSource.manual),

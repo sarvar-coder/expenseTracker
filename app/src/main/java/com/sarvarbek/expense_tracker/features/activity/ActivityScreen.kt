@@ -30,6 +30,7 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
+import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
@@ -85,7 +86,7 @@ fun ActivityScreen(db: ExpenseDao, onEdit: (Expense) -> Unit) {
                 Text(formatMoney(section.items.filter { it.transferTo == null }.sumOf { it.amount }), color = AppTheme.colors.muted, style = ty.labelMedium)
             }
             AppCard(Modifier.fillMaxWidth()) {
-                for (e in section.items) ExpenseTile(e, catById[e.categoryId], db, onEdit)
+                for (e in section.items) ExpenseTile(FamilyExpense(e, t("family.you"), mine = true), catById[e.categoryId], db, onEdit)
             }
         }
     }

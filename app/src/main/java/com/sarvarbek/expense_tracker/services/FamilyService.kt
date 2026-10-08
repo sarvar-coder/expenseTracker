@@ -57,7 +57,10 @@ data class FamilyMember(
  * A family feed row with who added it. [mine] = own row from Room (its
  * ownerId may still be null before the first sync); others' rows are read-only.
  */
-data class FamilyExpense(val expense: Expense, val ownerName: String, val mine: Boolean = false)
+data class FamilyExpense(val expense: Expense, val ownerName: String, val mine: Boolean = false) {
+    /** Tap routing for every list: own, non-frozen rows open edit; the rest open the read-only sheet. */
+    val editable get() = mine && !expense.frozen
+}
 
 data class SentInvite(val id: String, val email: String)
 
@@ -263,7 +266,9 @@ internal fun parseOthers(rows: List<JsonObject>, familyId: String) = rows.mapNot
         Expense(
             id = e.str("id")!!, description = e.str("description")!!, amount = e.num("amount"),
             categoryId = e.str("category_id")!!, date = OffsetDateTime.parse(e.str("date")!!).toInstant().toEpochMilli(),
-            source = ExpenseSource.manual, ownerId = e.str("owner_id")!!, familyId = familyId,
+            // raw_input: servers before 20261009120000 don't send it.
+            source = e.str("source")?.let { s -> ExpenseSource.entries.firstOrNull { it.name == s } } ?: ExpenseSource.manual,
+            rawInput = e.str("raw_input"), ownerId = e.str("owner_id")!!, familyId = familyId,
             frozen = (e["frozen"] as? JsonPrimitive)?.booleanOrNull == true, dirty = false,
         ),
         e.str("owner_name")!!,

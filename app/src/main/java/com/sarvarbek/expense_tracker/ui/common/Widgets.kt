@@ -82,6 +82,13 @@ import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.sarvarbek.expense_tracker.services.FamilyExpense
+import com.sarvarbek.expense_tracker.ui.theme.AppSheet
+import com.sarvarbek.expense_tracker.ui.theme.SecondaryButton
 
 /** 6-digit hex (no '#') -> opaque color, e.g. "E08A5B". */
 fun colorFromHex(hex: String) = Color(0xFF000000 or hex.toLong(16))
@@ -188,12 +195,65 @@ fun sourceMeta(s: ExpenseSource): Pair<String, ImageVector> = when (s) {
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
- * One expense row. Tap opens edit; swipe left deletes after confirm.
- * Frozen rows (shared history of a family you left) are read-only.
- * Used by Home (today) and Tarix.
+ * Tap handler for an expense row, the one place tap routing lives:
+ * [FamilyExpense.editable] rows call [onEdit]; others' and frozen rows open
+ * [ExpenseDetailSheet] (shown from here).
  */
 @Composable
-fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (Expense) -> Unit) {
+fun rememberExpenseTap(fe: FamilyExpense, category: Category?, onEdit: (Expense) -> Unit): () -> Unit {
+    // Keyed by id: a feed refresh that reorders rows must not swap the open sheet's expense.
+    var open by remember(fe.expense.id) { mutableStateOf(false) }
+    if (open) ExpenseDetailSheet(fe, category) { open = false }
+    return { if (fe.editable) onEdit(fe.expense) else open = true }
+}
+
+private val fullDate = DateTimeFormatter.ofPattern("yyyy, HH:mm")
+
+/** Read-only expense: no edit or delete. Others' rows and frozen history. */
+@Composable
+fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> Unit) = AppSheet(onDismiss) { hide ->
+    val e = fe.expense
+    val c = AppTheme.colors
+    val ty = MaterialTheme.typography
+    val transfer = e.transferTo != null
+    @Composable
+    fun Field(label: String, value: String) = Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(vertical = 8.dp)) {
+        Text(label, color = c.muted, style = ty.labelMedium)
+        Text(value, style = ty.bodyLarge)
+    }
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = AppSpace.section)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (transfer) TransferBadge() else CategoryBadge(category)
+            Spacer(Modifier.width(14.dp))
+            Text(e.description, style = ty.titleMedium, modifier = Modifier.weight(1f).semantics { heading() })
+        }
+        Spacer(Modifier.height(16.dp))
+        Money(e.amount, style = ty.headlineMedium)
+        Spacer(Modifier.height(8.dp))
+        Field(t("widgets.added_by"), fe.ownerName)
+        Field(t("add.category"), if (transfer) t("widgets.transfer") else category?.name ?: t("widgets.no_category"))
+        val d = e.date.toLocalDateTime()
+        Field(t("add.date"), "${uzDayMonth(d.toLocalDate())} ${d.format(fullDate)}")
+        Field(t("widgets.source"), sourceMeta(e.source).first)
+        e.rawInput?.takeIf { it.isNotBlank() }?.let { Field(t("widgets.raw_input"), it) }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Lock, null, tint = c.muted, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(t("widgets.read_only"), color = c.muted, style = ty.bodySmall)
+        }
+        Spacer(Modifier.height(16.dp))
+        SecondaryButton({ hide(onDismiss) }, Modifier.fillMaxWidth()) { Text(t("common.close")) }
+    }
+}
+
+/**
+ * One expense row. Tap goes through [rememberExpenseTap]; swipe left deletes
+ * after confirm, own non-frozen rows only. Used by Home (today) and Tarix.
+ */
+@Composable
+fun ExpenseTile(fe: FamilyExpense, category: Category?, db: ExpenseDao, onEdit: (Expense) -> Unit) {
+    val expense = fe.expense
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val toaster = LocalToaster.current
@@ -221,15 +281,16 @@ fun ExpenseTile(expense: Expense, category: Category?, db: ExpenseDao, onEdit: (
             }
         },
         enableDismissFromStartToEnd = false,
-        gesturesEnabled = !expense.frozen,
+        gesturesEnabled = fe.editable,
         // Row snaps back; it disappears from the list once the delete lands.
         onDismiss = { confirm = true; scope.launch { swipe.reset() } },
     ) {
         val (srcLabel, srcIcon) = sourceMeta(expense.source)
+        val tap = rememberExpenseTap(fe, category, onEdit)
         Row(
             Modifier
                 .background(c.card)
-                .clickable(enabled = !expense.frozen) { onEdit(expense) }
+                .clickable(onClick = tap)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
