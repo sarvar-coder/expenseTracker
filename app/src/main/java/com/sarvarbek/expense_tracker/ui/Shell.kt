@@ -25,9 +25,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.DonutLarge
 import androidx.compose.material.icons.outlined.FamilyRestroom
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.DonutLarge
 import androidx.compose.material.icons.rounded.FamilyRestroom
 import androidx.compose.material.icons.rounded.Home
@@ -66,11 +68,12 @@ private data class Tab(val labelKey: String, val icon: ImageVector, val selected
 private val tabs = listOf(
     Tab("shell.home", Icons.Outlined.Home, Icons.Rounded.Home),
     Tab("shell.insights", Icons.Outlined.DonutLarge, Icons.Rounded.DonutLarge),
+    Tab("shell.needs", Icons.Outlined.Checklist, Icons.Rounded.Checklist),
     Tab("shell.family", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
 )
 
 /**
- * Bottom-nav shell: 3 tabs + bottom-right FAB that opens Add. Visited tabs stay
+ * Bottom-nav shell: 4 tabs + bottom-right FAB that opens Add. Visited tabs stay
  * composed, so a switch is a 150 ms crossfade of ready content: no data reload,
  * no empty-state flash, scroll kept. [page] gets whether its tab is showing.
  * ponytail: hidden tabs keep collecting their flows; unload if a tab gets heavy.
@@ -84,9 +87,9 @@ fun Shell(
     onTab: () -> Unit = {},
     page: @Composable (index: Int, active: Boolean) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
-    // Keys name the 3-tab layout: a state saved by the old 4-tab build (index 3) is ignored, not restored.
-    var index by rememberSaveable(key = "tab3") { mutableIntStateOf(0) }
-    var visited by rememberSaveable(key = "visited3") { mutableStateOf(listOf(0)) }
+    // Keys name the tab layout: a state saved by another layout (index 2 was Oila) is ignored, not restored.
+    var index by rememberSaveable(key = "tab4") { mutableIntStateOf(0) }
+    var visited by rememberSaveable(key = "visited4") { mutableStateOf(listOf(0)) }
     LaunchedEffect(tab) { if (tab != null) { index = tab; onTab() } }
     if (index !in visited) visited = visited + index
     Scaffold(

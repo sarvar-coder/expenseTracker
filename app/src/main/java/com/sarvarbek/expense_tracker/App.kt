@@ -6,6 +6,7 @@ import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.AiParser
 import com.sarvarbek.expense_tracker.services.FamilyService
+import com.sarvarbek.expense_tracker.services.NeedPhotos
 import com.sarvarbek.expense_tracker.services.Push
 import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.services.SyncService
@@ -17,6 +18,7 @@ import io.github.jan.supabase.auth.SettingsSessionManager
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.storage.Storage
 import java.io.File
 
 class App : Application() {
@@ -53,8 +55,10 @@ class AppContainer(context: Context) {
         }
         install(Postgrest)
         install(Functions)
+        install(Storage)
     }
-    val sync = SyncService(database, supabase, prefs, settings)
+    val photos = NeedPhotos(context, supabase)
+    val sync = SyncService(database, supabase, prefs, settings, photos)
     val family = FamilyService(supabase, sync)
     val aiParser = AiParser(supabase)
     val speech = SpeechService(context)

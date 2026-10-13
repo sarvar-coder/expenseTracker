@@ -39,7 +39,8 @@ import com.sarvarbek.expense_tracker.features.family.FamilyScreen
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
-import com.sarvarbek.expense_tracker.features.family.NeedsScreen
+import com.sarvarbek.expense_tracker.features.family.memberNames
+import com.sarvarbek.expense_tracker.features.needs.NeedsScreen
 import com.sarvarbek.expense_tracker.features.family.LedgerScreen
 import com.sarvarbek.expense_tracker.features.home.ContributionScreen
 import com.sarvarbek.expense_tracker.services.SyncService
@@ -133,7 +134,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             } else {
                 // Offline or since deleted: the Oila tab instead.
                 nav.popBackStack("shell", inclusive = false)
-                tab = 2
+                tab = TAB_FAMILY
             }
         }
         if (pushRoute != null) onPushRouted()
@@ -168,9 +169,21 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                             container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
                             onCategory = openCategory, onEdit = edit,
                         )
+                        2 -> {
+                            // Re-read on each visit: a sync may have joined, left or changed role.
+                            val prefs = container.prefs
+                            val familyId = remember(active) { prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null } }
+                            val isAdmin = remember(active) { prefs.getBoolean(SyncService.K_ADMIN, false) }
+                            // Owner names come from the Oila overview; fetch it if that tab wasn't opened yet.
+                            LaunchedEffect(active, familyId) { if (active && familyId != null && family.overview == null) family.refresh() }
+                            NeedsScreen(
+                                container.db, familyId, container.supabase.auth.currentUserOrNull()?.id, isAdmin,
+                                names = family.overview?.memberNames.orEmpty(), photos = container.photos, onSync = container.sync::run,
+                            )
+                        }
                         else -> {
                             FamilyScreen(
-                                family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit,
+                                family, container.db, active, onEdit = edit,
                                 onList = { nav.go("family-list") }, onLedger = { nav.go("ledger") }, onCategories = { nav.go("categories") },
                             ) { nav.go("family-settings") }
                         }
@@ -204,10 +217,6 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             }
             // Also popped when the family vanishes (maybe while backgrounded): unguarded, route-scoped.
             composable("family-settings") { FamilySettingsScreen(family) { nav.popBackStack("family-settings", inclusive = true) } }
-            composable("needs") {
-                val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
-                NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
-            }
             composable("ledger") { LedgerScreen(container.family::ledger, onBack = { nav.back() }) { nav.go("contribution-add") } }
             composable("contribution-add") { ContributionScreen(container.db) { nav.back() } }
             composable("family-list") {
@@ -227,6 +236,9 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
         }
     }
 }
+
+/** Shell tab indices: Asosiy, Tahlil, Kerakli, Oila. */
+private const val TAB_FAMILY = 3
 
 /**
  * Android 13+: explain, then ask for POST_NOTIFICATIONS. Only the system dialog's

@@ -9,6 +9,8 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.Need
+import com.sarvarbek.expense_tracker.data.NeedStatus
+import com.sarvarbek.expense_tracker.data.withStatus
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.ResolvedCategory
 import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
@@ -77,6 +79,36 @@ class DataTest {
             assertEquals(2, dao.dirtyContributions().size) // the deletion waits to be pushed
             dao.resetLocal()
             assertTrue(dao.getContributions().isEmpty())
+        } finally {
+            upgraded.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test fun upgradesV4NeedsToStatusKeepingDone() = runBlocking {
+        val name = "v4-upgrade.db"
+        context.deleteDatabase(name)
+        // v4 schema as MIGRATION_1_2..3_4 leave it.
+        android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use {
+            it.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, `icon_key` TEXT NOT NULL, `is_archived` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `description` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category_id` TEXT NOT NULL, `date` INTEGER NOT NULL, `source` TEXT NOT NULL, `raw_input` TEXT, `is_private` INTEGER NOT NULL, `pending_category` TEXT, `frozen` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `transfer_to` TEXT, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_category_id` ON `expenses` (`category_id`)")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `needs` (`id` TEXT NOT NULL, `text` TEXT NOT NULL, `done` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `contributions` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, `note` TEXT NOT NULL, `date` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("INSERT INTO needs VALUES ('n1', 'Non', 1, NULL, NULL, 1, 1, NULL, 0), ('n2', 'Sut', 0, NULL, 'f1', 2, 2, NULL, 0)")
+            it.version = 4
+        }
+        val upgraded = AppDatabase.open(context, name)
+        try {
+            val dao = upgraded.dao()
+            val rows = dao.watchNeeds().first().associateBy { it.id }
+            assertEquals(NeedStatus.DONE, rows.getValue("n1").status)
+            assertEquals(NeedStatus.NEW, rows.getValue("n2").status)
+            assertEquals(listOf(false, null, null), rows.getValue("n2").let { listOf(it.needMoney, it.link, it.photoPath) })
+            assertEquals(0, dao.dirtyNeeds().size) // nothing to re-push
+            dao.updateNeed(rows.getValue("n2").withStatus(NeedStatus.DONE).copy(needMoney = true, link = "https://a.uz"))
+            val n2 = dao.getNeed("n2")!!
+            assertEquals(listOf(true, true, "https://a.uz", true), listOf(n2.done, n2.needMoney, n2.link, n2.dirty))
         } finally {
             upgraded.close()
             context.deleteDatabase(name)

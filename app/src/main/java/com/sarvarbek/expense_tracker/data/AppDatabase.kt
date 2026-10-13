@@ -48,9 +48,20 @@ internal val MIGRATION_3_4 = object : Migration(3, 4) {
     )
 }
 
+/** v5: Kerakli status, money flag, link, photo. */
+internal val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `needs` ADD COLUMN `status` TEXT NOT NULL DEFAULT 'new'")
+        db.execSQL("ALTER TABLE `needs` ADD COLUMN `need_money` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `needs` ADD COLUMN `link` TEXT")
+        db.execSQL("ALTER TABLE `needs` ADD COLUMN `photo_path` TEXT")
+        db.execSQL("UPDATE `needs` SET `status` = 'done' WHERE `done` = 1")
+    }
+}
+
 // ponytail: exportSchema off, migrations hand-written and checked by DataTest's
 // v1 upgrade test; export schemas if migrations pile up.
-@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 4, exportSchema = false)
+@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): ExpenseDao
 
@@ -62,7 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         for (c in seedCategories()) {
@@ -155,6 +166,8 @@ abstract class ExpenseDao {
     abstract fun watchNeeds(): Flow<List<Need>>
 
     @Insert abstract suspend fun insertNeed(n: Need)
+
+    @Query("SELECT * FROM needs WHERE id = :id") abstract suspend fun getNeed(id: String): Need?
 
     @Upsert abstract suspend fun upsertNeeds(rows: List<Need>)
 
