@@ -199,6 +199,13 @@ class HomeAddTest {
         rule.waitUntil(5000) { runBlocking { db.getContributions() }.isEmpty() }
     }
 
+    @Test fun monthLineCountsContributions() {
+        runBlocking { db.insertContribution(Contribution(amount = 400_000, note = "Oylik")) }
+        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
+        waitFor("Oy: 0 / 400 000", substring = true)
+        rule.onNodeWithText("+ Hissa qo'shish").assertDoesNotExist() // adding lives on the Hissa page only
+    }
+
     @Test fun notInFamilyHasNoFamilyLine() {
         val food = runBlocking { db.getCategories() }.first()
         runBlocking { db.insertExpense(Expense(description = "Coffee", amount = 45000, categoryId = food.id, date = System.currentTimeMillis(), source = ExpenseSource.manual)) }

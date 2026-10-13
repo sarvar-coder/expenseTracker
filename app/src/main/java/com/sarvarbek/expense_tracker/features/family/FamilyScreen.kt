@@ -217,6 +217,8 @@ fun FamilyScreen(
                     state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories)
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
+                        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // adding a Hissa is local-first
+                        Spacer(Modifier.height(AppSpace.gap))
                         CategoriesBanner(onCategories) // categories are local: work offline
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
