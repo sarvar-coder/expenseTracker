@@ -59,9 +59,14 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/** v6: Kerakli chat message count (server-kept). */
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) = db.execSQL("ALTER TABLE `needs` ADD COLUMN `comment_count` INTEGER NOT NULL DEFAULT 0")
+}
+
 // ponytail: exportSchema off, migrations hand-written and checked by DataTest's
 // v1 upgrade test; export schemas if migrations pile up.
-@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 5, exportSchema = false)
+@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): ExpenseDao
 
@@ -73,7 +78,7 @@ abstract class AppDatabase : RoomDatabase() {
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         for (c in seedCategories()) {

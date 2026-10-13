@@ -79,6 +79,20 @@ class PushTest {
         assertEquals(setOf("expenses:o1", "expenses:o2"), summaries.map { it.group }.toSet())
     }
 
+    @Test fun needCommentPushTextAndRoute() {
+        val nid = "1c9a7c1e-3f4d-4e5a-9b8c-7d6e5f4a3b2c"
+        val data = mapOf("type" to "need_comment", "uid" to "u1", "need_id" to nid, "name" to "Ali", "item" to "Velosiped", "text" to "Qaysi rang?")
+        val p = pushContent(data, "u1")!!
+        assertEquals(Push.CH_NEEDS, p.channel)
+        assertEquals("Muhokama: Velosiped", p.title)
+        assertEquals("Ali: Qaysi rang?", p.text)
+        assertEquals("need/$nid", p.route)
+        assertEquals("need:$nid", p.tag)
+        assertEquals(p.route, Push.route(Intent().putExtra(Push.EXTRA_ROUTE, p.route)))
+        assertNull("no id, nothing to open", pushContent(data - "need_id", "u1"))
+        assertNull(Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "need/../settings")))
+    }
+
     @Test fun tapRouteIsWhitelisted() {
         assertEquals(Push.ROUTE_REQUESTS, Push.route(Intent().putExtra(Push.EXTRA_ROUTE, Push.ROUTE_REQUESTS)))
         assertNull(Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "settings")))

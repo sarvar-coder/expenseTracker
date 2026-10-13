@@ -66,6 +66,7 @@ data class Need(
     @ColumnInfo(name = "need_money", defaultValue = "0") val needMoney: Boolean = false, // false = has money, wants opinions
     val link: String? = null, // http(s) only
     @ColumnInfo(name = "photo_path") val photoPath: String? = null, // storage object, set once uploaded
+    @ColumnInfo(name = "comment_count", defaultValue = "0") val commentCount: Int = 0, // server-kept (chat), never pushed
     @ColumnInfo(name = "owner_id") val ownerId: String? = null,
     @ColumnInfo(name = "family_id") val familyId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),

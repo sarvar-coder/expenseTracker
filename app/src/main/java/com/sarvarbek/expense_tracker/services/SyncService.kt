@@ -44,6 +44,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
@@ -347,7 +348,9 @@ suspend fun applyNeeds(database: AppDatabase, rows: List<JsonObject>) {
         Need(
             id = r.str("id")!!, ownerId = r.str("owner_id"), familyId = r.str("family_id"), text = r.str("text")!!,
             done = r.bool("done"), status = r.str("status")!!, needMoney = r.bool("need_money"),
-            link = r.str("link"), photoPath = r.str("photo_path"), createdAt = r.ts("created_at")!!, updatedAt = r.ts("updated_at")!!,
+            link = r.str("link"), photoPath = r.str("photo_path"),
+            commentCount = r["comment_count"]?.jsonPrimitive?.intOrNull ?: 0, // absent before 20261013190000
+            createdAt = r.ts("created_at")!!, updatedAt = r.ts("updated_at")!!,
             deletedAt = r.ts("deleted_at"), dirty = false,
         )
     })

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,10 +38,13 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -143,6 +147,7 @@ fun NeedsScreen(
     names: Map<String, String> = emptyMap(),
     photos: NeedPhotos? = null,
     onSync: suspend () -> Unit = {},
+    onChat: (Need) -> Unit = {},
 ) {
     val needs by remember(db) { db.watchNeeds() }.collectAsStateWithLifecycle(null)
     var scopeFilter by rememberSaveable { mutableStateOf(NeedsScope.All) }
@@ -203,6 +208,7 @@ fun NeedsScreen(
                 NeedCard(
                     n, NeedActions(n, myId, isAdmin), owner = if (inFamily && n.familyId != null) ownerLabel(n, myId, names) else null,
                     photos = photos,
+                    onChat = { onChat(n) },
                     onStatus = { s -> scope.launch { db.updateNeed(n.withStatus(s)) } },
                     onDelete = {
                         scope.launch {
@@ -255,6 +261,7 @@ private fun NeedCard(
     can: NeedActions,
     owner: String?,
     photos: NeedPhotos?,
+    onChat: () -> Unit,
     onStatus: (String) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -288,7 +295,14 @@ private fun NeedCard(
                     Text(link.toUri().host ?: link, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 4.dp), horizontalArrangement = Arrangement.End) {
+            Row(Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Chat: family items only.
+                if (n.familyId != null) IconButton(onChat, Modifier.size(48.dp).offset(x = (-12).dp)) {
+                    BadgedBox(badge = {
+                        if (n.commentCount > 0) Badge(containerColor = c.accent, contentColor = c.onAccent) { Text("${n.commentCount}") }
+                    }) { Icon(Icons.Outlined.ChatBubbleOutline, t("needs.chat_a11y", "${n.commentCount}"), tint = c.muted) }
+                }
+                Spacer(Modifier.weight(1f))
                 if (can.reject) LinkButton({ onStatus(NeedStatus.REJECTED) }) { Text(t("needs.action.reject"), color = c.danger) }
                 if (can.reopen) LinkButton({ onStatus(NeedStatus.NEW) }) { Text(t("needs.action.reopen")) }
                 if (can.done) LinkButton({ onStatus(NeedStatus.DONE) }) { Text(t("needs.action.done")) }

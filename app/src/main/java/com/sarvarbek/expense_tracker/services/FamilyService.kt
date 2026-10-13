@@ -96,6 +96,9 @@ data class LedgerRow(val id: String, val from: String, val to: String?, val amou
     val isTransfer get() = to != null
 }
 
+/** A Kerakli chat message; [authorName] is the name when it was posted. */
+data class NeedComment(val id: String, val authorId: String, val authorName: String, val body: String, val createdAt: Long)
+
 /** Thrown by [FamilyService] with a message ready to show (Uzbek). */
 class FamilyException(override val message: String) : Exception(message)
 
@@ -260,6 +263,37 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
     /** Waiting expenses stay in Boshqa. */
     suspend fun rejectRequest(id: String) { change { rpc("reject_category_request", buildJsonObject { put("p_id", id) }) } }
 
+    /** A family need's live messages, oldest first. Online only (RLS: current members of its family). */
+    suspend fun comments(needId: String): List<NeedComment> = call {
+        // ponytail: last 500 only; page if a thread ever gets that long.
+        client.from("need_comments").select {
+            filter { eq("need_id", needId); exact("deleted_at", null) }
+            order("created_at", Order.DESCENDING)
+            limit(500)
+        }.decodeList<JsonObject>()
+    }.map(::parseComment).reversed()
+
+    /**
+     * [id] is the draft's: a retry after a lost reply hits the row it already made (23505) and counts as sent.
+     * Then a sync pulls the need's new count / pending status.
+     */
+    suspend fun sendComment(needId: String, id: String, body: String) {
+        call {
+            try {
+                client.from("need_comments").insert(buildJsonObject { put("id", id); put("need_id", needId); put("body", body) })
+            } catch (e: PostgrestRestException) {
+                if (e.code != "23505") throw e
+            }
+        }
+        sync.schedule()
+    }
+
+    /** Own messages only (RLS); soft delete. */
+    suspend fun deleteComment(id: String) {
+        call { client.from("need_comments").update(buildJsonObject { put("deleted_at", Instant.now().toString()) }) { filter { eq("id", id) } } }
+        sync.schedule()
+    }
+
     private suspend fun rpc(fn: String, params: JsonObject = JsonObject(emptyMap())): PostgrestResult =
         call { client.postgrest.rpc(fn, params) }
 
@@ -295,6 +329,11 @@ internal fun parseMember(it: JsonObject): FamilyMember {
         available = opt("available") ?: (contribution - shared - given),
     )
 }
+
+internal fun parseComment(it: JsonObject) = NeedComment(
+    it.str("id")!!, it.str("author_id")!!, it.str("author_name").orEmpty(), it.str("body")!!,
+    OffsetDateTime.parse(it.str("created_at")!!).toInstant().toEpochMilli(),
+)
 
 /** `family_ledger` rows; a transfer whose receiver's account is gone keeps a "?" name. */
 internal fun parseLedger(rows: List<JsonObject>) = rows.map {

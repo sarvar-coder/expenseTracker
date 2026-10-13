@@ -338,5 +338,22 @@
   "overspend.own": "Shaxsiy pulim",
   "overspend.loan": "Qarz",
   "overspend.salary": "Maosh",
-  "overspend.confirm": "Hissa qo'shib saqlash"
+  "overspend.confirm": "Hissa qo'shib saqlash",
+  "needs.chat": "Muhokama",
+  "needs.chat_a11y": "Muhokama, %1$s ta xabar",
+  "chat.empty": "Hali xabar yo'q",
+  "chat.empty_hint": "Birinchi bo'lib fikringizni yozing",
+  "chat.placeholder": "Xabar yozing",
+  "chat.send": "Yuborish",
+  "chat.send_failed": "Yuborilmadi. Internetni tekshirib, qayta urining",
+  "chat.load_failed": "Xabarlar yuklanmadi",
+  "chat.offline_hint": "Internet qaytsa, o'zi yangilanadi",
+  "chat.offline": "Internet yo'q: xabarlar oxirgi yuklangan holatda",
+  "chat.delete": "Xabarni o'chirish",
+  "chat.delete_title": "Xabarni o'chirasizmi?",
+  "chat.delete_failed": "O'chirilmadi. Internetni tekshiring",
+  "chat.former": "Sobiq a'zo",
+  "push.channel_needs": "Kerakli muhokamasi",
+  "push.need_title": "Muhokama: %1$s",
+  "push.need": "%1$s: %2$s"
 }

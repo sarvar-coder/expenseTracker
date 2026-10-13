@@ -8,11 +8,13 @@ declare
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
   eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid(); eb7 uuid := gen_random_uuid();
   nb1 uuid := gen_random_uuid(); nb2 uuid := gen_random_uuid(); nb3 uuid := gen_random_uuid(); na1 uuid := gen_random_uuid();
+  c uuid := gen_random_uuid(); k1 uuid := gen_random_uuid(); k2 uuid := gen_random_uuid();
   fid uuid; inv uuid; req uuid; newcat uuid; bq uuid; n int; r record; ok boolean;
 begin
   insert into auth.users (id, email, aud, role, raw_user_meta_data) values
     (a, 'A@test.uz', 'authenticated', 'authenticated', '{"name":"Ali"}'),
-    (b, 'b@test.uz', 'authenticated', 'authenticated', '{}');
+    (b, 'b@test.uz', 'authenticated', 'authenticated', '{}'),
+    (c, 'c@test.uz', 'authenticated', 'authenticated', '{}');
 
   -- A: personal data, then creates the family with history
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
@@ -174,6 +176,52 @@ begin
   begin update public.needs set done = true where id = nb1; ok := false;
   exception when insufficient_privilege then ok := true; end;
   assert ok, 'owner cannot un-reject';
+  -- need chat (#111): members only, first comment new -> pending, done/rejected stay, count kept by the server
+  insert into public.need_comments (id, need_id, author_id, body) values (k1, na1, a, 'qaysi rang?'); -- author spoof ignored
+  select status, comment_count into r from public.needs where id = na1;
+  assert r.status = 'pending' and r.comment_count = 1, 'first comment: pending + count 1, got ' || r.status || ' ' || r.comment_count;
+  select count(*) into n from public.need_comments where id = k1 and author_id = b; assert n = 1, 'author pinned to caller';
+  execute 'reset role';
+  select count(*) into n from private.push_outbox where user_ids = array[a] and data->>'type' = 'need_comment'
+    and data->>'need_id' = na1::text and data->>'name' = 'b' and data->>'item' = 'bike' and data->>'text' = 'qaysi rang?';
+  assert n = 1, 'A (not author B) gets the comment push';
+  execute 'set local role authenticated';
+  insert into public.need_comments (id, need_id, body) values (gen_random_uuid(), nb1, 'nega?');
+  select status, comment_count into r from public.needs where id = nb1;
+  assert r.status = 'rejected' and r.comment_count = 1, 'comment keeps rejected';
+  begin insert into public.need_comments (id, need_id, body) values (gen_random_uuid(), nb2, 'x'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'no chat on personal needs';
+  update public.needs set comment_count = 99, text = 'milk!' where id = nb1;
+  select comment_count into n from public.needs where id = nb1; assert n = 1, 'client cannot write comment_count';
+  begin update public.needs set status = 'new' where id = na1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'member cannot reset others pending need';
+  update public.need_comments set body = 'changed' where id = k1;
+  select count(*) into n from public.need_comments where id = k1 and body = 'qaysi rang?'; assert n = 1, 'comment body immutable';
+  perform set_config('request.jwt.claims', json_build_object('sub', c, 'email', 'c@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from public.need_comments; assert n = 0, 'outsider reads no comments';
+  begin insert into public.need_comments (id, need_id, body) values (gen_random_uuid(), na1, 'spam'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'outsider cannot comment';
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from public.need_comments; assert n = 2, 'member reads family comments, got ' || n;
+  update public.need_comments set deleted_at = now() where id = k1;
+  get diagnostics n = row_count; assert n = 0, 'only the author soft-deletes';
+  begin delete from public.need_comments where id = k1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'no hard delete';
+  update public.needs set status = 'new' where id = na1; -- stale client copy
+  select status into r from public.needs where id = na1; assert r.status = 'pending', 'stale new keeps pending';
+  update public.needs set status = 'done' where id = na1;
+  insert into public.need_comments (id, need_id, body) values (k2, na1, 'olindi');
+  select status, comment_count into r from public.needs where id = na1;
+  assert r.status = 'done' and r.comment_count = 2, 'comment keeps done, count 2';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  update public.need_comments set deleted_at = now() where id = k1;
+  update public.need_comments set deleted_at = null where id = k1;
+  select count(*) into n from public.need_comments where id = k1 and deleted_at is not null; assert n = 1, 'author soft-deletes, no undelete';
+  select comment_count into n from public.needs where id = na1; assert n = 1, 'count drops on soft delete';
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select amount, description, is_private, source, raw_input into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount = 30 and r.description = 'secret2' and not r.is_private, 'no private: row shared with the family';
