@@ -44,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -68,6 +69,8 @@ import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -75,7 +78,7 @@ import java.time.temporal.ChronoUnit
  * Kerakli chat (#111) for one family need ([need] null = not in Room yet / deleted: no header).
  * Online only: [load] polls every [pollMs] while the screen is resumed; a failed poll keeps the
  * last messages with an offline note. A failed send keeps the typed text.
- * Own messages sit on the right; long-press one to delete it.
+ * Own messages sit on the right; tap or long-press one to delete it.
  */
 @Composable
 fun NeedChatScreen(
@@ -99,11 +102,18 @@ fun NeedChatScreen(
     var sendFailed by remember { mutableStateOf(false) } // shown under the field: a snackbar would cover it
     var deleting by remember { mutableStateOf<NeedComment?>(null) }
     val list = rememberLazyListState()
+    // Polls, sends and deletes take turns: a poll started before a send can't overwrite its result.
+    val lock = remember { Mutex() }
 
-    suspend fun fetch() {
+    /** [follow]: scroll to the newest even if the reader had scrolled up (own send). */
+    suspend fun fetch(follow: Boolean = false) {
         try {
-            messages = load()
+            val atEnd = !list.canScrollForward
+            val before = messages?.size
+            val m = load()
+            messages = m
             failed = false
+            if (m.isNotEmpty() && m.size != before && (atEnd || follow)) list.animateScrollToItem(m.size) // header is item 0
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -113,11 +123,10 @@ fun NeedChatScreen(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) { fetch(); delay(pollMs) }
+            // ponytail: whole thread (≤500) each poll; fetch since the last created_at if threads get long.
+            while (true) { lock.withLock { fetch() }; delay(pollMs) }
         }
     }
-    val count = messages?.size ?: 0
-    LaunchedEffect(count) { if (count > 0) list.animateScrollToItem(count) } // header is item 0
 
     AppBarScaffold(t("needs.chat"), onBack) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding()) {
@@ -161,11 +170,14 @@ fun NeedChatScreen(
                         sending = true
                         sendFailed = false
                         scope.launch {
+                            val body = draft
+                            val id = draftId
                             try {
-                                send(draftId, draft.trim())
-                                draft = ""
-                                draftId = newId()
-                                fetch()
+                                lock.withLock {
+                                    send(id, body.trim())
+                                    if (draft == body) { draft = ""; draftId = newId() } // keep text typed meanwhile
+                                    fetch(follow = true)
+                                }
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (_: Exception) {
@@ -187,8 +199,10 @@ fun NeedChatScreen(
             deleting = null
             scope.launch {
                 try {
-                    delete(msg.id)
-                    messages = messages?.filter { it.id != msg.id }
+                    lock.withLock {
+                        delete(msg.id)
+                        messages = messages?.filter { it.id != msg.id }
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -219,9 +233,10 @@ private fun Bubble(msg: NeedComment, mine: Boolean, onDelete: () -> Unit) {
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Column(
             Modifier.widthIn(max = 300.dp)
+                .semantics(mergeDescendants = true) {}
                 .then(
                     if (mine) Modifier.background(c.accent, shape)
-                        .combinedClickable(onClickLabel = null, onLongClickLabel = t("chat.delete"), onLongClick = onDelete, onClick = {})
+                        .combinedClickable(onClickLabel = t("chat.delete"), onLongClickLabel = t("chat.delete"), onLongClick = onDelete, onClick = onDelete)
                         .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                     else Modifier.background(c.card, shape).border(1.dp, c.border, shape),
                 )

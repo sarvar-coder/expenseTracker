@@ -222,6 +222,11 @@ begin
   update public.need_comments set deleted_at = null where id = k1;
   select count(*) into n from public.need_comments where id = k1 and deleted_at is not null; assert n = 1, 'author soft-deletes, no undelete';
   select comment_count into n from public.needs where id = na1; assert n = 1, 'count drops on soft delete';
+  update public.needs set deleted_at = now(), updated_at = now() + interval '3 second' where id = nb1;
+  begin insert into public.need_comments (id, need_id, body) values (gen_random_uuid(), nb1, 'late'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'deleted need has no chat';
+  update public.needs set deleted_at = null, updated_at = now() + interval '4 second' where id = nb1;
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select amount, description, is_private, source, raw_input into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount = 30 and r.description = 'secret2' and not r.is_private, 'no private: row shared with the family';
