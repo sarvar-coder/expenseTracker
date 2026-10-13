@@ -184,7 +184,7 @@ fun AddScreen(
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, canCreate, editing, prefill ?: Prefill("", "", null), members, onClose)
+                    ManualForm(db, settings, canCreate, editing, prefill ?: Prefill("", "", null), members, onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
                     TypeForm(db, settings, parse, speech, canCreate, voice = mode == AddMode.speak, onClose) { raw ->
@@ -204,6 +204,7 @@ private fun Label(text: String) =
 @Composable
 private fun ManualForm(
     db: ExpenseDao,
+    settings: SettingsStore,
     canCreate: () -> Boolean,
     editing: Expense?,
     init: Prefill,
@@ -232,6 +233,7 @@ private fun ManualForm(
     val today = LocalDate.now()
     val isToday = date.toLocalDate() == today
     val isYesterday = date.toLocalDate() == today.minusDays(1)
+    val saveChecked = rememberExpenseSaver(db, settings)
 
     fun save() {
         val a = parseAmount(amount)
@@ -249,12 +251,9 @@ private fun ManualForm(
             // Transfers sit in Boshqa (no category of their own); every total skips them.
             val cat = if (to != null) resolveCategory(db, "Boshqa", canCreate()).id else categoryId!!
             val pend = pending.takeIf { to == null }
-            if (editing != null) {
-                db.updateExpense(editing.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = pend, transferTo = to))
-            } else {
-                db.insertExpense(Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, transferTo = to))
-            }
-            onClose()
+            val e = editing?.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = pend, transferTo = to)
+                ?: Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, transferTo = to)
+            if (saveChecked(e, editing) != null) onClose() else saving = false
         }
     }
 
@@ -494,6 +493,7 @@ private fun TypeForm(
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     val micError = t("add.mic_error")
+    val saveChecked = rememberExpenseSaver(db, settings)
 
     fun startListening() {
         speech.listen(settings.settings.value.sttLocale, onResult = { input = it }, onEnd = { listening = false })
@@ -527,15 +527,16 @@ private fun TypeForm(
                 return@launch
             }
             val cat = resolveCategory(db, p.category, canCreate())
-            val id = db.insertExpense(
+            val undo = saveChecked(
                 Expense(
                     description = p.item, amount = p.amount, categoryId = cat.id, date = p.date.startMillis(),
                     source = if (voice) ExpenseSource.voice else ExpenseSource.typed, rawInput = raw,
                     pendingCategory = cat.pending, isPrivate = false,
                 ),
-            )
+                null,
+            ) ?: return@launch run { busy = false }
             onClose()
-            toaster.show(t("add.added", p.item, formatMoney(p.amount)), t("common.cancel")) { db.deleteExpense(id) }
+            toaster.show(t("add.added", p.item, formatMoney(p.amount)), t("common.cancel")) { undo() }
         }
     }
 

@@ -25,6 +25,8 @@ import com.sarvarbek.expense_tracker.ui.back
 import com.sarvarbek.expense_tracker.ui.go
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -46,6 +48,7 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.add.AddScreen
+import com.sarvarbek.expense_tracker.features.add.shortfallFor
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.ParsedExpense
@@ -117,6 +120,12 @@ class HomeAddTest {
     private fun rows() = runBlocking { db.getExpenses() }
 
     private fun waitRows(n: Int) = rule.waitUntil(5000) { rows().size == n }
+
+    /** Enough contributions this month and aiCoffee's month that saves don't hit "Pul qayerdan?". */
+    private fun fund() = runBlocking {
+        db.insertContribution(Contribution(amount = 10_000_000, note = "Oylik"))
+        db.insertContribution(Contribution(amount = 10_000_000, note = "Oylik", date = aiCoffee.date.startMillis()))
+    }
 
     private fun SemanticsNodeInteraction.tap() = performScrollTo().performClick()
 
@@ -269,6 +278,7 @@ class HomeAddTest {
     }
 
     @Test fun manualValidatesThenSavesAmountDescCategoryKecha() {
+        fund()
         settings.lastAddMode = "manual"
         show { Add() }
 
@@ -293,6 +303,7 @@ class HomeAddTest {
     }
 
     @Test fun transferPicksMemberSkipsCategoryAndSaves() {
+        fund()
         settings.lastAddMode = "manual"
         show { Add(members = listOf("u2" to "Malika · Singil")) }
 
@@ -320,6 +331,7 @@ class HomeAddTest {
     }
 
     @Test fun noMaxfiyAndNewRowsShared() {
+        fund()
         settings.lastAddMode = "manual"
         show { Add() }
 
@@ -330,6 +342,79 @@ class HomeAddTest {
         rule.onNodeWithText("Saqlash").tap()
         waitRows(1)
         assertFalse(rows().single().isPrivate)
+    }
+
+    // --- overspend ("Pul qayerdan?") ---
+
+    private fun fillCoffee(amount: String) {
+        settings.lastAddMode = "manual"
+        show { Add() }
+        rule.onNodeWithTag("amount").performTextInput(amount)
+        rule.onNodeWithTag("desc").performTextInput("Coffee")
+        pickCategory("Turkum tanlang", "Food & dining")
+        rule.onNodeWithText("Saqlash").tap()
+    }
+
+    @Test fun overspendAsksSourceNeedsNoteThenWritesBoth() {
+        runBlocking { db.insertContribution(Contribution(amount = 30000, note = "Oylik")) }
+        fillCoffee("45000")
+        waitFor("Pul qayerdan?")
+        rule.onNodeWithText("15 000 UZS", substring = true).assertExists()
+        rule.onNodeWithTag("source_confirm").assertIsNotEnabled()
+        assertEquals(0, rows().size)
+        rule.onNodeWithText("Qarz").performClick()
+        rule.onNodeWithTag("source_confirm").assertIsEnabled().performClick()
+        waitRows(1)
+        val source = runBlocking { db.getContributions() }.first { it.note == "Qarz" }
+        assertEquals(15000L, source.amount)
+        assertTrue(source.dirty && rows().single().dirty)
+    }
+
+    @Test fun overspendCancelSavesNothing() {
+        fillCoffee("45000")
+        waitFor("Pul qayerdan?")
+        rule.onNodeWithText("Bekor qilish").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Pul qayerdan?").fetchSemanticsNodes().isEmpty() }
+        assertEquals(0, rows().size)
+        assertEquals(0, runBlocking { db.getContributions() }.size)
+        rule.onNodeWithText("Saqlash").assertIsEnabled()
+    }
+
+    @Test fun withinAvailableSavesDirectly() {
+        runBlocking { db.insertContribution(Contribution(amount = 45000, note = "Oylik")) }
+        fillCoffee("45000")
+        waitRows(1)
+        rule.onNodeWithText("Pul qayerdan?").assertDoesNotExist()
+        assertEquals(1, runBlocking { db.getContributions() }.size)
+    }
+
+    @Test fun aiOverspendGoesThroughSheetAndUndoRemovesBoth() {
+        show { Add(parsed = aiCoffee) }
+        rule.onNodeWithText("Yozish").performClick()
+        rule.onNodeWithTag("input").performTextInput("coffee 45000")
+        rule.onNodeWithText("AI bilan qo'shish").tap()
+        waitFor("Pul qayerdan?")
+        rule.onNodeWithText("Maosh").performClick()
+        rule.onNodeWithTag("source_confirm").performClick()
+        waitFor("Qo'shildi: Coffee — 45 000 UZS")
+        assertEquals(45000L, runBlocking { db.getContributions() }.single().amount)
+        rule.onNodeWithText("Bekor qilish").performClick()
+        waitRows(0)
+        assertEquals(0, runBlocking { db.getContributions() }.size)
+    }
+
+    @Test fun shortfallForEditsAndPastMonths() = runBlocking {
+        val food = db.getCategories().first()
+        val today = LocalDate.now()
+        val past = today.minusMonths(2)
+        db.insertContribution(Contribution(amount = 100_000, note = "Oylik"))
+        db.insertContribution(Contribution(amount = 10_000, note = "Oylik", date = past.startMillis()))
+        val old = Expense(description = "Taxi", amount = 80_000, categoryId = food.id, date = today.startMillis(), source = ExpenseSource.manual)
+        db.insertExpense(old) // 20 000 left this month
+        assertEquals("new row: over by 10 000", 10_000L, shortfallFor(db, settings, old.copy(id = "n", amount = 30_000), null))
+        assertEquals("edit same month: only the 25 000 increase counts", 5_000L, shortfallFor(db, settings, old.copy(amount = 105_000), old))
+        assertEquals("edit down", 0L, shortfallFor(db, settings, old.copy(amount = 50_000), old))
+        assertEquals("moved to a past month: that month's 10 000", 70_000L, shortfallFor(db, settings, old.copy(date = past.startMillis()), old))
     }
 
     // --- add_edit_test ---
@@ -366,6 +451,7 @@ class HomeAddTest {
     }
 
     @Test fun typeModeParsesAndSavesWithSourceTyped() {
+        fund()
         show { Add(parsed = aiCoffee) }
         rule.onNodeWithText("Yozish").performClick()
         rule.onNodeWithTag("input").performTextInput("coffee 45000")
@@ -374,6 +460,7 @@ class HomeAddTest {
     }
 
     @Test fun speakModeTranscribesParsesAndSavesWithSourceVoice() {
+        fund()
         shadowOf(context as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
         show { Add(parsed = aiCoffee, speech = FakeSpeech(context, "coffee 45000")) }
         rule.onNodeWithText("Aytish").performClick()
