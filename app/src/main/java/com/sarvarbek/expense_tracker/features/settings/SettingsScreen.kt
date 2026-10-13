@@ -81,6 +81,7 @@ import com.sarvarbek.expense_tracker.ui.common.SectionLabel
 import com.sarvarbek.expense_tracker.ui.common.TextDialog
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.t
+import com.sarvarbek.expense_tracker.ui.theme.AppCard
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
@@ -108,7 +109,6 @@ fun SettingsScreen(
     db: ExpenseDao,
     email: String,
     onBack: () -> Unit,
-    onCategories: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val s by settings.settings.collectAsStateWithLifecycle()
@@ -122,10 +122,7 @@ fun SettingsScreen(
         LazyColumn(contentPadding = PaddingValues(AppSpace.page, 0.dp, AppSpace.page, AppSpace.section), modifier = Modifier.padding(pad)) {
             item {
                 SectionLabel(t("settings.general"))
-                DividedCard(listOf<@Composable () -> Unit>(
-                    { SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onClick = onCategories) },
-                    { NotificationsRow(settings) },
-                )) { it() }
+                AppCard(Modifier.fillMaxWidth()) { NotificationsRow(settings) }
             }
             item {
                 SectionLabel(t("settings.ai_voice"))

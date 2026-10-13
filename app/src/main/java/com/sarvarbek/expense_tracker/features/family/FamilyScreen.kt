@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.FamilyRestroom
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.ReceiptLong
-import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
@@ -48,7 +47,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,11 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
-import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
-import com.sarvarbek.expense_tracker.features.activity.ActivityFilterPage
-import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
-import com.sarvarbek.expense_tracker.features.activity.FilterButton
 import com.sarvarbek.expense_tracker.features.home.ContributionSheet
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
 import com.sarvarbek.expense_tracker.features.insights.Donut
@@ -173,8 +167,8 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
 
 /**
  * Oila tab. Not in a family: pending invites + create. In one: this month's
- * family budget vs shared spending, members, then the shared expenses (this
- * month, or the filter's Sana) as a category donut and a list.
+ * family budget vs shared spending, members, then this month's shared
+ * expenses as a category donut and a Ro'yxat banner.
  * Management (roles, invites, requests, leave, delete) is behind the gear.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -185,17 +179,14 @@ fun FamilyScreen(
     active: Boolean = true,
     onNeeds: () -> Unit = {},
     onEdit: (Expense) -> Unit = {},
-    /** Hoisted so the Ro'yxat page ([FamilyListScreen]) sees the same filter. */
-    filterState: MutableState<ActivityFilter> = rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) },
     onList: () -> Unit = {},
     onLedger: () -> Unit = {},
+    onCategories: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
-    var filter by filterState
-    var filterOpen by remember { mutableStateOf(false) }
     var contribute by rememberSaveable { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
@@ -219,22 +210,19 @@ fun FamilyScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(state.overview?.name ?: t("family.title"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                    if (state.overview != null) {
-                        FilterButton(filter.count) { filterOpen = true }
-                        Spacer(Modifier.width(4.dp))
-                        GearButton(t("family.settings"), onSettings)
-                    }
+                    if (state.overview != null) GearButton(t("family.settings"), onSettings)
                 }
                 Spacer(Modifier.height(AppSpace.gap))
             }
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onList, onLedger, { contribute = true }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories, { contribute = true }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
-                        NeedsCard(db, onNeeds) // local, works offline
+                        CategoriesBanner(onCategories) // categories and needs are local: work offline
+                        NeedsCard(db, onNeeds)
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
@@ -244,11 +232,6 @@ fun FamilyScreen(
     actions.dialog()?.invoke()
     // Closing refetches: overview() syncs first, so new contributions count.
     if (contribute) ContributionSheet(db) { contribute = false; scope.launch { state.refresh() } }
-    val f = state.overview
-    if (filterOpen && f != null) {
-        val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
-        ActivityFilterPage(filter, categories, onDismiss = { filterOpen = false }, members = f.memberNames) { filter = it; filterOpen = false }
-    }
 }
 
 internal val FamilyOverview.memberNames get() = members.associate { it.userId to it.label }
@@ -264,7 +247,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, needs: @Composable () -> Unit) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit, needs: @Composable () -> Unit) {
     val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -300,6 +283,8 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, ne
             Spacer(Modifier.width(8.dp))
             Text(t("family.create"))
         }
+        Spacer(Modifier.height(AppSpace.section))
+        CategoriesBanner(onCategories)
         needs()
     }
 }
@@ -311,36 +296,29 @@ private fun InFamily(
     f: FamilyOverview,
     rows: List<FamilyExpense>,
     cats: List<Category>,
-    filter: ActivityFilter,
-    onFilter: (ActivityFilter) -> Unit,
     onEdit: (Expense) -> Unit,
     onList: () -> Unit,
     onLedger: () -> Unit,
+    onCategories: () -> Unit,
     onContribute: () -> Unit,
     needs: @Composable () -> Unit,
 ) {
-    val catById = cats.associateBy { it.id }
-    val names = f.memberNames
-    val range = familyRange(filter)
-    val select = familySelect(f, filter)
-    val list = select(rows)
+    val range = familyRange()
+    val list = familySelect(f)(rows)
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget), onContribute)
         Spacer(Modifier.height(AppSpace.section))
         ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger)
+        Spacer(Modifier.height(AppSpace.gap))
+        CategoriesBanner(onCategories)
         needs()
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
-        SectionLabel(if (filter.range == null) t("family.shared_month") else t("family.shared"))
-        if (!filter.isEmpty) {
-            ActiveFilters(filter, catById, onFilter, names)
-            Spacer(Modifier.height(12.dp))
-        }
+        SectionLabel(t("family.shared_month"))
         if (list.isEmpty()) {
-            if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
-            else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
+            EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
         } else {
             AppCard(Modifier.fillMaxWidth()) { Donut(data) } // ponytail: no per-category legend here; Ro'yxat covers browsing
             Spacer(Modifier.height(AppSpace.section))
@@ -349,26 +327,29 @@ private fun InFamily(
     }
 }
 
-/** No Sana in the filter: this month. */
-internal fun familyRange(filter: ActivityFilter) = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
+/** This month. */
+internal fun familyRange() = monthStart().let { it..it.plusMonths(1).minusDays(1) }
 
 /**
- * The Oila feed as this tab shows it. Own rows: only the family's, no transfers;
- * ownerId set so the member filter sees them. Current members' labels carry their
+ * The Oila feed as this tab shows it: this month. Own rows: only the family's,
+ * no transfers; ownerId set to the member's. Current members' labels carry their
  * title; ex-members keep the server name. Also [FamilyListScreen]'s rows, so
  * its rows and totals match.
  */
-internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<FamilyExpense>) -> List<FamilyExpense> {
+internal fun familySelect(f: FamilyOverview): (List<FamilyExpense>) -> List<FamilyExpense> {
     val names = f.memberNames
-    val ranged = filter.copy(range = familyRange(filter))
+    val month = ActivityFilter(range = familyRange())
     return { all ->
         all.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
             .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
-            .filter { ranged.matches(it.expense) }
+            .filter { month.matches(it.expense) }
     }
 }
 
-/** Edge-to-edge rounded hero strip: title + subtitle, opens a page ("Ro'yxat" → [FamilyListScreen], "Hissa" → [LedgerScreen]). */
+@Composable
+private fun CategoriesBanner(onClick: () -> Unit) = ListBanner(t("settings.categories"), t("family.categories_hint"), onClick)
+
+/** Edge-to-edge rounded hero strip: title + subtitle, opens a page ("Ro'yxat" → [FamilyListScreen], "Hissa" → [LedgerScreen], "Turkumlar"). */
 @Composable
 private fun ListBanner(title: String, subtitle: String, onClick: () -> Unit) {
     val c = AppTheme.colors
