@@ -45,7 +45,8 @@ import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import java.time.LocalDate
 
 /**
- * Oila's "Ro'yxat": the tab's shared expenses (same rows as the tab), newest first in day groups. [offline]: others' rows are as last fetched.
+ * Oila's "Ro'yxat": the tab's shared expenses (same rows as the tab), newest
+ * first in day groups. [offline]: others' rows are as last fetched.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

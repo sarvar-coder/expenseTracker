@@ -204,6 +204,7 @@ class SettingsFamilyTest : ScreenTest() {
     @Test fun offlineFamilyShowsError() {
         show { FamilyScreen(FamilyState(null, load = { error("offline") }, loadInvites = { emptyList() }), db) }
         waitFor("Oila ma'lumotini yuklab bo'lmadi")
+        rule.onNodeWithText("Turkumlar").assertExists() // local page, reachable offline
         rule.onNodeWithText("Kerakli").assertExists() // local list still reachable offline
     }
 
@@ -247,12 +248,13 @@ class SettingsFamilyTest : ScreenTest() {
         val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         var edited: Expense? = null
+        var categories = false
         val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed)
         show {
             // Tab and its Ro'yxat page share the state, as in Routes.
             var list by remember { mutableStateOf(false) }
             if (list) FamilyListScreen(state, db, onBack = { list = false }, onEdit = { edited = it })
-            else FamilyScreen(state, db, onEdit = { edited = it }, onList = { list = true })
+            else FamilyScreen(state, db, onEdit = { edited = it }, onList = { list = true }, onCategories = { categories = true })
         }
 
         waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
@@ -267,7 +269,8 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         rule.onNodeWithContentDescription("Filtr").assertDoesNotExist() // header: gear only
-        rule.onNodeWithText("Turkumlar").assertExists() // banner to the categories page
+        rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick) // banner to the categories page
+        assertTrue(categories)
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
 
         assertTapTargets()

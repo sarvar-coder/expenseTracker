@@ -168,7 +168,7 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
 /**
  * Oila tab. Not in a family: pending invites + create. In one: this month's
  * family budget vs shared spending, members, then this month's shared
- * expenses as a category donut and a list.
+ * expenses as a category donut and a Ro'yxat banner.
  * Management (roles, invites, requests, leave, delete) is behind the gear.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -221,7 +221,8 @@ fun FamilyScreen(
                     state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories, { contribute = true }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
-                        NeedsCard(db, onNeeds) // local, works offline
+                        CategoriesBanner(onCategories) // categories and needs are local: work offline
+                        NeedsCard(db, onNeeds)
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
