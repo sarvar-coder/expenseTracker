@@ -11,6 +11,7 @@ import com.sarvarbek.expense_tracker.features.home.Balance
 import com.sarvarbek.expense_tracker.features.home.balance
 import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.features.home.todayExpenses
+import com.sarvarbek.expense_tracker.features.add.shortfall
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.expensesCsv
@@ -65,6 +66,13 @@ class HelpersTest {
         assertEquals(-200L, over.available)
         assertEquals(1f, over.summary.progress)
         assertEquals(0f, balance(emptyList(), emptyList(), 0, LocalDate.of(2026, 9, 1)).summary.progress)
+    }
+
+    @Test fun shortfallCoversOnlyTheUncoveredPart() {
+        assertEquals(0L, shortfall(100, 100))
+        assertEquals(50L, shortfall(150, 100))
+        assertEquals("already overspent: whole amount, not the old debt", 30L, shortfall(30, -500))
+        assertEquals("edit that lowers the amount", 0L, shortfall(-20, -500))
     }
 
     @Test fun transfersAreNotSpending() {

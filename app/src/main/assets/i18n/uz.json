@@ -308,5 +308,11 @@
   "contrib.month_total": "Bu oy: %1$s UZS",
   "contrib.empty": "Bu oy hali hissa qo'shilmagan",
   "contrib.delete_title": "Hissani o'chirasizmi?",
-  "contrib.deleted": "Hissa o'chirildi"
+  "contrib.deleted": "Hissa o'chirildi",
+  "overspend.title": "Pul qayerdan?",
+  "overspend.body": "Bu xarajat hissangizdan %1$s UZS ko'p. Shu pul qayerdan kelganini yozing — u hissa sifatida qo'shiladi.",
+  "overspend.own": "Shaxsiy pulim",
+  "overspend.loan": "Qarz",
+  "overspend.salary": "Maosh",
+  "overspend.confirm": "Hissa qo'shib saqlash"
 }

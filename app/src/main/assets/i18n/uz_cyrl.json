@@ -308,5 +308,11 @@
   "contrib.month_total": "Бу ой: %1$s UZS",
   "contrib.empty": "Бу ой ҳали ҳисса қўшилмаган",
   "contrib.delete_title": "Ҳиссани ўчирасизми?",
-  "contrib.deleted": "Ҳисса ўчирилди"
+  "contrib.deleted": "Ҳисса ўчирилди",
+  "overspend.title": "Пул қаердан?",
+  "overspend.body": "Бу харажат ҳиссангиздан %1$s UZS кўп. Шу пул қаердан келганини ёзинг — у ҳисса сифатида қўшилади.",
+  "overspend.own": "Шахсий пулим",
+  "overspend.loan": "Қарз",
+  "overspend.salary": "Маош",
+  "overspend.confirm": "Ҳисса қўшиб сақлаш"
 }

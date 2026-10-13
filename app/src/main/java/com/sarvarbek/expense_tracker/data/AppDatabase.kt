@@ -175,6 +175,13 @@ abstract class ExpenseDao {
 
     @Upsert abstract suspend fun upsertContributions(rows: List<Contribution>)
 
+    /** New ([update] false) or edited expense plus the overspend's [source] contribution, all or nothing. */
+    @Transaction
+    open suspend fun saveExpense(e: Expense, update: Boolean, source: Contribution?) {
+        source?.let { insertContribution(it) }
+        if (update) updateExpense(e) else insertExpenseRow(e)
+    }
+
     @Query("UPDATE contributions SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
     abstract suspend fun deleteContribution(id: String, now: Long = System.currentTimeMillis())
 
