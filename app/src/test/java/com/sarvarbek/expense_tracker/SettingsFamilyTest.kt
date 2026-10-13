@@ -35,7 +35,6 @@ import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.family.FamilyListScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
-import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -112,7 +111,7 @@ abstract class ScreenTest {
 class SettingsScreenTest : ScreenTest() {
     @Test fun settingsShowsUzbekRows() {
         val store = SettingsStore(prefs).apply { setDisplayName("Ali") }
-        show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
+        show { SettingsScreen(store, db, "me@oila.uz", {}, {}) }
 
         rule.onNodeWithText("Sozlamalar").assertExists()
         rule.onNodeWithText("Ovoz tili").assertExists()
@@ -128,6 +127,7 @@ class SettingsScreenTest : ScreenTest() {
         waitFor("Ruscha")
         assertEquals("ru_RU", store.settings.value.sttLocale)
 
+        assertTrue("Turkumlar moved to Oila", rule.onAllNodesWithText("Turkumlar").fetchSemanticsNodes().isEmpty())
         assertTrue("budget replaced by Hissa", rule.onAllNodesWithText("Oylik byudjet").fetchSemanticsNodes().isEmpty())
 
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("me@oila.uz"))
@@ -139,7 +139,7 @@ class SettingsScreenTest : ScreenTest() {
 
     @Test fun languageRowSwitchesUiToCyrillic() {
         val store = SettingsStore(prefs)
-        show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
+        show { SettingsScreen(store, db, "me@oila.uz", {}, {}) }
         try {
             rule.onNode(hasScrollAction()).performScrollToNode(hasText("O'zbekcha (lotin)"))
             rule.onNodeWithText("O'zbekcha (lotin)").performClick()
@@ -189,13 +189,16 @@ class SettingsFamilyTest : ScreenTest() {
 
     @Test fun notInFamilyShowsInvitesAndCreate() {
         val state = FamilyState(null, load = { null }, loadInvites = { listOf(FamilyInvite("i1", "Uy", "Ali")) })
-        show { FamilyScreen(state, db) }
+        var categories = false
+        show { FamilyScreen(state, db, onCategories = { categories = true }) }
 
         waitFor("“Uy” oilasiga taklif")
         rule.onNodeWithText("Siz hali oilada emassiz").assertExists()
         rule.onNodeWithText("Qabul qilish").assertExists()
         rule.onNodeWithText("Oila yaratish").assertExists()
         assertTapTargets()
+        rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick)
+        assertTrue(categories)
     }
 
     @Test fun offlineFamilyShowsError() {
@@ -246,11 +249,10 @@ class SettingsFamilyTest : ScreenTest() {
         var edited: Expense? = null
         val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed)
         show {
-            // Tab and its Ro'yxat page share the state and the filter, as in Routes.
+            // Tab and its Ro'yxat page share the state, as in Routes.
             var list by remember { mutableStateOf(false) }
-            val filter = remember { mutableStateOf(ActivityFilter()) }
-            if (list) FamilyListScreen(state, db, filter, onBack = { list = false }, onEdit = { edited = it })
-            else FamilyScreen(state, db, onEdit = { edited = it }, filterState = filter, onList = { list = true })
+            if (list) FamilyListScreen(state, db, onBack = { list = false }, onEdit = { edited = it })
+            else FamilyScreen(state, db, onEdit = { edited = it }, onList = { list = true })
         }
 
         waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
@@ -264,9 +266,10 @@ class SettingsFamilyTest : ScreenTest() {
         // management lives behind the gear now
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
+        rule.onNodeWithContentDescription("Filtr").assertDoesNotExist() // header: gear only
+        rule.onNodeWithText("Turkumlar").assertExists() // banner to the categories page
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
 
-        assertTrue("donut only, no Turkumlar legend", rule.onAllNodesWithText("Turkumlar").fetchSemanticsNodes().isEmpty())
         assertTapTargets()
 
         // Banner opens the list page: day-grouped rows.
@@ -297,20 +300,6 @@ class SettingsFamilyTest : ScreenTest() {
         rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
         rule.onNodeWithContentDescription("Orqaga").performClick()
         waitFor("3 ta xarajat · 40 000 UZS")
-
-        // Filter by member: only Vali's row stays; Ko'rinish is hidden (all shared).
-        rule.onNodeWithContentDescription("Filtr").performClick()
-        assertTrue(rule.onAllNodesWithText("Ko'rinish").fetchSemanticsNodes().isEmpty())
-        rule.onNodeWithText("A'zo").performClick()
-        rule.onNode(hasText("Vali") and hasClickAction()).performClick() // the sheet row, not the member row
-        rule.onNodeWithText("Tayyor").performClick()
-        rule.onNodeWithText("Qo'llash").performClick()
-        waitFor("1 ta xarajat · 20 000 UZS")
-        rule.onNodeWithContentDescription("Jami 20 000 UZS").assertExists()
-        // The list page applies the same filter.
-        rule.onNodeWithText("Ro'yxat").performSemanticsAction(SemanticsActions.OnClick)
-        waitFor("Taksi")
-        assertTrue(rule.onAllNodesWithText("Non").fetchSemanticsNodes().isEmpty())
     }
 
     private fun overview(admin: Boolean) = FamilyOverview(
