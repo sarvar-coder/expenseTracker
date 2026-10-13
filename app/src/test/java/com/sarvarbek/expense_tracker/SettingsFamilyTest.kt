@@ -190,7 +190,8 @@ class SettingsFamilyTest : ScreenTest() {
     @Test fun notInFamilyShowsInvitesAndCreate() {
         val state = FamilyState(null, load = { null }, loadInvites = { listOf(FamilyInvite("i1", "Uy", "Ali")) })
         var categories = false
-        show { FamilyScreen(state, db, onCategories = { categories = true }) }
+        var ledger = false
+        show { FamilyScreen(state, db, onLedger = { ledger = true }, onCategories = { categories = true }) }
 
         waitFor("“Uy” oilasiga taklif")
         rule.onNodeWithText("Siz hali oilada emassiz").assertExists()
@@ -199,6 +200,8 @@ class SettingsFamilyTest : ScreenTest() {
         assertTapTargets()
         rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick)
         assertTrue(categories)
+        rule.onNodeWithText("Hissa").performSemanticsAction(SemanticsActions.OnClick) // Hissa adds work without a family too
+        assertTrue(ledger)
     }
 
     @Test fun offlineFamilyShowsError() {
@@ -238,7 +241,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Jami hissa: 1 500 000").assertExists()
         rule.onNodeWithText("Hissa 500 000 · sarf 20 000").assertExists()
         rule.onNodeWithText("480 000 UZS").assertExists() // Vali's qolgan
-        rule.onNodeWithText("Hissa qo'shish").assertExists()
+        rule.onNodeWithText("Hissa qo'shish").assertDoesNotExist() // only the Hissa banner's page adds
         rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
         assertTrue("rows live on the list page", rule.onAllNodesWithText("Taksi").fetchSemanticsNodes().isEmpty())
         // management lives behind the gear now

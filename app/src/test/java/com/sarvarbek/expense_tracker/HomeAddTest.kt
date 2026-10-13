@@ -49,6 +49,7 @@ import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.add.shortfallFor
+import com.sarvarbek.expense_tracker.features.home.ContributionScreen
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.ParsedExpense
@@ -180,9 +181,8 @@ class HomeAddTest {
     }
 
     @Test fun addsContributionWithRequiredNoteThenDeletes() {
-        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
-        waitFor("+ Hissa qo'shish")
-        rule.onNodeWithText("+ Hissa qo'shish").performClick()
+        // The Hissa page's "+" is the only way in (Home's month line no longer opens it).
+        show { ContributionScreen(db) {} }
         waitFor("Bu oy hali hissa qo'shilmagan")
         rule.onNodeWithTag("contrib_amount").performTextInput("400000")
         rule.onNodeWithText("Qo'shish").performClick()
@@ -193,11 +193,17 @@ class HomeAddTest {
         rule.waitUntil(5000) { runBlocking { db.getContributions() }.isNotEmpty() }
         assertEquals(listOf(400_000L to "Oylik"), runBlocking { db.getContributions() }.map { it.amount to it.note })
         waitFor("Bu oy: 400 000 UZS")
-        waitFor("Oy: 0 / 400 000", substring = true) // Home's month line counts it
         rule.onNodeWithContentDescription("O'chirish").performClick()
         waitFor("Hissani o'chirasizmi?")
         rule.onNodeWithText("O'chirish").performClick()
         rule.waitUntil(5000) { runBlocking { db.getContributions() }.isEmpty() }
+    }
+
+    @Test fun monthLineCountsContributions() {
+        runBlocking { db.insertContribution(Contribution(amount = 400_000, note = "Oylik")) }
+        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
+        waitFor("Oy: 0 / 400 000", substring = true)
+        rule.onNodeWithText("+ Hissa qo'shish").assertDoesNotExist() // adding lives on the Hissa page only
     }
 
     @Test fun notInFamilyHasNoFamilyLine() {
