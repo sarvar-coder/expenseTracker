@@ -358,24 +358,25 @@ internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<Fami
     }
 }
 
-/** Edge-to-edge hero strip: "Ro'yxat", count + total; opens [FamilyListScreen]. */
+/** Edge-to-edge rounded hero strip: "Ro'yxat", count + total; opens [FamilyListScreen]. */
 @Composable
 private fun ListBanner(count: Int, total: Long, onClick: () -> Unit) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     Row(
         Modifier
-            // Escape the page's horizontal padding: full screen width, square corners.
+            // Escape the page's horizontal padding: full screen width.
             .layout { m, k ->
                 val extra = (AppSpace.page * 2).roundToPx()
                 val w = k.maxWidth + extra
                 val p = m.measure(k.copy(minWidth = w, maxWidth = w))
                 layout(k.maxWidth, p.height) { p.place(-extra / 2, 0) }
             }
+            .clip(RoundedCornerShape(20.dp))
             .background(c.hero)
             .clickable(role = Role.Button, onClick = onClick)
-            .defaultMinSize(minHeight = 64.dp)
-            .padding(horizontal = AppSpace.page, vertical = 14.dp),
+            .defaultMinSize(minHeight = 76.dp)
+            .padding(horizontal = AppSpace.page, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
