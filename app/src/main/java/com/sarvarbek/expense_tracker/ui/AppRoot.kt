@@ -42,6 +42,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.family.NeedsScreen
+import com.sarvarbek.expense_tracker.features.family.LedgerScreen
+import com.sarvarbek.expense_tracker.features.home.ContributionScreen
 import com.sarvarbek.expense_tracker.services.SyncService
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
 import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
@@ -173,7 +175,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                         else -> {
                             FamilyScreen(
                                 family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit,
-                                filterState = familyFilter, onList = { nav.go("family-list") },
+                                filterState = familyFilter, onList = { nav.go("family-list") }, onLedger = { nav.go("ledger") },
                             ) { nav.go("family-settings") }
                         }
                     }
@@ -211,6 +213,8 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                 val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
                 NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
             }
+            composable("ledger") { LedgerScreen(container.family::ledger, onBack = { nav.back() }) { nav.go("contribution-add") } }
+            composable("contribution-add") { ContributionScreen(container.db) { nav.back() } }
             composable("family-list") {
                 val stale by container.family.othersStale.collectAsStateWithLifecycle()
                 FamilyListScreen(family, container.db, familyFilter, offline = stale, onBack = { nav.back() }, onEdit = edit)

@@ -49,6 +49,10 @@ import com.sarvarbek.expense_tracker.services.FamilyInvite
 import com.sarvarbek.expense_tracker.services.FamilyMember
 import com.sarvarbek.expense_tracker.services.FamilyOverview
 import com.sarvarbek.expense_tracker.services.mergeFeed
+import com.sarvarbek.expense_tracker.services.FamilyException
+import com.sarvarbek.expense_tracker.services.LedgerRow
+import com.sarvarbek.expense_tracker.services.parseLedger
+import com.sarvarbek.expense_tracker.features.family.LedgerScreen
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.ui.common.I18n
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
@@ -385,5 +389,45 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Faqat o'qish uchun").assertExists()
         rule.onNodeWithContentDescription("Xarajatni tahrirlash").assertDoesNotExist()
         assertEquals("others never open edit", null, edited)
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+class LedgerScreenTest : ScreenTest() {
+    @Test fun ledgerShowsTransfersAndContributions() {
+        val now = System.currentTimeMillis()
+        val rows = listOf(
+            LedgerRow("t1", "Ali · Ota", "Vali · Ona", 200_000, "bozorga", now),
+            LedgerRow("c1", "Ali · Ota", null, 800_000, "Oylik", now),
+        )
+        show { LedgerScreen({ rows }, onBack = {}, onAdd = {}) }
+
+        waitFor("Ali · Ota → Vali · Ona")
+        rule.onNodeWithText("Ali · Ota · Hissa").assertExists()
+        rule.onNodeWithContentDescription("Jami hissa: 800 000 UZS").assertExists() // transfers move money, not counted
+        rule.onNodeWithContentDescription("Hissa qo'shish").assertExists()
+        assertTapTargets()
+    }
+
+    @Test fun ledgerEmpty() {
+        show { LedgerScreen({ emptyList() }, onBack = {}, onAdd = {}) }
+        waitFor("Bu oyda hissa yoki o'tkazma yo'q")
+    }
+
+    @Test fun ledgerLoadFailed() {
+        show { LedgerScreen({ throw FamilyException("offline") }, onBack = {}, onAdd = {}) }
+        waitFor("Hissalarni yuklab bo'lmadi")
+    }
+
+    @Test fun parseLedgerRows() {
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(
+            """[{"kind":"transfer","id":"1","from_name":"Ali","to_name":null,"amount":5,"note":"x","date":"2026-10-01T10:00:00+00:00"},
+               {"kind":"contribution","id":"2","from_name":"Ali","to_name":null,"amount":7,"note":"y","date":"2026-10-01T10:00:00+00:00"}]""",
+        ) as kotlinx.serialization.json.JsonArray
+        val r = parseLedger(json.map { it as kotlinx.serialization.json.JsonObject })
+        assertEquals("?", r[0].to)
+        assertTrue(r[0].isTransfer)
+        assertFalse(r[1].isTransfer)
+        assertEquals(7L, r[1].amount)
     }
 }

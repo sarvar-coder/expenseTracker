@@ -188,6 +188,7 @@ fun FamilyScreen(
     /** Hoisted so the Ro'yxat page ([FamilyListScreen]) sees the same filter. */
     filterState: MutableState<ActivityFilter> = rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) },
     onList: () -> Unit = {},
+    onLedger: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -230,7 +231,7 @@ fun FamilyScreen(
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onList, { contribute = true }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onList, onLedger, { contribute = true }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -314,6 +315,7 @@ private fun InFamily(
     onFilter: (ActivityFilter) -> Unit,
     onEdit: (Expense) -> Unit,
     onList: () -> Unit,
+    onLedger: () -> Unit,
     onContribute: () -> Unit,
     needs: @Composable () -> Unit,
 ) {
@@ -326,6 +328,8 @@ private fun InFamily(
 
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget), onContribute)
+        Spacer(Modifier.height(AppSpace.section))
+        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger)
         needs()
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
@@ -340,7 +344,7 @@ private fun InFamily(
         } else {
             AppCard(Modifier.fillMaxWidth()) { Donut(data) } // ponytail: no per-category legend here; Ro'yxat covers browsing
             Spacer(Modifier.height(AppSpace.section))
-            ListBanner(list.count { it.expense.transferTo == null }, data.total, onList) // same rows as the total
+            ListBanner(t("family.list"), t("family.list_summary", list.count { it.expense.transferTo == null }, formatMoney(data.total)), onList) // same rows as the total
         }
     }
 }
@@ -364,9 +368,9 @@ internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<Fami
     }
 }
 
-/** Edge-to-edge rounded hero strip: "Ro'yxat", count + total; opens [FamilyListScreen]. */
+/** Edge-to-edge rounded hero strip: title + subtitle, opens a page ("Ro'yxat" → [FamilyListScreen], "Hissa" → [LedgerScreen]). */
 @Composable
-private fun ListBanner(count: Int, total: Long, onClick: () -> Unit) {
+private fun ListBanner(title: String, subtitle: String, onClick: () -> Unit) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     Row(
@@ -386,8 +390,8 @@ private fun ListBanner(count: Int, total: Long, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(t("family.list"), style = ty.titleMedium.copy(color = c.onHero))
-            Text(t("family.list_summary", count, formatMoney(total)), style = ty.bodySmall.copy(color = c.onHero.copy(alpha = 0.72f)))
+            Text(title, style = ty.titleMedium.copy(color = c.onHero))
+            Text(subtitle, style = ty.bodySmall.copy(color = c.onHero.copy(alpha = 0.72f)))
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.onHero)
     }

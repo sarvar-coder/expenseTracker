@@ -29,8 +29,10 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import com.sarvarbek.expense_tracker.ui.common.t
+import com.sarvarbek.expense_tracker.ui.common.startMillis
 
 /** A pending invite addressed to the signed-in user. */
 data class FamilyInvite(val id: String, val familyName: String, val invitedBy: String)
@@ -87,6 +89,11 @@ data class FamilyOverview(
     /** Family budget = sum of members' own contributions (transfers only move money inside); spent = shared spending. */
     val budget get() = members.sumOf { it.ownContribution }
     val spent get() = members.sumOf { it.shared }
+}
+
+/** A Hissa page row: a contribution ([to] null) or a transfer [from] → [to]. Names are "Ali · Ota". */
+data class LedgerRow(val id: String, val from: String, val to: String?, val amount: Long, val note: String, val date: Long) {
+    val isTransfer get() = to != null
 }
 
 /** Thrown by [FamilyService] with a message ready to show (Uzbek). */
@@ -174,6 +181,15 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                 requests = requests.await(),
             )
         }
+    }
+
+    /** The family's (or, outside one, own) contributions and transfers in [month], newest first. Syncs first so own new rows show. */
+    suspend fun ledger(month: LocalDate): List<LedgerRow> {
+        sync.run()
+        return parseLedger(rpc("family_ledger", buildJsonObject {
+            put("p_from", Instant.ofEpochMilli(month.startMillis()).toString())
+            put("p_to", Instant.ofEpochMilli(month.plusMonths(1).startMillis()).toString())
+        }).decodeList())
     }
 
     suspend fun create(name: String, includeHistory: Boolean): String =
@@ -277,6 +293,15 @@ internal fun parseMember(it: JsonObject): FamilyMember {
         it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin", shared, contribution, it.str("title"),
         ownContribution = opt("own_contribution") ?: contribution, received = opt("received") ?: 0, given = given,
         available = opt("available") ?: (contribution - shared - given),
+    )
+}
+
+/** `family_ledger` rows; a transfer whose receiver's account is gone keeps a "?" name. */
+internal fun parseLedger(rows: List<JsonObject>) = rows.map {
+    val transfer = it.str("kind") == "transfer"
+    LedgerRow(
+        it.str("id")!!, it.str("from_name").orEmpty(), if (transfer) it.str("to_name") ?: "?" else null,
+        it.num("amount"), it.str("note").orEmpty(), OffsetDateTime.parse(it.str("date")!!).toInstant().toEpochMilli(),
     )
 }
 

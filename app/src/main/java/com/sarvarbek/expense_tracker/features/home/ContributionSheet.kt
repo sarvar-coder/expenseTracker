@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.ExpenseDao
+import com.sarvarbek.expense_tracker.features.settings.AppBarScaffold
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.DividedCard
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
@@ -56,13 +57,29 @@ import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/**
- * Hissa qo'shish: amount + required note, dated now. Below, this month's own
- * contributions (delete own). Local first; sync pushes them. Opened from
- * Home's month line and the Oila budget card.
- */
+/** Hissa qo'shish as a sheet: Home's month line and the Oila budget card. */
 @Composable
 fun ContributionSheet(db: ExpenseDao, onDismiss: () -> Unit) = AppSheet(onDismiss) { _ ->
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = AppSpace.section)) {
+        Text(t("contrib.add"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+        ContributionForm(db)
+    }
+}
+
+/** Hissa qo'shish as a page: the Hissa page's "+". */
+@Composable
+fun ContributionScreen(db: ExpenseDao, onBack: () -> Unit) = AppBarScaffold(t("contrib.add"), onBack) { pad ->
+    Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = AppSpace.page).padding(bottom = AppSpace.section)) {
+        ContributionForm(db)
+    }
+}
+
+/**
+ * Amount + required note, dated now. Below, this month's own contributions
+ * (delete own). Local first; sync pushes them. Emits into the caller's Column.
+ */
+@Composable
+private fun ContributionForm(db: ExpenseDao) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val toaster = LocalToaster.current
@@ -81,52 +98,49 @@ fun ContributionSheet(db: ExpenseDao, onDismiss: () -> Unit) = AppSheet(onDismis
         }
     }
 
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = AppSpace.section)) {
-        Text(t("contrib.add"), style = ty.titleLarge, modifier = Modifier.semantics { heading() })
-        Text(t("contrib.hint"), color = c.muted, style = ty.bodySmall)
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(
-            amount, { v -> amount = v.filter { it.isDigit() } }, Modifier.fillMaxWidth().testTag("contrib_amount"),
-            label = { Text(t("add.amount")) }, placeholder = { Text("400000") }, suffix = { Text("UZS") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            shape = fieldShape, colors = fieldColors(),
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            note, { note = it.take(200) }, Modifier.fillMaxWidth().testTag("contrib_note"),
-            label = { Text(t("contrib.note")) }, placeholder = { Text(t("contrib.note_hint")) }, singleLine = true,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            shape = fieldShape, colors = fieldColors(),
-        )
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton({
-            val a = parseAmount(amount)
-            when {
-                a == null || a <= 0 -> toaster.show(t("add.err_amount"))
-                note.isBlank() -> toaster.show(t("contrib.err_note"))
-                else -> scope.launch {
-                    db.insertContribution(Contribution(amount = a, note = note.trim()))
-                    toaster.show(t("contrib.added", formatMoney(a)))
-                    amount = ""; note = ""
-                }
+    Text(t("contrib.hint"), color = c.muted, style = ty.bodySmall)
+    Spacer(Modifier.height(16.dp))
+    OutlinedTextField(
+        amount, { v -> amount = v.filter { it.isDigit() } }, Modifier.fillMaxWidth().testTag("contrib_amount"),
+        label = { Text(t("add.amount")) }, placeholder = { Text("400000") }, suffix = { Text("UZS") }, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        shape = fieldShape, colors = fieldColors(),
+    )
+    Spacer(Modifier.height(12.dp))
+    OutlinedTextField(
+        note, { note = it.take(200) }, Modifier.fillMaxWidth().testTag("contrib_note"),
+        label = { Text(t("contrib.note")) }, placeholder = { Text(t("contrib.note_hint")) }, singleLine = true,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        shape = fieldShape, colors = fieldColors(),
+    )
+    Spacer(Modifier.height(16.dp))
+    PrimaryButton({
+        val a = parseAmount(amount)
+        when {
+            a == null || a <= 0 -> toaster.show(t("add.err_amount"))
+            note.isBlank() -> toaster.show(t("contrib.err_note"))
+            else -> scope.launch {
+                db.insertContribution(Contribution(amount = a, note = note.trim()))
+                toaster.show(t("contrib.added", formatMoney(a)))
+                amount = ""; note = ""
             }
-        }, Modifier.fillMaxWidth()) { Text(t("contrib.save")) }
+        }
+    }, Modifier.fillMaxWidth()) { Text(t("contrib.save")) }
 
-        if (month != null) {
-            SectionLabel(t("contrib.month_total", formatMoney(month.sumOf { it.amount })))
-            if (month.isEmpty()) {
-                Text(t("contrib.empty"), color = c.muted, style = ty.bodyMedium, modifier = Modifier.padding(horizontal = 4.dp))
-            } else {
-                DividedCard(month, indent = 16.dp) { row ->
-                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                            Text(row.note, style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(uzDayMonth(row.date.toLocalDate()), color = c.muted, style = ty.bodySmall)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Money(row.amount)
-                        IconButton({ deleting = row }) { Icon(Icons.Outlined.Delete, t("common.delete"), tint = c.muted) }
+    if (month != null) {
+        SectionLabel(t("contrib.month_total", formatMoney(month.sumOf { it.amount })))
+        if (month.isEmpty()) {
+            Text(t("contrib.empty"), color = c.muted, style = ty.bodyMedium, modifier = Modifier.padding(horizontal = 4.dp))
+        } else {
+            DividedCard(month, indent = 16.dp) { row ->
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                        Text(row.note, style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(uzDayMonth(row.date.toLocalDate()), color = c.muted, style = ty.bodySmall)
                     }
+                    Spacer(Modifier.width(8.dp))
+                    Money(row.amount)
+                    IconButton({ deleting = row }) { Icon(Icons.Outlined.Delete, t("common.delete"), tint = c.muted) }
                 }
             }
         }
