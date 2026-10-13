@@ -150,6 +150,11 @@ begin
   assert n = 1, 'A sees B contribution in ledger (deleted spoof hidden), got ' || n;
   select * into r from public.family_ledger(now() - interval '1 day', now() + interval '1 day') where kind = 'transfer';
   assert r.id = eb7 and r.from_user = b and r.to_user = a and r.to_name = 'Ali' and r.amount = 500, 'ledger shows B -> Ali 500';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  insert into public.contributions (id, amount, note, date) values (gen_random_uuid(), 9, 'before joining', now() - interval '2 hour');
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from public.family_ledger(now() - interval '1 day', now() + interval '1 day') where kind = 'contribution';
+  assert n = 1, 'ledger hides contributions from before joining, got ' || n;
   select id into req from public.category_requests where name = 'Gym';
   newcat := public.approve_category_request(req, '5B8DB8', null);
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
@@ -220,7 +225,7 @@ begin
   select count(*) into n from public.categories where id = ca; assert n = 1, 'ex-member still sees history category';
   select count(*) into n from public.family_expenses_since('epoch'); assert n = 0, 'ex-member sees no family rows';
   select count(*) into n from public.family_ledger(now() - interval '1 day', now() + interval '1 day');
-  assert n = 2, 'ex-member ledger: own contribution + own transfer only, got ' || n;
+  assert n = 3, 'ex-member ledger: own 2 contributions + own transfer only, got ' || n;
   select count(*) into n from public.needs; assert n = 1, 'ex-member sees only own personal need, got ' || n;
   insert into public.needs (id, family_id, text) values (nb3, fid, 'queued offline');
   select count(*) into n from public.needs where id = nb3 and family_id is null; assert n = 1, 'stale family need becomes personal';
