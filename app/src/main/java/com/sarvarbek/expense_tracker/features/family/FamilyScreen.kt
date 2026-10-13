@@ -334,7 +334,7 @@ private fun InFamily(
         } else {
             CategoryBreakdown(data) { onCategory(CategoryPick(it.id, periodLabel(filter.range, monthStart()), select)) }
             Spacer(Modifier.height(AppSpace.section))
-            ListBanner(list.size, data.total, onList)
+            ListBanner(list.count { it.expense.transferTo == null }, data.total, onList) // same rows as the total
         }
     }
 }

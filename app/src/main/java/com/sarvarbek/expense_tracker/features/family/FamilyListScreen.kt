@@ -14,6 +14,11 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +54,7 @@ import java.time.LocalDate
  * Oila's "Ro'yxat": the tab's shared expenses (same rows and [filterState]
  * as the tab), newest first in day groups. [offline]: others' rows are as last fetched.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FamilyListScreen(
     state: FamilyState,
@@ -71,31 +77,39 @@ fun FamilyListScreen(
     // Transfers left out of the total, like the tab's donut.
     val total = rows.orEmpty().filter { it.expense.transferTo == null }.sumOf { it.expense.amount }
 
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
     AppBarScaffold(t("family.list"), onBack) { pad ->
-        LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section)) {
-            item {
-                val period = periodLabel(filter.range, monthStart())
-                Column(Modifier.clearAndSetSemantics { contentDescription = "$period, ${t("insights.total_a11y", formatMoney(total))}" }) {
-                    Text(period, color = AppTheme.colors.muted, style = ty.labelMedium)
-                    Money(total, style = ty.headlineMedium, autoSize = true)
+        PullToRefreshBox(
+            refreshing,
+            onRefresh = { scope.launch { refreshing = true; state.refresh(); refreshing = false } },
+            Modifier.fillMaxSize().padding(pad),
+        ) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section)) {
+                item {
+                    val period = periodLabel(filter.range, monthStart())
+                    if (rows != null) Column(Modifier.clearAndSetSemantics { contentDescription = "$period, ${t("insights.total_a11y", formatMoney(total))}" }) {
+                        Text(period, color = AppTheme.colors.muted, style = ty.labelMedium)
+                        Money(total, style = ty.headlineMedium, autoSize = true)
+                    }
+                    if (offline) OfflineNote()
+                    if (f != null && !filter.isEmpty) {
+                        Spacer(Modifier.height(12.dp))
+                        ActiveFilters(filter, catById, { filter = it }, f.memberNames)
+                    }
                 }
-                if (offline) OfflineNote()
-                if (f != null && !filter.isEmpty) {
-                    Spacer(Modifier.height(12.dp))
-                    ActiveFilters(filter, catById, { filter = it }, f.memberNames)
-                }
-            }
-            when {
-                rows == null && state.failed -> item { EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint")) }
-                rows == null -> item {
-                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
-                }
-                rows.isEmpty() -> item {
-                    if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
-                    else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
-                }
-                else -> daySections(groupExpenses(rows.map { it.expense }, today = LocalDate.now()), rows.associateBy { it.expense.id }, catById, db, onEdit) { fe, cat ->
-                    SharedRow(fe, cat, onEdit)
+                when {
+                    rows == null && state.failed -> item { EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint")) }
+                    rows == null -> item {
+                        Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
+                    }
+                    rows.isEmpty() -> item {
+                        if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
+                        else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
+                    }
+                    else -> daySections(groupExpenses(rows.map { it.expense }, today = LocalDate.now()), rows.associateBy { it.expense.id }, catById, db, onEdit) { fe, cat ->
+                        SharedRow(fe, cat, onEdit)
+                    }
                 }
             }
         }
