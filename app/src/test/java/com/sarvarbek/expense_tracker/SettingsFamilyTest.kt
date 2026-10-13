@@ -39,7 +39,6 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
-import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
@@ -241,14 +240,13 @@ class SettingsFamilyTest : ScreenTest() {
         val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         var edited: Expense? = null
-        var pick: CategoryPick? = null
         val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed)
         show {
             // Tab and its Ro'yxat page share the state and the filter, as in Routes.
             var list by remember { mutableStateOf(false) }
             val filter = remember { mutableStateOf(ActivityFilter()) }
             if (list) FamilyListScreen(state, db, filter, onBack = { list = false }, onEdit = { edited = it })
-            else FamilyScreen(state, db, onEdit = { edited = it }, onCategory = { pick = it }, filterState = filter, onList = { list = true })
+            else FamilyScreen(state, db, onEdit = { edited = it }, filterState = filter, onList = { list = true })
         }
 
         waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
@@ -264,12 +262,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
 
-        // Category tap: the pick narrows the feed to exactly the Oila list (family rows, member labels).
-        rule.onNodeWithContentDescription("Groceries, 40 000 UZS, 100%").performSemanticsAction(SemanticsActions.OnClick)
-        val picked = runBlocking { pick!!.select(feed.first()) }
-        assertEquals(cat, pick!!.categoryId)
-        assertEquals(setOf("Non", "Sovg'a", "Taksi"), picked.map { it.expense.description }.toSet())
-        assertEquals(40_000L, picked.sumOf { it.expense.amount })
+        assertTrue("donut only, no Turkumlar legend", rule.onAllNodesWithText("Turkumlar").fetchSemanticsNodes().isEmpty())
         assertTapTargets()
 
         // Banner opens the list page: day-grouped rows.
@@ -282,12 +275,19 @@ class SettingsFamilyTest : ScreenTest() {
         assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
         assertTapTargets()
 
-        // Tap routing: own row opens edit, Vali's opens the read-only sheet.
+        // Tap routing: every row opens the sheet; only own rows get the pencil, which opens edit.
         rule.onNodeWithText("Non").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithText("Kim qo'shgan").assertExists()
+        assertEquals(null, edited)
+        assertTapTargets()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").performClick()
+        rule.waitUntil(5000) { edited != null }
         assertEquals("Non", edited?.description)
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() } // sheet closed
         edited = null
         rule.onNodeWithText("Taksi").performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithText("Kim qo'shgan").assertExists()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").assertDoesNotExist() // Vali's: read-only
         assertEquals(null, edited)
         rule.onNodeWithText("Yopish").performClick()
         rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
@@ -354,6 +354,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Non").performClick()
         assertFalse("frozen never opens edit", opened)
         rule.onNodeWithText("Kim qo'shgan").assertExists()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").assertDoesNotExist() // own but frozen: no pencil
         rule.onNodeWithText("non besh ming").assertExists() // raw input
         rule.onNodeWithText("Ovozli").assertExists() // source
         assertTrue("no delete in the sheet", rule.onAllNodesWithText("O'chirish").fetchSemanticsNodes().isEmpty())
@@ -362,7 +363,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
     }
 
-    @Test fun ownTileOpensEditOthersOpenReadOnlyWithName() {
+    @Test fun ownTileSheetHasPencilOthersReadOnlyWithName() {
         val e = Expense(description = "Non", amount = 5_000, categoryId = "c", date = System.currentTimeMillis(), source = ExpenseSource.manual)
         var edited: Expense? = null
         show {
@@ -372,10 +373,17 @@ class SettingsFamilyTest : ScreenTest() {
             }
         }
         rule.onNodeWithText("Non").performClick()
+        assertEquals("tap opens the sheet, not edit", null, edited)
+        rule.onNodeWithText("Faqat o'qish uchun").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").performClick()
+        rule.waitUntil(5000) { edited != null }
         assertEquals(e.id, edited?.id)
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
         edited = null
         rule.onNodeWithText("Taksi").performClick()
         rule.onNodeWithText("Vali").assertExists()
+        rule.onNodeWithText("Faqat o'qish uchun").assertExists()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").assertDoesNotExist()
         assertEquals("others never open edit", null, edited)
     }
 }

@@ -76,9 +76,7 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
 import com.sarvarbek.expense_tracker.features.activity.FilterButton
 import com.sarvarbek.expense_tracker.features.home.ContributionSheet
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
-import com.sarvarbek.expense_tracker.features.insights.CategoryBreakdown
-import com.sarvarbek.expense_tracker.features.insights.CategoryPick
-import com.sarvarbek.expense_tracker.features.insights.periodLabel
+import com.sarvarbek.expense_tracker.features.insights.Donut
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.FamilyException
 import com.sarvarbek.expense_tracker.services.FamilyExpense
@@ -187,7 +185,6 @@ fun FamilyScreen(
     active: Boolean = true,
     onNeeds: () -> Unit = {},
     onEdit: (Expense) -> Unit = {},
-    onCategory: (CategoryPick) -> Unit = {},
     /** Hoisted so the Ro'yxat page ([FamilyListScreen]) sees the same filter. */
     filterState: MutableState<ActivityFilter> = rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) },
     onList: () -> Unit = {},
@@ -233,7 +230,7 @@ fun FamilyScreen(
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onCategory, onList, { contribute = true }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onList, { contribute = true }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -316,7 +313,6 @@ private fun InFamily(
     filter: ActivityFilter,
     onFilter: (ActivityFilter) -> Unit,
     onEdit: (Expense) -> Unit,
-    onCategory: (CategoryPick) -> Unit,
     onList: () -> Unit,
     onContribute: () -> Unit,
     needs: @Composable () -> Unit,
@@ -342,7 +338,7 @@ private fun InFamily(
             if (filter.isEmpty) EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
             else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
         } else {
-            CategoryBreakdown(data) { onCategory(CategoryPick(it.id, periodLabel(filter.range, monthStart()), select)) }
+            AppCard(Modifier.fillMaxWidth()) { Donut(data) } // ponytail: no per-category legend here; Ro'yxat covers browsing
             Spacer(Modifier.height(AppSpace.section))
             ListBanner(list.count { it.expense.transferTo == null }, data.total, onList) // same rows as the total
         }
@@ -355,8 +351,8 @@ internal fun familyRange(filter: ActivityFilter) = filter.range ?: monthStart().
 /**
  * The Oila feed as this tab shows it. Own rows: only the family's, no transfers;
  * ownerId set so the member filter sees them. Current members' labels carry their
- * title; ex-members keep the server name. Also the category screen's
- * [CategoryPick.select] and [FamilyListScreen]'s rows, so their rows and totals match.
+ * title; ex-members keep the server name. Also [FamilyListScreen]'s rows, so
+ * its rows and totals match.
  */
 internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<FamilyExpense>) -> List<FamilyExpense> {
     val names = f.memberNames

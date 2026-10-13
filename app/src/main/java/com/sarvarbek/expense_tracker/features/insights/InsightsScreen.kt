@@ -274,7 +274,7 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
     }
 }
 
-/** Donut card, then "Turkumlar" with one share row per category; [onClick] opens a category. Shared with Oila. */
+/** Donut card, then "Turkumlar" with one share row per category; [onClick] opens a category. */
 @Composable
 internal fun CategoryBreakdown(data: InsightsData, onClick: (Category) -> Unit) {
     AppCard(Modifier.fillMaxWidth()) { Donut(data) }
@@ -291,9 +291,9 @@ internal fun CategoryBreakdown(data: InsightsData, onClick: (Category) -> Unit) 
     }
 }
 
-/** Share donut (3dp gaps between slices) with "Jami" + total in the hole. Read out as one label. */
+/** Share donut (3dp gaps between slices) with "Jami" + total in the hole. Read out as one label. Oila shows it alone. */
 @Composable
-private fun Donut(data: InsightsData) {
+internal fun Donut(data: InsightsData) {
     val ty = MaterialTheme.typography
     val colors = data.slices.map { colorFromHex(it.category.colorHex) }
     Box(

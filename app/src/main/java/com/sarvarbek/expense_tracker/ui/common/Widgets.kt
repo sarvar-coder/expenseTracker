@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
@@ -195,23 +196,23 @@ fun sourceMeta(s: ExpenseSource): Pair<String, ImageVector> = when (s) {
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
- * Tap handler for an expense row, the one place tap routing lives:
- * [FamilyExpense.editable] rows call [onEdit]; others' and frozen rows open
- * [ExpenseDetailSheet] (shown from here).
+ * Tap handler for an expense row, the one place tap routing lives: every row
+ * opens [ExpenseDetailSheet] (shown from here); [FamilyExpense.editable] rows
+ * get its pencil, which calls [onEdit].
  */
 @Composable
 fun rememberExpenseTap(fe: FamilyExpense, category: Category?, onEdit: (Expense) -> Unit): () -> Unit {
     // Keyed by id: a feed refresh that reorders rows must not swap the open sheet's expense.
     var open by remember(fe.expense.id) { mutableStateOf(false) }
-    if (open) ExpenseDetailSheet(fe, category) { open = false }
-    return { if (fe.editable) onEdit(fe.expense) else open = true }
+    if (open) ExpenseDetailSheet(fe, category, if (fe.editable) { { onEdit(fe.expense) } } else null) { open = false }
+    return { open = true }
 }
 
 private val fullDate = DateTimeFormatter.ofPattern("yyyy, HH:mm")
 
-/** Read-only expense: no edit or delete. Others' rows and frozen history. */
+/** Expense details. With [onEdit] (own, non-frozen rows) a pencil opens the editor; without it the sheet is read-only. */
 @Composable
-fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> Unit) = AppSheet(onDismiss) { hide ->
+fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onEdit: (() -> Unit)? = null, onDismiss: () -> Unit) = AppSheet(onDismiss) { hide ->
     val e = fe.expense
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
@@ -226,6 +227,7 @@ fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> 
             if (transfer) TransferBadge() else CategoryBadge(category)
             Spacer(Modifier.width(14.dp))
             Text(e.description, style = ty.titleMedium, modifier = Modifier.weight(1f).semantics { heading() })
+            if (onEdit != null) IconButton({ hide { onDismiss(); onEdit() } }) { Icon(Icons.Outlined.Edit, t("add.title_edit")) }
         }
         Spacer(Modifier.height(16.dp))
         Money(e.amount, style = ty.headlineMedium)
@@ -236,11 +238,13 @@ fun ExpenseDetailSheet(fe: FamilyExpense, category: Category?, onDismiss: () -> 
         Field(t("add.date"), "${uzDayMonth(d.toLocalDate())} ${d.format(fullDate)}")
         Field(t("widgets.source"), sourceMeta(e.source).first)
         e.rawInput?.takeIf { it.isNotBlank() }?.let { Field(t("widgets.raw_input"), it) }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Lock, null, tint = c.muted, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(t("widgets.read_only"), color = c.muted, style = ty.bodySmall)
+        if (onEdit == null) {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Lock, null, tint = c.muted, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(t("widgets.read_only"), color = c.muted, style = ty.bodySmall)
+            }
         }
         Spacer(Modifier.height(16.dp))
         SecondaryButton({ hide(onDismiss) }, Modifier.fillMaxWidth()) { Text(t("common.close")) }
