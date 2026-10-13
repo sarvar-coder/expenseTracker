@@ -9,6 +9,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.room.withTransaction
 import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Category
+import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.Need
@@ -18,6 +19,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.CancellationException
@@ -44,9 +46,13 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
+import com.sarvarbek.expense_tracker.ui.common.startMillis
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.YearMonth
 
 /**
  * Background two-way sync between Room (source of truth) and Supabase.
@@ -130,7 +136,8 @@ class SyncService(
         if (prev != null && prev != uid) {
             // Another account on this device: its rows are not ours to show or push.
             db.resetLocal()
-            settings.applyProfile(budget = 0, displayName = "")
+            settings.applyProfile(displayName = "")
+            settings.setReceived("", 0)
             prefs.edit { prefs.all.keys.filter { it.startsWith("sync.") }.forEach { remove(it) } }
         }
         prefs.edit { putString(K_UID, uid) }
@@ -145,7 +152,7 @@ class SyncService(
         val prevFamily = prefs.getString(K_FAMILY, null)
         prefs.edit {
             if (prevFamily != null && prevFamily != (familyId ?: "")) {
-                remove("sync.categories"); remove("sync.expenses"); remove("sync.needs")
+                remove("sync.categories"); remove("sync.expenses"); remove("sync.needs"); remove("sync.contributions")
             }
             putString(K_FAMILY, familyId ?: "")
             putBoolean(K_ADMIN, member?.str("role") == "admin")
@@ -168,29 +175,41 @@ class SyncService(
         push("needs", db.dirtyNeeds(), Need::toJson) { db.markNeedClean(it.id, it.updatedAt) }
         pull("needs") { applyNeeds(database, it) }
         db.dropForeignNeeds(familyId)
+        push("contributions", db.dirtyContributions(), Contribution::toJson) { db.markContributionClean(it.id, it.updatedAt) }
+        pull("contributions") { applyContributions(database, it) }
+        cacheReceived(uid, familyId)
+    }
+
+    /** This month's transfers to me (others' rows aren't in Room), kept for Home's offline balance. */
+    private suspend fun cacheReceived(uid: String, familyId: String?) {
+        val month = YearMonth.now()
+        val received = if (familyId == null) 0L else client.postgrest.rpc("family_summary", buildJsonObject {
+            put("p_from", Instant.ofEpochMilli(month.atDay(1).startMillis()).toString())
+            put("p_to", Instant.ofEpochMilli(month.plusMonths(1).atDay(1).startMillis()).toString())
+        }).decodeList<JsonObject>().firstOrNull { it.str("user_id") == uid }
+            ?.get("received")?.jsonPrimitive?.longOrNull ?: 0L // server before 20261013120000: no column
+        settings.setReceived(month.toString(), received)
     }
 
     /**
-     * Budget and name: push a local edit, otherwise take the server's
-     * (another device may have changed them).
+     * Name: push a local edit, otherwise take the server's (another device may
+     * have changed it). profiles.budget is left alone (old APKs; Hissa replaced it).
      */
     private suspend fun syncProfile(uid: String) {
-        val server = if (settings.profileDirty) null else client.from("profiles")
-            .select(Columns.list("budget", "display_name")) { filter { eq("id", uid) } }
-            .decodeSingle<JsonObject>()
         val local = settings.load()
-        if (shouldPushProfile(settings.profileDirty, server?.get("budget")?.jsonPrimitive?.long, local.monthlyBudget)) {
-            client.from("profiles").update(buildJsonObject {
-                put("budget", local.monthlyBudget)
-                // Blank = never pulled on this device; keep the server's.
-                if (local.displayName.isNotBlank()) put("display_name", local.displayName)
-                put("updated_at", Instant.now().toString())
-            }) { filter { eq("id", uid) } }
+        if (settings.profileDirty) {
+            // Blank = never pulled on this device; keep the server's.
+            if (local.displayName.isNotBlank()) {
+                client.from("profiles").update(buildJsonObject {
+                    put("display_name", local.displayName)
+                    put("updated_at", Instant.now().toString())
+                }) { filter { eq("id", uid) } }
+            }
             settings.markProfileClean()
         } else {
-            settings.applyProfile(
-                server!!.getValue("budget").jsonPrimitive.long, server.str("display_name") ?: "",
-            )
+            val server = client.from("profiles").select(Columns.list("display_name")) { filter { eq("id", uid) } }
+                .decodeSingle<JsonObject>()
+            settings.applyProfile(server.str("display_name") ?: "")
         }
     }
 
@@ -244,14 +263,6 @@ class SyncService(
         private const val PAGE = 1000
     }
 }
-
-/**
- * Push this device's budget/private default, or take the server's? Push
- * when edited here, or when the server has no budget but this device does
- * (set before sign-in or before profiles synced; 0 = unset) so it isn't wiped.
- */
-fun shouldPushProfile(dirty: Boolean, serverBudget: Long?, localBudget: Long) =
-    dirty || (serverBudget == 0L && localBudget > 0)
 
 /** Outside a family, or as its admin, the user may create categories. As of the last sync; true before the first one. */
 fun canCreateCategories(prefs: SharedPreferences) =
@@ -325,6 +336,17 @@ suspend fun applyNeeds(database: AppDatabase, rows: List<JsonObject>) {
     })
 }
 
+suspend fun applyContributions(database: AppDatabase, rows: List<JsonObject>) {
+    val db = database.dao()
+    val pending = db.dirtyContributions().associate { it.id to it.updatedAt }
+    db.upsertContributions(rows.filter { isFresh(it, pending) }.map { r ->
+        Contribution(
+            id = r.str("id")!!, amount = r.getValue("amount").jsonPrimitive.long, note = r.str("note")!!,
+            date = r.ts("date")!!, updatedAt = r.ts("updated_at")!!, deletedAt = r.ts("deleted_at"), dirty = false,
+        )
+    })
+}
+
 private fun isFresh(r: JsonObject, pending: Map<String, Long>): Boolean {
     val mine = pending[r.str("id")] ?: return true
     return r.ts("updated_at")!! > mine
@@ -356,6 +378,11 @@ private fun Expense.toJson() = jsonOf(
     "description" to description, "amount" to amount, "date" to iso(date), "source" to source.name,
     "raw_input" to rawInput, "is_private" to isPrivate, "pending_category" to pendingCategory, "transfer_to" to transferTo,
     "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
+)
+
+private fun Contribution.toJson() = jsonOf(
+    "id" to id, "amount" to amount, "note" to note, "date" to iso(date),
+    "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
 )
 
 private fun Need.toJson() = jsonOf(

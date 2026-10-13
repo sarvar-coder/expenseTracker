@@ -6,15 +6,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.time.LocalDate
+import java.time.YearMonth
 
 data class Settings(
-    val monthlyBudget: Long = 0,
     val sttLocale: String = "uz_UZ",
     /** Name the family sees (profiles.display_name); empty until the first sync. */
     val displayName: String = "",
     /** UI script: "uz" (Latin) or "uz_cyrl" (Cyrillic). Local only. */
     val uiLanguage: String = "uz",
-)
+    /** Transfers others gave me in [receivedMonth] ("2026-10"), from the last family_summary; Room doesn't have them. */
+    val received: Long = 0,
+    val receivedMonth: String = "",
+) {
+    /** [received] if it's for [today]'s month, else 0 (new month, nothing fetched yet). */
+    fun receivedIn(today: LocalDate) = if (receivedMonth == YearMonth.from(today).toString()) received else 0
+}
 
 /** Plain settings in SharedPreferences; [settings] updates screens live. */
 class SettingsStore(private val prefs: SharedPreferences) {
@@ -22,19 +29,14 @@ class SettingsStore(private val prefs: SharedPreferences) {
     val settings: StateFlow<Settings> = state.asStateFlow()
 
     fun load() = Settings(
-        monthlyBudget = prefs.getLong(K_BUDGET, 0),
         sttLocale = prefs.getString(K_LOCALE, null) ?: "uz_UZ",
         displayName = prefs.getString(K_NAME, null) ?: "",
         uiLanguage = prefs.getString(K_UI_LANG, null) ?: "uz",
+        received = prefs.getLong(K_RECEIVED, 0),
+        receivedMonth = prefs.getString(K_RECEIVED_MONTH, null) ?: "",
     )
 
-    // Budget also lives on the server profile (the family budget needs it),
-    // so edits wait there for the next sync.
-    fun setBudget(v: Long) {
-        prefs.edit { putLong(K_BUDGET, v); putBoolean(K_PROFILE_DIRTY, true) }
-        state.update { it.copy(monthlyBudget = v) }
-    }
-
+    // Name also lives on the server profile, so edits wait there for the next sync.
     fun setDisplayName(v: String) {
         prefs.edit { putString(K_NAME, v); putBoolean(K_PROFILE_DIRTY, true) }
         state.update { it.copy(displayName = v) }
@@ -53,10 +55,16 @@ class SettingsStore(private val prefs: SharedPreferences) {
     val profileDirty get() = prefs.getBoolean(K_PROFILE_DIRTY, false)
     fun markProfileClean() = prefs.edit { remove(K_PROFILE_DIRTY) }
 
-    /** Server values pulled by sync; not marked for push. */
-    fun applyProfile(budget: Long, displayName: String) {
-        prefs.edit { putLong(K_BUDGET, budget); putString(K_NAME, displayName) }
-        state.update { it.copy(monthlyBudget = budget, displayName = displayName) }
+    /** Server value pulled by sync; not marked for push. */
+    fun applyProfile(displayName: String) {
+        prefs.edit { putString(K_NAME, displayName) }
+        state.update { it.copy(displayName = displayName) }
+    }
+
+    /** Cached by sync so Home's balance works offline. */
+    fun setReceived(month: String, v: Long) {
+        prefs.edit { putLong(K_RECEIVED, v); putString(K_RECEIVED_MONTH, month) }
+        state.update { it.copy(received = v, receivedMonth = month) }
     }
 
     /** Last Add mode the user picked (enum name), so Add reopens in it. */
@@ -77,7 +85,6 @@ class SettingsStore(private val prefs: SharedPreferences) {
     companion object {
         // New key (old one was "push.asked", set even by a dismissed explanation): everyone is asked once more.
         private const val K_PUSH_ANSWERED = "push.answered"
-        private const val K_BUDGET = "monthlyBudget"
         private const val K_LOCALE = "sttLocale"
         private const val K_ADD_MODE = "lastAddMode"
         private const val K_INSIGHTS_LIST = "insightsList"
@@ -85,5 +92,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
         private const val K_UI_LANG = "uiLanguage"
         // 'sync.' prefix: wiped with the other sync keys when the account changes.
         private const val K_PROFILE_DIRTY = "sync.profileDirty"
+        private const val K_RECEIVED = "sync.received"
+        private const val K_RECEIVED_MONTH = "sync.receivedMonth"
     }
 }

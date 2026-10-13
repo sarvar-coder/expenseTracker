@@ -69,3 +69,18 @@ data class Need(
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     val dirty: Boolean = true,
 )
+
+/**
+ * Hissa: money a member puts into their month (repeat top-ups, note required).
+ * Own rows only (the server sets the owner); the family sees totals via family_summary.
+ */
+@Entity(tableName = "contributions")
+data class Contribution(
+    @PrimaryKey val id: String = newId(),
+    val amount: Long, // UZS, > 0
+    val note: String,
+    val date: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
+    val dirty: Boolean = true,
+)

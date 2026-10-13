@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Edit
@@ -59,7 +58,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -82,7 +80,6 @@ import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.SectionLabel
 import com.sarvarbek.expense_tracker.ui.common.TextDialog
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
-import com.sarvarbek.expense_tracker.ui.common.parseAmount
 import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
@@ -126,23 +123,6 @@ fun SettingsScreen(
             item {
                 SectionLabel(t("settings.general"))
                 DividedCard(listOf<@Composable () -> Unit>(
-                    {
-                        SettingRow(Icons.Outlined.AccountBalanceWallet, t("settings.budget"), if (s.monthlyBudget > 0) "${formatMoney(s.monthlyBudget)} UZS" else t("common.not_set")) {
-                            dialog = {
-                                TextDialog(
-                                    t("settings.budget"), t("common.save"), close,
-                                    initial = if (s.monthlyBudget > 0) s.monthlyBudget.toString() else "",
-                                    hint = "4000000", suffix = "UZS", keyboard = KeyboardType.Number,
-                                    accept = { v -> v.all(Char::isDigit) },
-                                ) { text ->
-                                    close()
-                                    // 0 or empty clears the budget ("Belgilanmagan").
-                                    val amount = if (text.isEmpty()) 0L else parseAmount(text)
-                                    if (amount == null) toaster.show(t("settings.budget_invalid")) else settings.setBudget(amount)
-                                }
-                            }
-                        }
-                    },
                     { SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onClick = onCategories) },
                     { NotificationsRow(settings) },
                 )) { it() }

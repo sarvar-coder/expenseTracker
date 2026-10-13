@@ -2,6 +2,7 @@ package com.sarvarbek.expense_tracker.features.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,11 +79,14 @@ fun HomeScreen(
     // the scroll position the list restores when coming back from a pushed page.
     val rows = feedRows ?: return
     val categories = cats ?: return
-    val budget by settings.settings.collectAsStateWithLifecycle()
+    val s by settings.settings.collectAsStateWithLifecycle()
+    val contributions by remember(db) { db.watchContributions() }.collectAsStateWithLifecycle(emptyList())
+    var contribute by rememberSaveable { mutableStateOf(false) }
     val now = LocalDate.now()
     val today = remember(rows, now) { todayExpenses(rows, now) }
-    // The budget line stays personal.
-    val month = remember(rows, budget.monthlyBudget, now) { summarize(rows.filter { it.mine }.map { it.expense }, budget.monthlyBudget, now) }
+    // The month line stays personal: my contributions + received vs my spending.
+    val received = s.receivedIn(now)
+    val month = remember(rows, contributions, received, now) { balance(rows.filter { it.mine }.map { it.expense }, contributions, received, now).summary }
     // Others' rows also count: the family pref can lag a join until the next recomposition.
     val family = inFamily || today.any { !it.mine }
     val catById = categories.associateBy { it.id }
@@ -91,7 +99,7 @@ fun HomeScreen(
         item {
             val spent = today.filter { it.expense.transferTo == null }
             val mine = spent.filter { it.mine }
-            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount })
+            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount }) { contribute = true }
         }
         item {
             Spacer(Modifier.height(AppSpace.section))
@@ -115,6 +123,7 @@ fun HomeScreen(
             }
         }
     }
+    if (contribute) ContributionSheet(db) { contribute = false }
 }
 
 @Composable
@@ -137,8 +146,8 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
 }
 
 @Composable
-/** [familyTotal]: today's family spend (mine included), null when not in a family. */
-private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?) {
+/** [familyTotal]: today's family spend (mine included), null when not in a family. Tapping the month line adds a Hissa. */
+private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?, onContribute: () -> Unit) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -158,26 +167,31 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: 
             Spacer(Modifier.height(4.dp))
             Text(t("home.family_today", formatMoney(familyTotal)), style = ty.labelMedium.copy(color = c.onHero))
         }
-        Spacer(Modifier.height(20.dp))
-        if (month.budget <= 0) {
-            Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))
-        } else {
-            LinearProgressIndicator(
-                progress = { month.progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(AppRadii.chip)),
-                color = if (over) c.danger else c.accent,
-                trackColor = c.onHero.copy(alpha = 0.15f),
-                gapSize = 0.dp,
-                drawStopIndicator = {},
-            )
-            Spacer(Modifier.height(8.dp))
-            Row {
-                Text(t("home.month_of_budget", formatMoney(month.spent), formatMoney(month.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
-                Text(
-                    if (over) t("home.over", formatMoney(-month.remaining)) else t("home.left", formatMoney(month.remaining)),
-                    style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
+        Spacer(Modifier.height(12.dp))
+        // The whole month block opens the Hissa sheet.
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(AppRadii.md)).clickable(role = Role.Button, onClick = onContribute).padding(vertical = 8.dp)) {
+            if (month.budget <= 0) {
+                Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))
+            } else {
+                LinearProgressIndicator(
+                    progress = { month.progress },
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(AppRadii.chip)),
+                    color = if (over) c.danger else c.accent,
+                    trackColor = c.onHero.copy(alpha = 0.15f),
+                    gapSize = 0.dp,
+                    drawStopIndicator = {},
                 )
+                Spacer(Modifier.height(8.dp))
+                Row {
+                    Text(t("home.month_of_budget", formatMoney(month.spent), formatMoney(month.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
+                    Text(
+                        if (over) t("home.over", formatMoney(-month.remaining)) else t("home.left", formatMoney(month.remaining)),
+                        style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
+                    )
+                }
             }
+            Spacer(Modifier.height(6.dp))
+            Text(t("home.add_contribution"), style = ty.labelMedium.copy(color = c.onHero, fontWeight = FontWeight.Bold))
         }
     }
 }

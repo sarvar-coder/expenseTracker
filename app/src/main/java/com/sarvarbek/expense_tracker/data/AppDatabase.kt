@@ -40,9 +40,17 @@ internal val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) = db.execSQL("ALTER TABLE `expenses` ADD COLUMN `transfer_to` TEXT")
 }
 
+/** v4: Hissa (contributions). */
+internal val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) = db.execSQL(
+        "CREATE TABLE IF NOT EXISTS `contributions` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, `note` TEXT NOT NULL, " +
+            "`date` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+    )
+}
+
 // ponytail: exportSchema off, migrations hand-written and checked by DataTest's
 // v1 upgrade test; export schemas if migrations pile up.
-@Database(entities = [Category::class, Expense::class, Need::class], version = 3, exportSchema = false)
+@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): ExpenseDao
 
@@ -54,7 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         for (c in seedCategories()) {
@@ -155,6 +163,21 @@ abstract class ExpenseDao {
     @Query("UPDATE needs SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
     abstract suspend fun deleteNeed(id: String, now: Long = System.currentTimeMillis())
 
+    // --- Contributions (own only) ---
+    /** Newest first. */
+    @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
+    abstract fun watchContributions(): Flow<List<Contribution>>
+
+    @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
+    abstract suspend fun getContributions(): List<Contribution>
+
+    @Insert abstract suspend fun insertContribution(c: Contribution)
+
+    @Upsert abstract suspend fun upsertContributions(rows: List<Contribution>)
+
+    @Query("UPDATE contributions SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
+    abstract suspend fun deleteContribution(id: String, now: Long = System.currentTimeMillis())
+
     // --- Sync (raw: no dirty/updatedAt bump unless stated) ---
     /** Every row, soft-deleted included. */
     @Query("SELECT * FROM categories") abstract suspend fun allCategoryRows(): List<Category>
@@ -165,9 +188,11 @@ abstract class ExpenseDao {
 
     @Query("SELECT * FROM needs WHERE dirty = 1") abstract suspend fun dirtyNeeds(): List<Need>
 
+    @Query("SELECT * FROM contributions WHERE dirty = 1") abstract suspend fun dirtyContributions(): List<Contribution>
+
     @Query(
         "SELECT (SELECT count(*) FROM categories WHERE dirty = 1) + (SELECT count(*) FROM expenses WHERE dirty = 1) " +
-            "+ (SELECT count(*) FROM needs WHERE dirty = 1)",
+            "+ (SELECT count(*) FROM needs WHERE dirty = 1) + (SELECT count(*) FROM contributions WHERE dirty = 1)",
     )
     abstract fun watchDirtyCount(): Flow<Int>
 
@@ -180,6 +205,9 @@ abstract class ExpenseDao {
 
     @Query("UPDATE needs SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     abstract suspend fun markNeedClean(id: String, updatedAt: Long)
+
+    @Query("UPDATE contributions SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    abstract suspend fun markContributionClean(id: String, updatedAt: Long)
 
     /** Drops family items of any family but [familyId] (left or removed); the server refuses their edits anyway. */
     @Query("DELETE FROM needs WHERE family_id IS NOT NULL AND (:familyId IS NULL OR family_id != :familyId)")
@@ -217,12 +245,15 @@ abstract class ExpenseDao {
 
     @Query("DELETE FROM needs") abstract suspend fun deleteAllNeeds()
 
+    @Query("DELETE FROM contributions") abstract suspend fun deleteAllContributions()
+
     /** Another account signed in on this device: drop the previous one's rows. */
     @Transaction
     open suspend fun resetLocal() {
         deleteAllExpenses()
         deleteAllCategories()
         deleteAllNeeds()
+        deleteAllContributions()
         upsertCategories(seedCategories())
     }
 }
