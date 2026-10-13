@@ -68,11 +68,14 @@ class Push(private val context: Context, private val client: SupabaseClient) {
         scope.launch(Dispatchers.Main) {
             ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
                 override fun onResume(owner: LifecycleOwner) {
-                    if (sentCanNotify != null && sentCanNotify != canNotify(context)) scope.launch { register() }
+                    if (sentCanNotify != null && sentCanNotify != reportable()) scope.launch { register() }
                 }
             })
         }
     }
+
+    /** App switch, permission and both channels: what the server sees as `can_notify`. */
+    private fun reportable() = listOf(CH_REQUESTS, CH_EXPENSES).all { canNotify(context, it) }
 
     /** What the last successful [register] reported; null until one lands. */
     @Volatile private var sentCanNotify: Boolean? = null
@@ -82,7 +85,7 @@ class Push(private val context: Context, private val client: SupabaseClient) {
         if (client.auth.currentUserOrNull() == null) return true // signed out: nothing to do
         return attempt("register") {
             val t = token ?: Tasks.await(FirebaseMessaging.getInstance().token)
-            val can = canNotify(context)
+            val can = reportable()
             // can_notify + version: lets the server side tell a silent phone from a missing token.
             client.postgrest.rpc("register_push_token", buildJsonObject {
                 put("p_token", t)

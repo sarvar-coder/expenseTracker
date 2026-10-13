@@ -237,7 +237,8 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
 private fun AskNotifications(settings: SettingsStore) {
     val context = LocalContext.current
     // The runtime permission only: if just the app switch is off, the system dialog can't help.
-    var show by remember { mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, notificationPermission(context), settings.pushAnswered)) }
+    // Saveable: survives Shell leaving composition (pushed pages), so a dismiss holds until the app restarts.
+    var show by rememberSaveable { mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, notificationPermission(context), settings.pushAnswered)) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { settings.pushAnswered = true }
     if (!show) return
     ConfirmDialog(t("push.ask_title"), t("push.ask_text"), t("push.ask_allow"), onDismiss = { show = false }) {
