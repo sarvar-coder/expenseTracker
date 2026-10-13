@@ -16,7 +16,7 @@ data class HomeSummary(val spent: Long, val budget: Long) {
 
 /**
  * My calendar month: own contributions + transfers received − own spending −
- * transfers given. Mirrors family_summary's `available`.
+ * transfers given, over every own row whatever its family. Mirrors family_summary's `available`.
  */
 data class Balance(val contributed: Long, val received: Long, val spent: Long, val given: Long) {
     val available: Long get() = contributed + received - spent - given

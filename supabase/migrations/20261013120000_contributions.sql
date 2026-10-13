@@ -54,7 +54,11 @@ create policy contributions_update on public.contributions for update to authent
 -- contribution = own contributions + transfers received (what the member had),
 -- shared_total = non-transfer spending. New: own_contribution (the family
 -- budget sums only these, so a transfer isn't counted twice), received, given
--- (transfers out) and available = contribution - shared_total - given.
+-- (transfers out) and available = contribution - all own spending - given.
+-- Contributions, given and available's spending are the member's own money,
+-- whatever family a row belongs to (personal rows before joining, frozen rows
+-- of a previous family): the same rule as the app's Home balance, which sums
+-- every own Room row. shared_total stays this family's rows only.
 drop function public.family_summary(timestamptz, timestamptz);
 create function public.family_summary(p_from timestamptz, p_to timestamptz)
 returns table (
@@ -68,6 +72,9 @@ language sql stable security definer set search_path = '' as $$
       (select coalesce(sum(e.amount), 0) from public.expenses e
         where e.owner_id = m.user_id and e.family_id = m.family_id and e.deleted_at is null
           and e.date >= p_from and e.date < p_to and e.transfer_to is null) as spent,
+      (select coalesce(sum(e.amount), 0) from public.expenses e
+        where e.owner_id = m.user_id and e.deleted_at is null
+          and e.date >= p_from and e.date < p_to and e.transfer_to is null) as own_spent,
       (select coalesce(sum(c.amount), 0) from public.contributions c
         where c.owner_id = m.user_id and c.deleted_at is null
           and c.date >= p_from and c.date < p_to) as own,
@@ -82,7 +89,7 @@ language sql stable security definer set search_path = '' as $$
     where m.family_id = private.my_family_id()
   )
   select uid, dname, mrole, spent::bigint, (own + got)::bigint, mtitle,
-    own::bigint, got::bigint, gave::bigint, (own + got - spent - gave)::bigint
+    own::bigint, got::bigint, gave::bigint, (own + got - own_spent - gave)::bigint
   from s
 $$;
 revoke execute on function public.family_summary(timestamptz, timestamptz) from public, anon;
