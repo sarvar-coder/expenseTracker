@@ -1,5 +1,12 @@
 package com.sarvarbek.expense_tracker.features.settings
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +34,7 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.MicNone
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Unarchive
@@ -54,12 +62,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.expensesCsv
+import com.sarvarbek.expense_tracker.services.canNotify
 import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
+import com.sarvarbek.expense_tracker.services.notificationPermission
+import com.sarvarbek.expense_tracker.services.shouldAskNotifications
 import com.sarvarbek.expense_tracker.services.shareCsv
 import com.sarvarbek.expense_tracker.ui.common.CategoryBadge
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
@@ -132,6 +144,7 @@ fun SettingsScreen(
                         }
                     },
                     { SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onClick = onCategories) },
+                    { NotificationsRow(settings) },
                 )) { it() }
             }
             item {
@@ -187,6 +200,25 @@ fun SettingsScreen(
         }
     }
     dialog?.invoke()
+}
+
+/** On/off (app switch + permission); tap asks while the system dialog still can, else opens Android's settings. */
+@Composable
+private fun NotificationsRow(settings: SettingsStore) {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(canNotify(context)) }
+    LifecycleResumeEffect(Unit) { on = canNotify(context); onPauseOrDispose {} }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { settings.pushAnswered = true; on = canNotify(context) }
+    SettingRow(Icons.Outlined.Notifications, t("settings.notifications"), t(if (on) "settings.notifications_on" else "settings.notifications_off")) {
+        if (Build.VERSION.SDK_INT >= 33 && shouldAskNotifications(33, notificationPermission(context), settings.pushAnswered)) {
+            ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            context.startActivity(
+                if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+            )
+        }
+    }
 }
 
 /** Back-arrow top bar + the app snackbar, for pushed pages. */

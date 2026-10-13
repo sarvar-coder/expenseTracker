@@ -12,11 +12,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.sarvarbek.expense_tracker.App
+import com.sarvarbek.expense_tracker.BuildConfig
 import com.sarvarbek.expense_tracker.MainActivity
 import com.sarvarbek.expense_tracker.R
 import com.sarvarbek.expense_tracker.ui.common.formatMoney
@@ -60,14 +64,33 @@ class Push(private val context: Context, private val client: SupabaseClient) {
                 .distinctUntilChanged()
                 .collectLatest { uid -> if (uid != null) while (!register()) delay(RETRY_MS) }
         }
+        // Back in the app (system settings, permission dialog): report a changed notification switch.
+        scope.launch(Dispatchers.Main) {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onResume(owner: LifecycleOwner) {
+                    if (sentCanNotify != null && sentCanNotify != canNotify(context)) scope.launch { register() }
+                }
+            })
+        }
     }
+
+    /** What the last successful [register] reported; null until one lands. */
+    @Volatile private var sentCanNotify: Boolean? = null
 
     /** Saves [token] (default: this phone's) for the signed-in user. Never throws; false = failed, try again. */
     suspend fun register(token: String? = null): Boolean {
         if (client.auth.currentUserOrNull() == null) return true // signed out: nothing to do
         return attempt("register") {
             val t = token ?: Tasks.await(FirebaseMessaging.getInstance().token)
-            client.postgrest.rpc("register_push_token", buildJsonObject { put("p_token", t) })
+            val can = canNotify(context)
+            // can_notify + version: lets the server side tell a silent phone from a missing token.
+            client.postgrest.rpc("register_push_token", buildJsonObject {
+                put("p_token", t)
+                put("p_can_notify", can)
+                put("p_version", BuildConfig.VERSION_NAME)
+            })
+            sentCanNotify = can
+            Log.i(TAG, "registered, canNotify=$can")
         }
     }
 
@@ -86,9 +109,13 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     /** Called on FCM's worker thread. */
     fun show(data: Map<String, String>) {
         val uid = runBlocking {
-            withTimeoutOrNull(5_000) { client.auth.sessionStatus.first { it !is SessionStatus.Initializing } }
+            withTimeoutOrNull(10_000) { client.auth.sessionStatus.first { it !is SessionStatus.Initializing } }
+            // A push often wakes a killed app with an expired token: while that refresh fails
+            // (RefreshFailure, no session in the status) the stored session still names the account.
             client.auth.currentUserOrNull()?.id
+                ?: if (client.auth.sessionStatus.value is SessionStatus.RefreshFailure) client.auth.sessionManager.loadSessionOrNull()?.user?.id else null
         }
+        if (uid == null) return Unit.also { Log.i(TAG, "drop ${data["type"]}: no signed-in user (${client.auth.sessionStatus.value})") }
         pushContent(data, uid)?.let { post(context, it) }
     }
 
@@ -135,7 +162,7 @@ class Push(private val context: Context, private val client: SupabaseClient) {
 data class PushContent(val channel: String, val title: String, val text: String, val route: String?, val tag: String, val group: String? = null)
 
 fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
-    if (signedInUid == null || data["uid"] != signedInUid) return null
+    if (signedInUid == null || data["uid"] != signedInUid) return null.also { Log.i("push", "drop ${data["type"]}: for another account") }
     val category = data["category"].orEmpty()
     return when (data["type"]) {
         "category_request" -> PushContent(
@@ -148,7 +175,7 @@ fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
             null, "resolved:$category",
         )
         "expense" -> {
-            val id = data["id"] ?: return null
+            val id = data["id"] ?: return null.also { Log.i("push", "drop expense: no id") }
             val name = data["name"].orEmpty()
             PushContent(
                 Push.CH_EXPENSES, t("push.expense_title"),
@@ -156,13 +183,13 @@ fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
                 Push.ROUTE_EXPENSE + id, "expense:$id", "expenses:${data["owner"].orEmpty()}",
             )
         }
-        else -> null
+        else -> null.also { Log.i("push", "drop: unknown type ${data["type"]}") }
     }
 }
 
 /** Shows [p]; grouped pushes also get (or refresh) their group's summary. Tapping opens [PushContent.route]. */
 internal fun post(context: Context, p: PushContent) {
-    if (!canNotify(context)) return
+    if (!canNotify(context, p.channel)) return Unit.also { Log.i("push", "drop ${p.tag}: notifications off (app or channel ${p.channel})") }
     fun tap(route: String?, code: Int) = PendingIntent.getActivity(
         context, code,
         Intent(context, MainActivity::class.java)
@@ -190,14 +217,22 @@ internal fun post(context: Context, p: PushContent) {
     }
 }
 
-/** Android 13+ needs POST_NOTIFICATIONS at runtime; older versions only the app switch. */
-fun canNotify(context: Context) =
-    (Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-        NotificationManagerCompat.from(context).areNotificationsEnabled()
+/** Android 13+ needs POST_NOTIFICATIONS at runtime; older versions only the app switch. [channel]: also that channel not blocked. */
+fun canNotify(context: Context, channel: String? = null) =
+    notificationPermission(context) &&
+        NotificationManagerCompat.from(context).areNotificationsEnabled() &&
+        (channel == null || Build.VERSION.SDK_INT < 26 ||
+            context.getSystemService(NotificationManager::class.java).getNotificationChannel(channel)?.importance != NotificationManager.IMPORTANCE_NONE)
 
-/** Ask once, only on Android 13+, only if not granted yet; a "no" is final (Android settings can still turn it on). */
-fun shouldAskNotifications(sdk: Int, granted: Boolean, askedBefore: Boolean) = sdk >= 33 && !granted && !askedBefore
+/** The runtime permission only (Android 13+); the app switch and channels are separate. */
+fun notificationPermission(context: Context) = Build.VERSION.SDK_INT < 33 ||
+    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+/**
+ * Ask on Android 13+ while not granted, until the system dialog has answered once
+ * ([answered]); closing our explanation doesn't count. After that, Settings' row is the way.
+ */
+fun shouldAskNotifications(sdk: Int, granted: Boolean, answered: Boolean) = sdk >= 33 && !granted && !answered
 
 class PushMessagingService : FirebaseMessagingService() {
     private val push get() = (application as App).container.push

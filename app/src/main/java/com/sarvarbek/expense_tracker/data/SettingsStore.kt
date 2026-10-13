@@ -69,7 +69,14 @@ class SettingsStore(private val prefs: SharedPreferences) {
         get() = prefs.getBoolean(K_INSIGHTS_LIST, true)
         set(v) = prefs.edit { putBoolean(K_INSIGHTS_LIST, v) }
 
+    /** The system notification-permission dialog has answered once (closing our explanation doesn't count). */
+    var pushAnswered: Boolean
+        get() = prefs.getBoolean(K_PUSH_ANSWERED, false)
+        set(v) = prefs.edit { putBoolean(K_PUSH_ANSWERED, v) }
+
     companion object {
+        // New key (old one was "push.asked", set even by a dismissed explanation): everyone is asked once more.
+        private const val K_PUSH_ANSWERED = "push.answered"
         private const val K_BUDGET = "monthlyBudget"
         private const val K_LOCALE = "sttLocale"
         private const val K_ADD_MODE = "lastAddMode"
