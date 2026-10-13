@@ -2,7 +2,6 @@ package com.sarvarbek.expense_tracker.features.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,10 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +76,6 @@ fun HomeScreen(
     val categories = cats ?: return
     val s by settings.settings.collectAsStateWithLifecycle()
     val contributions by remember(db) { db.watchContributions() }.collectAsStateWithLifecycle(emptyList())
-    var contribute by rememberSaveable { mutableStateOf(false) }
     val now = LocalDate.now()
     val today = remember(rows, now) { todayExpenses(rows, now) }
     // The month line stays personal: my contributions + received vs my spending.
@@ -99,7 +93,7 @@ fun HomeScreen(
         item {
             val spent = today.filter { it.expense.transferTo == null }
             val mine = spent.filter { it.mine }
-            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount }) { contribute = true }
+            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount })
         }
         item {
             Spacer(Modifier.height(AppSpace.section))
@@ -123,7 +117,6 @@ fun HomeScreen(
             }
         }
     }
-    if (contribute) ContributionSheet(db) { contribute = false }
 }
 
 @Composable
@@ -146,8 +139,8 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
 }
 
 @Composable
-/** [familyTotal]: today's family spend (mine included), null when not in a family. Tapping the month line adds a Hissa. */
-private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?, onContribute: () -> Unit) {
+/** [familyTotal]: today's family spend (mine included), null when not in a family. */
+private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -168,8 +161,7 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: 
             Text(t("home.family_today", formatMoney(familyTotal)), style = ty.labelMedium.copy(color = c.onHero))
         }
         Spacer(Modifier.height(12.dp))
-        // The whole month block opens the Hissa sheet.
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(AppRadii.md)).clickable(role = Role.Button, onClick = onContribute).padding(vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             if (month.budget <= 0) {
                 Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))
             } else {
@@ -190,8 +182,6 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: 
                     )
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Text(t("home.add_contribution"), style = ty.labelMedium.copy(color = c.onHero, fontWeight = FontWeight.Bold))
         }
     }
 }

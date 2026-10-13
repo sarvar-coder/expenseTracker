@@ -51,7 +51,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +67,6 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
-import com.sarvarbek.expense_tracker.features.home.ContributionSheet
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
 import com.sarvarbek.expense_tracker.features.insights.Donut
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
@@ -186,7 +184,6 @@ fun FamilyScreen(
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
-    var contribute by rememberSaveable { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
     LaunchedEffect(state, active) { if (active) state.refresh() } // every time the tab opens
@@ -216,8 +213,8 @@ fun FamilyScreen(
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories)
-                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories) { contribute = true }
+                    state.loaded && f == null -> NoFamily(state.invites, show, act, onLedger, onCategories)
+                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories)
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         CategoriesBanner(onCategories) // categories are local: work offline
@@ -228,8 +225,6 @@ fun FamilyScreen(
         }
     }
     actions.dialog()?.invoke()
-    // Closing refetches: overview() syncs first, so new contributions count.
-    if (contribute) ContributionSheet(db) { contribute = false; scope.launch { state.refresh() } }
 }
 
 internal val FamilyOverview.memberNames get() = members.associate { it.userId to it.label }
@@ -245,7 +240,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onLedger: () -> Unit, onCategories: () -> Unit) {
     val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -282,6 +277,8 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, on
             Text(t("family.create"))
         }
         Spacer(Modifier.height(AppSpace.section))
+        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // the only way to add a Hissa
+        Spacer(Modifier.height(AppSpace.gap))
         CategoriesBanner(onCategories)
     }
 }
@@ -297,14 +294,13 @@ private fun InFamily(
     onList: () -> Unit,
     onLedger: () -> Unit,
     onCategories: () -> Unit,
-    onContribute: () -> Unit,
 ) {
     val range = familyRange()
     val list = familySelect(f)(rows)
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
-        BudgetCard(HomeSummary(f.spent, f.budget), onContribute)
+        BudgetCard(HomeSummary(f.spent, f.budget))
         Spacer(Modifier.height(AppSpace.section))
         ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger)
         Spacer(Modifier.height(AppSpace.gap))
@@ -431,7 +427,7 @@ internal fun GearButton(label: String, onClick: () -> Unit) {
 
 /** Family budget (sum of members' own contributions) vs shared spending this month, + Hissa qo'shish. */
 @Composable
-private fun BudgetCard(summary: HomeSummary, onContribute: () -> Unit) {
+private fun BudgetCard(summary: HomeSummary) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -460,12 +456,6 @@ private fun BudgetCard(summary: HomeSummary, onContribute: () -> Unit) {
                     style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
                 )
             }
-        }
-        Spacer(Modifier.height(14.dp))
-        PrimaryButton(onContribute, Modifier.fillMaxWidth()) {
-            Icon(Icons.Filled.Add, null)
-            Spacer(Modifier.width(8.dp))
-            Text(t("contrib.add"))
         }
     }
 }

@@ -27,8 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +46,6 @@ import com.sarvarbek.expense_tracker.ui.common.startMillis
 import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
-import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import com.sarvarbek.expense_tracker.ui.theme.PrimaryButton
@@ -57,16 +54,7 @@ import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** Hissa qo'shish as a sheet: Home's month line and the Oila budget card. */
-@Composable
-fun ContributionSheet(db: ExpenseDao, onDismiss: () -> Unit) = AppSheet(onDismiss) { _ ->
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = AppSpace.section)) {
-        Text(t("contrib.add"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-        ContributionForm(db)
-    }
-}
-
-/** Hissa qo'shish as a page: the Hissa page's "+". */
+/** Hissa qo'shish page: the Hissa page's "+" (the only way to add one). */
 @Composable
 fun ContributionScreen(db: ExpenseDao, onBack: () -> Unit) = AppBarScaffold(t("contrib.add"), onBack) { pad ->
     Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = AppSpace.page).padding(bottom = AppSpace.section)) {
