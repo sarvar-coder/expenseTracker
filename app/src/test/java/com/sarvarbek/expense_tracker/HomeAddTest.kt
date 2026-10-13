@@ -388,6 +388,21 @@ class HomeAddTest {
         assertEquals(1, runBlocking { db.getContributions() }.size)
     }
 
+    @Test fun aiOverspendGoesThroughSheetAndUndoRemovesBoth() {
+        show { Add(parsed = aiCoffee) }
+        rule.onNodeWithText("Yozish").performClick()
+        rule.onNodeWithTag("input").performTextInput("coffee 45000")
+        rule.onNodeWithText("AI bilan qo'shish").tap()
+        waitFor("Pul qayerdan?")
+        rule.onNodeWithText("Maosh").performClick()
+        rule.onNodeWithTag("source_confirm").performClick()
+        waitFor("Qo'shildi: Coffee — 45 000 UZS")
+        assertEquals(45000L, runBlocking { db.getContributions() }.single().amount)
+        rule.onNodeWithText("Bekor qilish").performClick()
+        waitRows(0)
+        assertEquals(0, runBlocking { db.getContributions() }.size)
+    }
+
     @Test fun shortfallForEditsAndPastMonths() = runBlocking {
         val food = db.getCategories().first()
         val today = LocalDate.now()

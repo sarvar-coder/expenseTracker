@@ -57,6 +57,8 @@ fun shortfall(extra: Long, available: Long): Long = (extra - available.coerceAtL
  */
 suspend fun shortfallFor(db: ExpenseDao, settings: SettingsStore, e: Expense, old: Expense?): Long {
     val day = e.date.toLocalDate()
+    // ponytail: received transfers are cached for the current month only, so other months count them as 0
+    // (may ask needlessly); keep received per month if that bites.
     val kept = old?.takeIf { YearMonth.from(it.date.toLocalDate()) == YearMonth.from(day) }?.amount ?: 0
     return shortfall(e.amount - kept, myAvailable(db, settings, day))
 }
@@ -81,7 +83,7 @@ fun rememberExpenseSaver(db: ExpenseDao, settings: SettingsStore): suspend (e: E
                 Contribution(amount = s, note = note ?: return@save null, date = e.date)
             }
             db.saveExpense(e, update = old != null, source)
-            ({ db.deleteExpense(e.id); source?.let { db.deleteContribution(it.id) } })
+            ({ db.deleteExpenseWithSource(e.id, source?.id) })
         }
     }
 }
