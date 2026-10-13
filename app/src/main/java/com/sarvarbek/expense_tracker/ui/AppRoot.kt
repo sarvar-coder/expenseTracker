@@ -172,7 +172,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                         )
                         else -> {
                             FamilyScreen(
-                                family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory,
+                                family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit,
                                 filterState = familyFilter, onList = { nav.go("family-list") },
                             ) { nav.go("family-settings") }
                         }

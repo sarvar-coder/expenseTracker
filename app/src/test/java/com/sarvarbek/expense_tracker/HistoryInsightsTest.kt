@@ -250,8 +250,13 @@ class HistoryInsightsTest {
         rule.onNodeWithText("Coffee").assertExists()
         rule.onNodeWithText("Vali · Food & dining").assertExists()
         rule.onNodeWithContentDescription("Jami 80 000 UZS").assertExists()
-        rule.onNodeWithText("Coffee").performClick()
+        rule.onNodeWithText("Coffee").performClick() // own row: sheet with a pencil
+        rule.onNodeWithText("Kim qo'shgan").assertExists()
+        rule.onNodeWithText("Faqat o'qish uchun").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Xarajatni tahrirlash").performClick()
+        rule.waitUntil(5000) { edited != null }
         assertEquals("Coffee", edited?.description)
+        rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
 
         // Search narrows; no match shows its empty state.
         rule.onNode(hasSetTextAction()).performTextReplacement("zzz")
@@ -263,6 +268,7 @@ class HistoryInsightsTest {
         assertEquals(listOf(false), modes)
         rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Food & dining, 75 000 UZS, 94%")).fetchSemanticsNodes().isNotEmpty() }
         rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().let { assertEquals(2, it.size) } // header + donut
+        assertEquals(2, rule.onAllNodesWithText("Turkumlar").fetchSemanticsNodes().size) // mode tab + legend heading: Tahlil keeps it
         rule.onNode(hasContentDescription("Food & dining, 75 000 UZS, 94%")).performClick()
 
         // Category screen: only its rows, total = legend amount; back returns.
