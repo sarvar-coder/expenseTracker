@@ -7,7 +7,7 @@ declare
   ca uuid := gen_random_uuid(); cb1 uuid := gen_random_uuid(); cb2 uuid := gen_random_uuid();
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
   eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid(); eb7 uuid := gen_random_uuid();
-  nb1 uuid := gen_random_uuid(); nb2 uuid := gen_random_uuid(); nb3 uuid := gen_random_uuid();
+  nb1 uuid := gen_random_uuid(); nb2 uuid := gen_random_uuid(); nb3 uuid := gen_random_uuid(); na1 uuid := gen_random_uuid();
   fid uuid; inv uuid; req uuid; newcat uuid; bq uuid; n int; r record; ok boolean;
 begin
   insert into auth.users (id, email, aud, role, raw_user_meta_data) values
@@ -122,13 +122,59 @@ begin
   select count(*) into n from public.expenses where owner_id = b; assert n = 0, 'A cannot read B rows directly';
   select count(*) into n from public.profiles where id = b; assert n = 0, 'A cannot read B profile/budget';
   select count(*) into n from public.needs; assert n = 1, 'A sees family need only, got ' || n;
+  -- the app pushes the full row with the real owner (b); the admin's upsert still passes
   insert into public.needs (id, owner_id, family_id, text, done, updated_at)
-    values (nb1, a, null, 'milk', true, now() + interval '1 second')
-    on conflict (id) do update set done = excluded.done, family_id = excluded.family_id, updated_at = excluded.updated_at;
+    values (nb1, b, null, 'milk', true, now() + interval '1 second')
+    on conflict (id) do update set owner_id = excluded.owner_id, done = excluded.done, family_id = excluded.family_id, updated_at = excluded.updated_at;
   select count(*) into n from public.needs where id = nb1 and done and family_id = fid and owner_id = b;
-  assert n = 1, 'member ticks family need via upsert, owner/family kept';
+  assert n = 1, 'admin ticks family need via full-row upsert, owner/family kept';
   update public.needs set done = true where id = nb2;
   get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
+  -- needs status (#110): owner marks own done, admin marks any done / rejects, pending is server-only
+  select count(*) into n from public.needs where id = nb1 and status = 'done'; assert n = 1, 'old-style done=true sets status';
+  insert into public.needs (id, family_id, text, link) values (na1, fid, 'bike', 'https://shop.uz/bike');
+  begin
+    insert into public.needs (id, text, link) values (gen_random_uuid(), 'x', 'javascript:alert(1)'); ok := false;
+  exception when check_violation then ok := true; end;
+  assert ok, 'link must be http(s)';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  begin update public.needs set status = 'done', done = true where id = na1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'member cannot mark others done';
+  begin update public.needs set status = 'rejected' where id = nb1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'member cannot reject (even own)';
+  begin update public.needs set status = 'pending' where id = nb1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'client cannot set pending';
+  update public.needs set done = false where id = nb1; -- old APK untick
+  select count(*) into n from public.needs where id = nb1 and status = 'new' and not done; assert n = 1, 'old-style untick reopens';
+  update public.needs set status = 'done' where id = nb1;
+  select count(*) into n from public.needs where id = nb1 and done; assert n = 1, 'owner marks own done, done follows status';
+  -- photo: owner uploads; family sees; others can't write it
+  insert into storage.objects (bucket_id, name) values ('need-photos', nb1 || '/photo.jpg');
+  begin insert into storage.objects (bucket_id, name) values ('need-photos', na1 || '/photo.jpg'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'member cannot upload a photo for another need';
+  insert into storage.objects (bucket_id, name) values ('need-photos', nb2 || '/photo.jpg');
+  begin insert into storage.objects (bucket_id, name) values ('need-photos', nb2 || '/x.jpg'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'one object per need: {id}/photo.jpg only';
+  update public.needs set photo_path = nb1 || '/photo.jpg' where id = nb1;
+  update public.needs set photo_path = null, text = 'milk!' where id = nb1;
+  select count(*) into n from public.needs where id = nb1 and photo_path is not null; assert n = 1, 'stale copy cannot drop photo_path';
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
+  select count(*) into n from storage.objects where bucket_id = 'need-photos'; assert n = 1, 'A sees family photo only, got ' || n;
+  update public.needs set status = 'rejected' where id = nb1;
+  select count(*) into n from public.needs where id = nb1 and status = 'rejected' and not done; assert n = 1, 'admin rejects';
+  begin update public.needs set text = 'hijack' where id = nb1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'admin cannot edit others text';
+  perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
+  begin update public.needs set done = true where id = nb1; ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'owner cannot un-reject';
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select amount, description, is_private, source, raw_input into r from public.family_expenses_since('epoch') where id = eb4;
   assert r.amount = 30 and r.description = 'secret2' and not r.is_private, 'no private: row shared with the family';
   assert r.source = 'typed' and r.raw_input = 'secret 30', 'feed carries source + raw input (read-only sheet)';

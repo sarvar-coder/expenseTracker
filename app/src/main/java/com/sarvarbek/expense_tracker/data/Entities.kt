@@ -56,12 +56,16 @@ data class Expense(
     val dirty: Boolean = true,
 )
 
-/** "Kerakli" item. familyId null = personal; set = the whole family sees and ticks it. */
+/** "Kerakli" item. familyId null = personal; set = the whole family sees it. */
 @Entity(tableName = "needs")
 data class Need(
     @PrimaryKey val id: String = newId(),
     val text: String,
-    val done: Boolean = false,
+    val done: Boolean = false, // mirrors status == done (old APKs read it)
+    @ColumnInfo(defaultValue = NeedStatus.NEW) val status: String = NeedStatus.NEW,
+    @ColumnInfo(name = "need_money", defaultValue = "0") val needMoney: Boolean = false, // false = has money, wants opinions
+    val link: String? = null, // http(s) only
+    @ColumnInfo(name = "photo_path") val photoPath: String? = null, // storage object, set once uploaded
     @ColumnInfo(name = "owner_id") val ownerId: String? = null,
     @ColumnInfo(name = "family_id") val familyId: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
@@ -84,3 +88,14 @@ data class Contribution(
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
     val dirty: Boolean = true,
 )
+
+/** Need.status values, in tab order. Pending is set by the server (first comment). */
+object NeedStatus {
+    const val NEW = "new"
+    const val PENDING = "pending"
+    const val DONE = "done"
+    const val REJECTED = "rejected"
+    val all = listOf(NEW, PENDING, DONE, REJECTED)
+}
+
+fun Need.withStatus(s: String) = copy(status = s, done = s == NeedStatus.DONE)

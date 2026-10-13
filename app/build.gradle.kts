@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.functions)
+    implementation(libs.supabase.storage)
     implementation(libs.ktor.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.lifecycle.process)

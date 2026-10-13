@@ -177,7 +177,6 @@ fun FamilyScreen(
     state: FamilyState,
     db: ExpenseDao,
     active: Boolean = true,
-    onNeeds: () -> Unit = {},
     onEdit: (Expense) -> Unit = {},
     onList: () -> Unit = {},
     onLedger: () -> Unit = {},
@@ -217,12 +216,11 @@ fun FamilyScreen(
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories, { contribute = true }) { NeedsCard(db, onNeeds) }
+                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories)
+                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories) { contribute = true }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
-                        CategoriesBanner(onCategories) // categories and needs are local: work offline
-                        NeedsCard(db, onNeeds)
+                        CategoriesBanner(onCategories) // categories are local: work offline
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
@@ -247,7 +245,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit, needs: @Composable () -> Unit) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit) {
     val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -285,7 +283,6 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, on
         }
         Spacer(Modifier.height(AppSpace.section))
         CategoriesBanner(onCategories)
-        needs()
     }
 }
 
@@ -301,7 +298,6 @@ private fun InFamily(
     onLedger: () -> Unit,
     onCategories: () -> Unit,
     onContribute: () -> Unit,
-    needs: @Composable () -> Unit,
 ) {
     val range = familyRange()
     val list = familySelect(f)(rows)
@@ -313,7 +309,6 @@ private fun InFamily(
         ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger)
         Spacer(Modifier.height(AppSpace.gap))
         CategoriesBanner(onCategories)
-        needs()
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
         SectionLabel(t("family.shared_month"))

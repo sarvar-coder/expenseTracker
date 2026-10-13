@@ -82,7 +82,7 @@ Dark mode follows the system. Radii via `AppRadii`.
 Category colors are stored per category row (hex): Food `#E08A5B`, Groceries
 `#6FA86A`, Shopping `#C07FA6`, Transport `#5B8DB8`, Bills `#D9A24E`.
 Currency is **UZS only** (whole units, no decimals). UI language is Uzbek.
-Three tabs (Asosiy, Tahlil, Oila) + FAB; Settings opens from the Home gear.
+Four tabs (Asosiy, Tahlil, Kerakli, Oila) + FAB; Settings opens from the Home gear.
 
 ## Layout
 
@@ -96,8 +96,8 @@ app/src/main/java/com/sarvarbek/expense_tracker/
   ui/common/              // Format.kt (money/dates), Widgets.kt (shared widgets)
   data/                   // Room entities, AppDatabase + DAO, SettingsStore
   services/               // AiParser, CategoryMatcher, SyncService, FamilyService,
-                          // SpeechService, CsvExport, Push (FCM)
-  features/home|add|activity|insights|settings|auth|family/
+                          // SpeechService, CsvExport, Push (FCM), NeedPhotos (storage)
+  features/home|add|activity|insights|settings|auth|family|needs/
 app/src/test/             // Robolectric + Compose tests
 supabase/
   migrations/             // schema, RLS, RPCs
