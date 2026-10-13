@@ -33,7 +33,12 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
+import com.sarvarbek.expense_tracker.features.family.FamilyListScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
@@ -242,16 +247,20 @@ class SettingsFamilyTest : ScreenTest() {
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         var edited: Expense? = null
         var pick: CategoryPick? = null
-        show { FamilyScreen(FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed), db, onEdit = { edited = it }, onCategory = { pick = it }) }
+        val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed)
+        show {
+            // Tab and its Ro'yxat page share the state and the filter, as in Routes.
+            var list by remember { mutableStateOf(false) }
+            val filter = remember { mutableStateOf(ActivityFilter()) }
+            if (list) FamilyListScreen(state, db, filter, onBack = { list = false }, onEdit = { edited = it })
+            else FamilyScreen(state, db, onEdit = { edited = it }, onCategory = { pick = it }, filterState = filter, onList = { list = true })
+        }
 
-        waitFor("Non")
+        waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
         rule.onNodeWithText("Uy").assertExists() // title = family name
         rule.onNodeWithText("Byudjet: 1 500 000").assertExists()
         rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
-        rule.onAllNodesWithText("Ali · Ota", substring = true).onFirst().assertExists() // own shared row's owner label
-        rule.onNodeWithText("Taksi").assertExists()
-        rule.onNodeWithText("Sovg'a").assertExists() // old private row: no private any more, shared
-        assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
+        assertTrue("rows live on the list page", rule.onAllNodesWithText("Taksi").fetchSemanticsNodes().isEmpty())
         // management lives behind the gear now
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
@@ -265,8 +274,17 @@ class SettingsFamilyTest : ScreenTest() {
         assertEquals(40_000L, picked.sumOf { it.expense.amount })
         assertTapTargets()
 
+        // Banner opens the list page: day-grouped rows.
+        rule.onNodeWithText("Ro'yxat").performSemanticsAction(SemanticsActions.OnClick)
+        waitFor("Non")
+        rule.onNodeWithText("Bugun").assertExists() // day header
+        rule.onAllNodesWithText("Ali · Ota", substring = true).onFirst().assertExists() // own shared row's owner label
+        rule.onNodeWithText("Taksi").assertExists()
+        rule.onNodeWithText("Sovg'a").assertExists() // old private row: no private any more, shared
+        assertTrue("personal, not in the family", rule.onAllNodesWithText("Shaxsiy").fetchSemanticsNodes().isEmpty())
+        assertTapTargets()
+
         // Tap routing: own row opens edit, Vali's opens the read-only sheet.
-        // Rows sit below the fold in the lazy column: click via semantics.
         rule.onNodeWithText("Non").performSemanticsAction(SemanticsActions.OnClick)
         assertEquals("Non", edited?.description)
         edited = null
@@ -275,6 +293,8 @@ class SettingsFamilyTest : ScreenTest() {
         assertEquals(null, edited)
         rule.onNodeWithText("Yopish").performClick()
         rule.waitUntil(5000) { rule.onAllNodesWithText("Kim qo'shgan").fetchSemanticsNodes().isEmpty() }
+        rule.onNodeWithContentDescription("Orqaga").performClick()
+        waitFor("3 ta xarajat · 40 000 UZS")
 
         // Filter by member: only Vali's row stays; Ko'rinish is hidden (all shared).
         rule.onNodeWithContentDescription("Filtr").performClick()
@@ -283,9 +303,12 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNode(hasText("Vali") and hasClickAction()).performClick() // the sheet row, not the member row
         rule.onNodeWithText("Tayyor").performClick()
         rule.onNodeWithText("Qo'llash").performClick()
-        rule.waitUntil(5000) { rule.onAllNodesWithText("Non").fetchSemanticsNodes().isEmpty() }
-        rule.onNodeWithText("Taksi").assertExists()
+        waitFor("1 ta xarajat · 20 000 UZS")
         rule.onNodeWithContentDescription("Jami 20 000 UZS").assertExists()
+        // The list page applies the same filter.
+        rule.onNodeWithText("Ro'yxat").performSemanticsAction(SemanticsActions.OnClick)
+        waitFor("Taksi")
+        assertTrue(rule.onAllNodesWithText("Non").fetchSemanticsNodes().isEmpty())
     }
 
     private fun overview(admin: Boolean) = FamilyOverview(

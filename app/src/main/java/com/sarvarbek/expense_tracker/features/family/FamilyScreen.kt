@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -47,6 +48,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -108,7 +112,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private fun monthStart() = LocalDate.now().withDayOfMonth(1)
+internal fun monthStart() = LocalDate.now().withDayOfMonth(1)
 
 /**
  * Oila tab data. Kept above the tab (it re-enters on every visit) so the
@@ -181,12 +185,15 @@ fun FamilyScreen(
     onNeeds: () -> Unit = {},
     onEdit: (Expense) -> Unit = {},
     onCategory: (CategoryPick) -> Unit = {},
+    /** Hoisted so the Ro'yxat page ([FamilyListScreen]) sees the same filter. */
+    filterState: MutableState<ActivityFilter> = rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) },
+    onList: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     val actions = rememberFamilyActions(state)
-    var filter by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
+    var filter by filterState
     var filterOpen by remember { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
@@ -217,7 +224,7 @@ fun FamilyScreen(
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit, onCategory) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit, onCategory, onList) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -235,7 +242,7 @@ fun FamilyScreen(
     }
 }
 
-private val FamilyOverview.memberNames get() = members.associate { it.userId to it.label }
+internal val FamilyOverview.memberNames get() = members.associate { it.userId to it.label }
 
 /** Joining or creating: share past expenses too? */
 @Composable
@@ -299,22 +306,15 @@ private fun InFamily(
     onFilter: (ActivityFilter) -> Unit,
     onEdit: (Expense) -> Unit,
     onCategory: (CategoryPick) -> Unit,
+    onList: () -> Unit,
     needs: @Composable () -> Unit,
 ) {
     val rows by feed.collectAsStateWithLifecycle(emptyList())
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
     val names = f.memberNames
-    // No Sana in the filter: this month.
-    val range = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
-    // Own rows: only the family's, no transfers; ownerId set so the member filter sees them.
-    // Current members' labels carry their title; ex-members keep the server name.
-    // Also the category screen's [CategoryPick.select], so its rows and total match this screen.
-    val select = { all: List<FamilyExpense> ->
-        all.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
-            .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
-            .filter { filter.copy(range = range).matches(it.expense) }
-    }
+    val range = familyRange(filter)
+    val select = familySelect(f, filter)
     val list = select(rows)
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
@@ -333,15 +333,61 @@ private fun InFamily(
             else EmptyState(Icons.Outlined.SearchOff, t("family.no_match"), t("family.no_match_hint"))
         } else {
             CategoryBreakdown(data) { onCategory(CategoryPick(it.id, periodLabel(filter.range, monthStart()), select)) }
-            SectionLabel(t("family.list"))
-            // ponytail: whole list in one lazy item; fine for a family's month, page it if wide ranges get slow.
-            DividedCard(list) { e -> SharedRow(e, catById[e.expense.categoryId], onEdit) }
+            Spacer(Modifier.height(AppSpace.section))
+            ListBanner(list.count { it.expense.transferTo == null }, data.total, onList) // same rows as the total
         }
     }
 }
 
+/** No Sana in the filter: this month. */
+internal fun familyRange(filter: ActivityFilter) = filter.range ?: monthStart().let { it..it.plusMonths(1).minusDays(1) }
+
+/**
+ * The Oila feed as this tab shows it. Own rows: only the family's, no transfers;
+ * ownerId set so the member filter sees them. Current members' labels carry their
+ * title; ex-members keep the server name. Also the category screen's
+ * [CategoryPick.select] and [FamilyListScreen]'s rows, so their rows and totals match.
+ */
+internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<FamilyExpense>) -> List<FamilyExpense> {
+    val names = f.memberNames
+    val ranged = filter.copy(range = familyRange(filter))
+    return { all ->
+        all.filter { !it.mine || (it.expense.familyId == f.id && it.expense.transferTo == null) }
+            .map { if (it.mine) it.copy(it.expense.copy(ownerId = f.myId), names[f.myId] ?: it.ownerName) else it.copy(ownerName = names[it.expense.ownerId] ?: it.ownerName) }
+            .filter { ranged.matches(it.expense) }
+    }
+}
+
+/** Edge-to-edge hero strip: "Ro'yxat", count + total; opens [FamilyListScreen]. */
 @Composable
-private fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?, onEdit: (Expense) -> Unit) = Row(
+private fun ListBanner(count: Int, total: Long, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val ty = MaterialTheme.typography
+    Row(
+        Modifier
+            // Escape the page's horizontal padding: full screen width, square corners.
+            .layout { m, k ->
+                val extra = (AppSpace.page * 2).roundToPx()
+                val w = k.maxWidth + extra
+                val p = m.measure(k.copy(minWidth = w, maxWidth = w))
+                layout(k.maxWidth, p.height) { p.place(-extra / 2, 0) }
+            }
+            .background(c.hero)
+            .clickable(role = Role.Button, onClick = onClick)
+            .defaultMinSize(minHeight = 64.dp)
+            .padding(horizontal = AppSpace.page, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(t("family.list"), style = ty.titleMedium.copy(color = c.onHero))
+            Text(t("family.list_summary", count, formatMoney(total)), style = ty.bodySmall.copy(color = c.onHero.copy(alpha = 0.72f)))
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.onHero)
+    }
+}
+
+@Composable
+internal fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?, onEdit: (Expense) -> Unit) = Row(
     Modifier.fillMaxWidth().clickable(onClick = rememberExpenseTap(fe, category, onEdit)).padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {

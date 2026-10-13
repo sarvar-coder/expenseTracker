@@ -218,6 +218,7 @@
   "family.no_match": "Мос келадигани йўқ",
   "family.no_match_hint": "Бошқа фильтрни синаб кўринг",
   "family.list": "Рўйхат",
+  "family.list_summary": "%1$s та харажат · %2$s UZS",
   "family.you_suffix": "(сиз)",
   "family.admin_suffix": "· админ",
   "family.contribution": "Бюджетга ҳисса: %1$s UZS",

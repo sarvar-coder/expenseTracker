@@ -36,7 +36,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.setValue
+import com.sarvarbek.expense_tracker.features.family.FamilyListScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyScreen
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
+import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.family.NeedsScreen
@@ -96,6 +100,8 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     val canCreate = { canCreateCategories(container.prefs) }
     // Above the tab so the last overview survives tab switches.
     val family = remember { FamilyState(container.family) }
+    // Oila's filter, shared by the tab and its Ro'yxat page.
+    val familyFilter = rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
     // Activity-scoped ViewModel: survives rotation / theme switch. Holds a lambda, so not process death: then the route pops.
     val picked = viewModel<Picked>()
     val openCategory = { p: CategoryPick -> picked.pick = p; nav.go("category") }
@@ -167,7 +173,10 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                             onCategory = openCategory, onEdit = edit,
                         )
                         else -> {
-                            FamilyScreen(family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory) { nav.go("family-settings") }
+                            FamilyScreen(
+                                family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory,
+                                filterState = familyFilter, onList = { nav.go("family-list") },
+                            ) { nav.go("family-settings") }
                             // In a family is when pushes start to matter (requests, later new expenses).
                             if (active && family.overview != null) AskNotifications(container.prefs)
                         }
@@ -203,6 +212,10 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             composable("needs") {
                 val familyId = container.prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null }
                 NeedsScreen(container.db, familyId, container.sync::run) { nav.back() }
+            }
+            composable("family-list") {
+                val stale by container.family.othersStale.collectAsStateWithLifecycle()
+                FamilyListScreen(family, container.db, familyFilter, offline = stale, onBack = { nav.back() }, onEdit = edit)
             }
             composable("category") {
                 val p = picked.pick
