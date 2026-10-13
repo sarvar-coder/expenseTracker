@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
@@ -198,12 +199,17 @@ fun FamilyScreen(
     val show = actions.show
     val act = actions.act
     LaunchedEffect(state, active) { if (active) state.refresh() } // every time the tab opens
+    val feedRows by state.feed.collectAsStateWithLifecycle(null)
+    val allCats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
 
     PullToRefreshBox(
         refreshing,
         onRefresh = { scope.launch { refreshing = true; state.refresh(); refreshing = false } },
         Modifier.fillMaxSize(),
     ) {
+        // Blank until loaded, so a returning list restores its scroll (see HomeScreen).
+        val rows = feedRows ?: return@PullToRefreshBox
+        val cats = allCats ?: return@PullToRefreshBox
         LazyColumn(
             Modifier.fillMaxSize(),
             // Bottom padding clears the floating add button.
@@ -224,7 +230,7 @@ fun FamilyScreen(
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, state.feed, db, filter, { filter = it }, onEdit, onCategory, onList) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onCategory, onList) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -300,8 +306,8 @@ private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 @Composable
 private fun InFamily(
     f: FamilyOverview,
-    feed: Flow<List<FamilyExpense>>,
-    db: ExpenseDao,
+    rows: List<FamilyExpense>,
+    cats: List<Category>,
     filter: ActivityFilter,
     onFilter: (ActivityFilter) -> Unit,
     onEdit: (Expense) -> Unit,
@@ -309,8 +315,6 @@ private fun InFamily(
     onList: () -> Unit,
     needs: @Composable () -> Unit,
 ) {
-    val rows by feed.collectAsStateWithLifecycle(emptyList())
-    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
     val catById = cats.associateBy { it.id }
     val names = f.memberNames
     val range = familyRange(filter)

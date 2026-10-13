@@ -68,13 +68,17 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onEdit: (Expense) -> Unit,
 ) {
-    val rows by feed.collectAsStateWithLifecycle(null) // null = loading
-    val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
+    val feedRows by feed.collectAsStateWithLifecycle(null) // null = loading
+    val cats by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(null)
+    // No list until both load (Room answers in a frame): a short first frame would clamp
+    // the scroll position the list restores when coming back from a pushed page.
+    val rows = feedRows ?: return
+    val categories = cats ?: return
     val budget by settings.settings.collectAsStateWithLifecycle()
     val now = LocalDate.now()
-    val today = remember(rows, now) { todayExpenses(rows.orEmpty(), now) }
+    val today = remember(rows, now) { todayExpenses(rows, now) }
     // The budget line stays personal.
-    val month = remember(rows, budget.monthlyBudget, now) { summarize(rows.orEmpty().filter { it.mine }.map { it.expense }, budget.monthlyBudget, now) }
+    val month = remember(rows, budget.monthlyBudget, now) { summarize(rows.filter { it.mine }.map { it.expense }, budget.monthlyBudget, now) }
     // Others' rows also count: the family pref can lag a join until the next recomposition.
     val family = inFamily || today.any { !it.mine }
     val catById = categories.associateBy { it.id }
@@ -104,7 +108,6 @@ fun HomeScreen(
         }
         item {
             when {
-                rows == null -> Unit // loading: Room answers in a frame, no spinner flash
                 today.isEmpty() -> EmptyState(Icons.Outlined.ReceiptLong, t("home.empty_title"), t("home.empty_body"))
                 else -> AppCard {
                     for (fe in today) key(fe.expense.id) { ExpenseTile(fe, catById[fe.expense.categoryId], db, onEdit) }

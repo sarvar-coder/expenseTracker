@@ -12,6 +12,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToNode
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.sarvarbek.expense_tracker.features.insights.InsightsScreen
+import com.sarvarbek.expense_tracker.ui.Shell
+import com.sarvarbek.expense_tracker.ui.back
+import com.sarvarbek.expense_tracker.ui.go
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
@@ -163,6 +174,36 @@ class HomeAddTest {
         waitFor("Coffee")
         rule.onNodeWithText("Bugun sarflangan · 1 ta").assertExists()
         rule.onNodeWithText("Oila bugun", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun tabsKeepScrollAfterPageAndBack() {
+        val food = runBlocking { db.getCategories() }.first()
+        val now = System.currentTimeMillis()
+        runBlocking {
+            repeat(40) { db.insertExpense(Expense(description = "Coffee $it", amount = 1000, categoryId = food.id, date = now - it, source = ExpenseSource.manual)) }
+        }
+        lateinit var nav: NavHostController
+        show {
+            nav = rememberNavController()
+            NavHost(nav, "shell") {
+                composable("shell") {
+                    Shell(onAdd = {}) { i, _ -> if (i == 0) HomeScreen(db, settings, onSettings = {}, onEdit = {}) else InsightsScreen(db) }
+                }
+                composable("page") {}
+            }
+        }
+        fun shown(text: String) = runCatching { rule.onNodeWithText(text).assertIsDisplayed() }.isSuccess
+        for (tab in listOf("Asosiy", "Tahlil")) {
+            rule.onNodeWithText(tab).performClick()
+            waitFor("Coffee 0")
+            rule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Coffee 39"))
+            assertFalse(shown("Coffee 0"))
+            rule.runOnIdle { nav.go("page") }
+            rule.runOnIdle { nav.back() }
+            rule.waitForIdle()
+            assertTrue("$tab: Coffee 39 still on screen", shown("Coffee 39"))
+            assertFalse("$tab: not back at the top", shown("Coffee 0"))
+        }
     }
 
     // --- add_screen_test ---

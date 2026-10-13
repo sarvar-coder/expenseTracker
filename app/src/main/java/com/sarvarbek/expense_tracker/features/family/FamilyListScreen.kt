@@ -71,8 +71,8 @@ fun FamilyListScreen(
     LaunchedEffect(f == null) { if (f == null) state.refresh() }
     if (state.loaded && f == null) LaunchedEffect(Unit) { onBack() }
     val all by state.feed.collectAsStateWithLifecycle(null) // null = loading
-    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
-    val catById = cats.associateBy { it.id }
+    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
+    val catById = cats.orEmpty().associateBy { it.id }
     val rows = if (f == null) null else all?.let(familySelect(f, filter))
     // Transfers left out of the total, like the tab's donut.
     val total = rows.orEmpty().filter { it.expense.transferTo == null }.sumOf { it.expense.amount }
@@ -85,6 +85,8 @@ fun FamilyListScreen(
             onRefresh = { scope.launch { refreshing = true; state.refresh(); refreshing = false } },
             Modifier.fillMaxSize().padding(pad),
         ) {
+            // Blank until Room answers (a frame), so a list coming back from edit restores its scroll.
+            if (all == null || cats == null) return@PullToRefreshBox
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section)) {
                 item {
                     val period = periodLabel(filter.range, monthStart())

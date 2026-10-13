@@ -120,9 +120,12 @@ fun InsightsScreen(
 ) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
-    val rows by feed.collectAsStateWithLifecycle(emptyList())
+    val feedRows by feed.collectAsStateWithLifecycle(null)
     // Archived too: past spend in an archived category still gets its slice.
-    val categories by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
+    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
+    // Blank until loaded, so a returning list restores its scroll (see HomeScreen).
+    val rows = feedRows ?: return
+    val categories = cats ?: return
     val now = LocalDate.now()
     var year by rememberSaveable { mutableIntStateOf(now.year) }
     var month by rememberSaveable { mutableIntStateOf(now.monthValue) }
