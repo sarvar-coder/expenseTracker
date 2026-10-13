@@ -122,11 +122,12 @@ begin
   select count(*) into n from public.expenses where owner_id = b; assert n = 0, 'A cannot read B rows directly';
   select count(*) into n from public.profiles where id = b; assert n = 0, 'A cannot read B profile/budget';
   select count(*) into n from public.needs; assert n = 1, 'A sees family need only, got ' || n;
+  -- the app pushes the full row with the real owner (b); the admin's upsert still passes
   insert into public.needs (id, owner_id, family_id, text, done, updated_at)
-    values (nb1, a, null, 'milk', true, now() + interval '1 second')
-    on conflict (id) do update set done = excluded.done, family_id = excluded.family_id, updated_at = excluded.updated_at;
+    values (nb1, b, null, 'milk', true, now() + interval '1 second')
+    on conflict (id) do update set owner_id = excluded.owner_id, done = excluded.done, family_id = excluded.family_id, updated_at = excluded.updated_at;
   select count(*) into n from public.needs where id = nb1 and done and family_id = fid and owner_id = b;
-  assert n = 1, 'member ticks family need via upsert, owner/family kept';
+  assert n = 1, 'admin ticks family need via full-row upsert, owner/family kept';
   update public.needs set done = true where id = nb2;
   get diagnostics n = row_count; assert n = 0, 'A cannot touch B personal need';
   -- needs status (#110): owner marks own done, admin marks any done / rejects, pending is server-only
@@ -156,6 +157,12 @@ begin
   exception when insufficient_privilege then ok := true; end;
   assert ok, 'member cannot upload a photo for another need';
   insert into storage.objects (bucket_id, name) values ('need-photos', nb2 || '/photo.jpg');
+  begin insert into storage.objects (bucket_id, name) values ('need-photos', nb2 || '/x.jpg'); ok := false;
+  exception when insufficient_privilege then ok := true; end;
+  assert ok, 'one object per need: {id}/photo.jpg only';
+  update public.needs set photo_path = nb1 || '/photo.jpg' where id = nb1;
+  update public.needs set photo_path = null, text = 'milk!' where id = nb1;
+  select count(*) into n from public.needs where id = nb1 and photo_path is not null; assert n = 1, 'stale copy cannot drop photo_path';
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'email', 'a@test.uz', 'role', 'authenticated')::text, true);
   select count(*) into n from storage.objects where bucket_id = 'need-photos'; assert n = 1, 'A sees family photo only, got ' || n;
   update public.needs set status = 'rejected' where id = nb1;

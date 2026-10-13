@@ -173,10 +173,16 @@ class SyncService(
         push("categories", db.dirtyCategories(), Category::toJson) { db.markCategoryClean(it.id, it.updatedAt) }
         push("expenses", db.dirtyExpenses(), Expense::toJson) { db.markExpenseClean(it.id, it.updatedAt) }
         pull("expenses") { applyExpenses(database, it) }
-        push("needs", db.dirtyNeeds(), Need::toJson) { db.markNeedClean(it.id, it.updatedAt) }
+        // A need the guard refuses (stale status, e.g. rejected meanwhile) is
+        // dropped: marked clean and the next pull re-fetches the server's copy.
+        val deniedNeed: suspend (Need) -> Unit = {
+            db.markNeedClean(it.id, it.updatedAt)
+            prefs.edit { remove("sync.needs") }
+        }
+        push("needs", db.dirtyNeeds(), Need::toJson, deniedNeed) { db.markNeedClean(it.id, it.updatedAt) }
         pull("needs") { applyNeeds(database, it) }
         // Photos after their rows exist on the server; then push the new photo_path.
-        if (photos.upload(db)) push("needs", db.dirtyNeeds(), Need::toJson) { db.markNeedClean(it.id, it.updatedAt) }
+        if (photos.upload(db)) push("needs", db.dirtyNeeds(), Need::toJson, deniedNeed) { db.markNeedClean(it.id, it.updatedAt) }
         db.dropForeignNeeds(familyId)
         push("contributions", db.dirtyContributions(), Contribution::toJson) { db.markContributionClean(it.id, it.updatedAt) }
         pull("contributions") { applyContributions(database, it) }
@@ -216,7 +222,13 @@ class SyncService(
         }
     }
 
-    private suspend fun <T> push(table: String, rows: List<T>, toJson: (T) -> JsonObject, markClean: suspend (T) -> Unit) {
+    private suspend fun <T> push(
+        table: String,
+        rows: List<T>,
+        toJson: (T) -> JsonObject,
+        onDenied: (suspend (T) -> Unit)? = null,
+        markClean: suspend (T) -> Unit,
+    ) {
         val pushed = mutableListOf<T>()
         for (chunk in rows.chunked(500)) {
             try {
@@ -230,6 +242,7 @@ class SyncService(
                         pushed += r
                     } catch (e: PostgrestRestException) {
                         Log.w(TAG, "sync: $table ${toJson(r)["id"]} refused: ${e.error}")
+                        if (e.code == "42501") onDenied?.invoke(r) // permanent: a guard said no
                     }
                 }
             }

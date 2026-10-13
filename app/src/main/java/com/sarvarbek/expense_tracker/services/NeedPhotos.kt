@@ -69,7 +69,8 @@ class NeedPhotos(context: Context, private val client: SupabaseClient) {
     /** Keeps [jpeg] for [needId] until [upload] sends it. Call after the need row is inserted. */
     suspend fun stash(needId: String, jpeg: ByteArray) = withContext(Dispatchers.IO) {
         pendingDir.mkdirs()
-        pending(needId).writeBytes(jpeg)
+        // Temp name first: upload skips it, so a crash mid-write can't send a truncated photo.
+        File(pendingDir, "$needId.tmp").apply { writeBytes(jpeg) }.renameTo(pending(needId))
     }
 
     fun hasPhoto(n: Need) = n.photoPath != null || pending(n.id).exists()
@@ -99,16 +100,16 @@ class NeedPhotos(context: Context, private val client: SupabaseClient) {
      */
     suspend fun upload(db: ExpenseDao): Boolean {
         var changed = false
-        for (f in pendingDir.listFiles().orEmpty()) {
+        for (f in pendingDir.listFiles { f -> f.extension == "jpg" }.orEmpty()) {
             val n = db.getNeed(f.nameWithoutExtension)
             if (n == null || n.deletedAt != null) { f.delete(); continue } // deleted, or another account's
             if (n.dirty) continue // row not pushed yet (or refused)
             val path = "${n.id}/photo.jpg"
             try {
                 client.storage.from(BUCKET).upload(path, f.readBytes()) { upsert = true }
+                db.setNeedPhoto(n.id, path)
                 cacheDir.mkdirs()
                 f.renameTo(cached(path))
-                db.updateNeed(n.copy(photoPath = path))
                 changed = true
             } catch (e: CancellationException) {
                 throw e

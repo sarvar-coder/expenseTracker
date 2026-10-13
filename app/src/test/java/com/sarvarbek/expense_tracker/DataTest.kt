@@ -125,6 +125,12 @@ class DataTest {
         assertEquals(listOf("a", "b"), db.watchNeeds().first().map { it.text })
         assertTrue("deletion waits to be pushed", db.dirtyNeeds().any { it.id == c.id && it.deletedAt != null })
         assertTrue(db.watchDirtyCount().first() >= 3)
+        // Undo and the photo upload touch only their columns.
+        db.updateNeed(c.withStatus(NeedStatus.DONE).copy(deletedAt = db.getNeed(c.id)!!.deletedAt))
+        db.restoreNeed(c.id)
+        db.setNeedPhoto(c.id, "${c.id}/photo.jpg")
+        val back = db.getNeed(c.id)!!
+        assertEquals(listOf<Any?>(null, NeedStatus.DONE, "${c.id}/photo.jpg", true), listOf(back.deletedAt, back.status, back.photoPath, back.dirty))
     }
 
     @Test fun seedsFiveDefaultCategories() = runBlocking {

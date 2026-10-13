@@ -103,7 +103,9 @@ import com.sarvarbek.expense_tracker.ui.theme.SecondaryButton
 import com.sarvarbek.expense_tracker.ui.theme.fieldColors
 import com.sarvarbek.expense_tracker.ui.theme.fieldShape
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // label is a string key.
 private enum class NeedsScope(val label: String) { All("needs.filter.all"), Mine("needs.filter.mine"), Family("family.title") }
@@ -205,7 +207,7 @@ fun NeedsScreen(
                     onDelete = {
                         scope.launch {
                             db.deleteNeed(n.id)
-                            toaster.show(t("needs.deleted"), t("needs.undo")) { db.updateNeed(n) }
+                            toaster.show(t("needs.deleted"), t("needs.undo")) { db.restoreNeed(n.id) }
                         }
                     },
                 )
@@ -370,8 +372,11 @@ private fun AddNeedSheet(db: ExpenseDao, familyId: String?, photos: NeedPhotos?,
         )
         if (photos != null) {
             Spacer(Modifier.height(12.dp))
-            val preview = remember(jpeg) { jpeg?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
-            if (preview == null) {
+            val preview by produceState<ImageBitmap?>(null, jpeg) {
+                value = jpeg?.let { j -> withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(j, 0, j.size)?.asImageBitmap() } }
+            }
+            val shown = preview
+            if (jpeg == null || shown == null) {
                 SecondaryButton({ pick.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) }, Modifier.fillMaxWidth()) {
                     Icon(Icons.Outlined.AddPhotoAlternate, null)
                     Spacer(Modifier.width(8.dp))
@@ -379,7 +384,7 @@ private fun AddNeedSheet(db: ExpenseDao, familyId: String?, photos: NeedPhotos?,
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(preview, t("needs.photo"), Modifier.size(72.dp).clip(RoundedCornerShape(AppRadii.sm)), contentScale = ContentScale.Crop)
+                    Image(shown, t("needs.photo"), Modifier.size(72.dp).clip(RoundedCornerShape(AppRadii.sm)), contentScale = ContentScale.Crop)
                     Spacer(Modifier.weight(1f))
                     IconButton({ jpeg = null }, Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, t("needs.photo_remove"), tint = c.muted) }
                 }

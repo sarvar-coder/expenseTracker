@@ -176,6 +176,14 @@ abstract class ExpenseDao {
     @Query("UPDATE needs SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
     abstract suspend fun deleteNeed(id: String, now: Long = System.currentTimeMillis())
 
+    /** Undo of [deleteNeed]: only the tombstone, so edits since (status, photo) stay. */
+    @Query("UPDATE needs SET deleted_at = NULL, updated_at = :now, dirty = 1 WHERE id = :id")
+    abstract suspend fun restoreNeed(id: String, now: Long = System.currentTimeMillis())
+
+    /** Sets only the photo, so a status change made during the upload isn't overwritten. */
+    @Query("UPDATE needs SET photo_path = :path, updated_at = :now, dirty = 1 WHERE id = :id")
+    abstract suspend fun setNeedPhoto(id: String, path: String, now: Long = System.currentTimeMillis())
+
     // --- Contributions (own only) ---
     /** Newest first. */
     @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
