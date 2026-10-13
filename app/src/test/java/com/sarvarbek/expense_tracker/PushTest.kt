@@ -3,9 +3,11 @@ package com.sarvarbek.expense_tracker
 import android.Manifest
 import android.app.Application
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.Push
 import com.sarvarbek.expense_tracker.services.canNotify
 import com.sarvarbek.expense_tracker.services.post
@@ -84,11 +86,29 @@ class PushTest {
         assertNull(Push.route(null))
     }
 
-    @Test fun permissionAskedOnceOnAndroid13Plus() {
-        assertTrue(shouldAskNotifications(33, granted = false, askedBefore = false))
-        assertFalse("pre-13 needs no runtime permission", shouldAskNotifications(32, granted = false, askedBefore = false))
-        assertFalse("already granted", shouldAskNotifications(34, granted = true, askedBefore = false))
-        assertFalse("never ask again", shouldAskNotifications(34, granted = false, askedBefore = true))
+    @Test fun permissionAskedUntilSystemDialogAnswers() {
+        assertTrue(shouldAskNotifications(33, granted = false, answered = false))
+        assertFalse("pre-13 needs no runtime permission", shouldAskNotifications(32, granted = false, answered = false))
+        assertFalse("already granted", shouldAskNotifications(34, granted = true, answered = false))
+        assertFalse("system dialog answered: Settings row only", shouldAskNotifications(34, granted = false, answered = true))
+    }
+
+    @Test fun pushAnsweredIsOnlySetExplicitly() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val store = SettingsStore(app.getSharedPreferences("t", 0).apply { edit().putBoolean("push.asked", true).commit() })
+        assertFalse("old dismiss-counts key is ignored", store.pushAnswered)
+        store.pushAnswered = true
+        assertTrue(store.pushAnswered)
+    }
+
+    @Test fun blockedChannelCantNotify() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val nm = app.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(Push.CH_EXPENSES, "x", NotificationManager.IMPORTANCE_NONE))
+        assertTrue(canNotify(app))
+        assertFalse(canNotify(app, Push.CH_EXPENSES))
+        assertTrue("unknown channel isn't blocked", canNotify(app, Push.CH_REQUESTS))
     }
 
     @Test fun canNotifyFollowsRuntimePermission() { // robolectric sdk 34

@@ -1,16 +1,14 @@
 package com.sarvarbek.expense_tracker.ui
 
 import android.Manifest
-import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.core.content.edit
 import com.sarvarbek.expense_tracker.services.Push
+import com.sarvarbek.expense_tracker.services.notificationPermission
 import com.sarvarbek.expense_tracker.services.shouldAskNotifications
+import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.t
 import androidx.compose.foundation.layout.fillMaxSize
@@ -177,11 +175,11 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                                 family, container.db, active, onNeeds = { nav.go("needs") }, onEdit = edit, onCategory = openCategory,
                                 filterState = familyFilter, onList = { nav.go("family-list") },
                             ) { nav.go("family-settings") }
-                            // In a family is when pushes start to matter (requests, later new expenses).
-                            if (active && family.overview != null) AskNotifications(container.prefs)
                         }
                     }
                 }
+                // Signed in (Shell is behind the auth gate): any tab.
+                AskNotifications(container.settings)
             }
             composable("add") { Add(null) }
             composable("edit/{id}") { entry ->
@@ -231,26 +229,23 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     }
 }
 
-/** Android 13+: explain, then ask for POST_NOTIFICATIONS once ever (either answer counts). */
+/**
+ * Android 13+: explain, then ask for POST_NOTIFICATIONS. Only the system dialog's
+ * answer is final; closing the explanation hides it until the next app start.
+ */
 @Composable
-private fun AskNotifications(prefs: SharedPreferences) {
+private fun AskNotifications(settings: SettingsStore) {
     val context = LocalContext.current
-    var show by remember {
-        // The runtime permission only: if just the app switch is off, the system dialog can't help.
-        val granted = Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, granted, prefs.getBoolean(K_PUSH_ASKED, false)))
-    }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // The runtime permission only: if just the app switch is off, the system dialog can't help.
+    // Saveable: survives Shell leaving composition (pushed pages), so a dismiss holds until the app restarts.
+    var show by rememberSaveable { mutableStateOf(shouldAskNotifications(Build.VERSION.SDK_INT, notificationPermission(context), settings.pushAnswered)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { settings.pushAnswered = true }
     if (!show) return
-    val done = { show = false; prefs.edit { putBoolean(K_PUSH_ASKED, true) } }
-    ConfirmDialog(t("push.ask_title"), t("push.ask_text"), t("push.ask_allow"), onDismiss = done) {
-        done()
+    ConfirmDialog(t("push.ask_title"), t("push.ask_text"), t("push.ask_allow"), onDismiss = { show = false }) {
+        show = false
         if (Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
-
-private const val K_PUSH_ASKED = "push.asked"
 
 /** The category the category route shows ([CategoryPick] holds the source screen's selector). */
 class Picked : ViewModel() {
