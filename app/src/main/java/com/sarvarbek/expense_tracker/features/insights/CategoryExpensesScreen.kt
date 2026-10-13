@@ -1,6 +1,5 @@
 package com.sarvarbek.expense_tracker.features.insights
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,13 +70,15 @@ fun periodLabel(range: ClosedRange<LocalDate>?, month: LocalDate): String = when
 fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick: CategoryPick, offline: Boolean = false, onBack: () -> Unit, onEdit: (Expense) -> Unit) {
     val ty = MaterialTheme.typography
     val all by feed.collectAsStateWithLifecycle(null) // null = loading
-    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(emptyList())
-    val catById = cats.associateBy { it.id }
+    val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
+    val catById = cats.orEmpty().associateBy { it.id }
     val category = catById[pick.categoryId]
     val rows = all?.let { list -> pick.select(list).filter { it.expense.categoryId == pick.categoryId && it.expense.transferTo == null } }
     val total = rows.orEmpty().sumOf { it.expense.amount }
 
     AppBarScaffold(category?.name.orEmpty(), onBack) { pad ->
+        // Blank until Room answers (a frame), so a list coming back from edit restores its scroll.
+        if (rows == null || cats == null) return@AppBarScaffold
         LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section)) {
             item {
                 Row(
@@ -95,9 +95,6 @@ fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick
                 if (offline) OfflineNote()
             }
             when {
-                rows == null -> item {
-                    Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
-                }
                 rows.isEmpty() -> item { EmptyState(Icons.Outlined.ReceiptLong, t("insights.category_empty")) }
                 else -> daySections(groupExpenses(rows.map { it.expense }, today = LocalDate.now()), rows.associateBy { it.expense.id }, catById, db, onEdit)
             }
