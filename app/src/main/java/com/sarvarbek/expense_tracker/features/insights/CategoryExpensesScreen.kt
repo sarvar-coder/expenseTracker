@@ -92,14 +92,7 @@ fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick
                         Money(total, style = ty.headlineMedium, autoSize = true)
                     }
                 }
-                if (offline) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.WifiOff, null, tint = AppTheme.colors.muted)
-                        Spacer(Modifier.width(8.dp))
-                        Text(t("insights.offline"), color = AppTheme.colors.muted, style = ty.bodySmall)
-                    }
-                }
+                if (offline) OfflineNote()
             }
             when {
                 rows == null -> item {
@@ -112,13 +105,25 @@ fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick
     }
 }
 
-/** Day headers with the day's total (transfers left out), then the rows in a card. Tahlil list and this screen. */
+/** "Others' rows are as last fetched" line under a page header. */
+@Composable
+internal fun OfflineNote() {
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.WifiOff, null, tint = AppTheme.colors.muted)
+        Spacer(Modifier.width(8.dp))
+        Text(t("insights.offline"), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Day headers with the day's total (transfers left out), then the rows in a card. Tahlil list, this screen, Oila's Ro'yxat ([row]). */
 internal fun LazyListScope.daySections(
     sections: List<DaySection>,
     rows: Map<String, FamilyExpense>,
     catById: Map<String, Category>,
     db: ExpenseDao,
     onEdit: (Expense) -> Unit,
+    row: @Composable (FamilyExpense, Category?) -> Unit = { fe, cat -> ExpenseTile(fe, cat, db, onEdit) },
 ) = items(sections, key = { it.day.toEpochDay() }) { section ->
     val ty = MaterialTheme.typography
     Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 20.dp, bottom = 8.dp)) {
@@ -126,6 +131,6 @@ internal fun LazyListScope.daySections(
         Text(formatMoney(section.items.filter { it.transferTo == null }.sumOf { it.amount }), color = AppTheme.colors.muted, style = ty.labelMedium)
     }
     AppCard(Modifier.fillMaxWidth()) {
-        for (e in section.items) rows[e.id]?.let { ExpenseTile(it, catById[e.categoryId], db, onEdit) }
+        for (e in section.items) rows[e.id]?.let { row(it, catById[e.categoryId]) }
     }
 }

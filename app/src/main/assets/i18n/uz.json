@@ -218,6 +218,7 @@
   "family.no_match": "Mos keladigani yo'q",
   "family.no_match_hint": "Boshqa filtrni sinab ko'ring",
   "family.list": "Ro'yxat",
+  "family.list_summary": "%1$s ta xarajat · %2$s UZS",
   "family.you_suffix": "(siz)",
   "family.admin_suffix": "· admin",
   "family.contribution": "Byudjetga hissa: %1$s UZS",
