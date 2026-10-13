@@ -338,5 +338,22 @@
   "overspend.own": "Шахсий пулим",
   "overspend.loan": "Қарз",
   "overspend.salary": "Маош",
-  "overspend.confirm": "Ҳисса қўшиб сақлаш"
+  "overspend.confirm": "Ҳисса қўшиб сақлаш",
+  "needs.chat": "Муҳокама",
+  "needs.chat_a11y": "Муҳокама, %1$s та хабар",
+  "chat.empty": "Ҳали хабар йўқ",
+  "chat.empty_hint": "Биринчи бўлиб фикрингизни ёзинг",
+  "chat.placeholder": "Хабар ёзинг",
+  "chat.send": "Юбориш",
+  "chat.send_failed": "Юборилмади. Интернетни текшириб, қайта уринг",
+  "chat.load_failed": "Хабарлар юкланмади",
+  "chat.offline_hint": "Интернет қайтса, ўзи янгиланади",
+  "chat.offline": "Интернет йўқ: хабарлар охирги юкланган ҳолатда",
+  "chat.delete": "Хабарни ўчириш",
+  "chat.delete_title": "Хабарни ўчирасизми?",
+  "chat.delete_failed": "Ўчирилмади. Интернетни текширинг",
+  "chat.former": "Собиқ аъзо",
+  "push.channel_needs": "Керакли муҳокамаси",
+  "push.need_title": "Муҳокама: %1$s",
+  "push.need": "%1$s: %2$s"
 }

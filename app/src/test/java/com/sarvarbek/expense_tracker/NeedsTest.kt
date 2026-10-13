@@ -11,6 +11,8 @@ import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.data.NeedStatus
 import com.sarvarbek.expense_tracker.data.withStatus
 import com.sarvarbek.expense_tracker.features.needs.NeedActions
+import com.sarvarbek.expense_tracker.features.needs.NeedChatScreen
+import com.sarvarbek.expense_tracker.services.NeedComment
 import com.sarvarbek.expense_tracker.features.needs.NeedsScreen
 import com.sarvarbek.expense_tracker.features.needs.validLink
 import kotlinx.coroutines.flow.first
@@ -113,6 +115,72 @@ class NeedsTest : ScreenTest() {
         rule.onNodeWithText("Rad etildi 2").performClick()
         waitFor("Telefon")
         assertEquals(2, rule.onAllNodesWithText("Qayta ochish").fetchSemanticsNodes().size)
+    }
+
+    @Test fun chatIconOnFamilyItemsOnlyWithCount() {
+        runBlocking {
+            db.insertNeed(need("Olma", "me", family = null))
+            db.insertNeed(need("Velosiped", "u2").copy(commentCount = 3))
+        }
+        var opened: String? = null
+        show { NeedsScreen(db, familyId = "f1", myId = "me", isAdmin = false, onChat = { opened = it.text }) }
+        waitFor("Velosiped")
+        assertEquals(1, rule.onAllNodesWithContentDescriptionCount("Muhokama, 3 ta xabar"))
+        rule.onNodeWithText("3").assertExists() // badge
+        assertEquals(0, rule.onAllNodesWithContentDescriptionCount("Muhokama, 0 ta xabar")) // personal Olma: no chat
+        rule.onNodeWithContentDescription("Muhokama, 3 ta xabar").performClick()
+        assertEquals("Velosiped", opened)
+    }
+
+    private val msgs = listOf(
+        NeedComment("c1", "u2", "Ali", "Qaysi rang?", System.currentTimeMillis() - 60_000),
+        NeedComment("c2", "me", "Men", "Qizil", System.currentTimeMillis()),
+    )
+
+    @Test fun chatShowsHeaderMessagesAndAuthor() {
+        show {
+            NeedChatScreen(need("Velosiped", "u2", status = NeedStatus.PENDING), "me", load = { msgs }, send = { _, _ -> }, delete = {}, onBack = {})
+        }
+        waitFor("Qizil")
+        rule.onNodeWithText("Velosiped").assertExists()
+        rule.onNodeWithText("Kutilmoqda").assertExists()
+        rule.onNodeWithText("Ali").assertExists() // others' messages name the author
+        rule.onNodeWithText("Men").assertDoesNotExist() // own: no name
+        assertTapTargets()
+    }
+
+    @Test fun chatEmptyAndLoadFailedStates() {
+        show { NeedChatScreen(null, "me", load = { emptyList() }, send = { _, _ -> }, delete = {}, onBack = {}) }
+        waitFor("Hali xabar yo'q")
+    }
+
+    @Test fun chatLoadFailedShowsOffline() {
+        show { NeedChatScreen(null, "me", load = { error("offline") }, send = { _, _ -> }, delete = {}, onBack = {}) }
+        waitFor("Xabarlar yuklanmadi")
+    }
+
+    @Test fun failedSendKeepsTextAndRetryReusesId() {
+        val ids = mutableListOf<String>()
+        var fail = true
+        val sent = mutableListOf<String>()
+        show {
+            NeedChatScreen(null, "me", load = { emptyList() }, send = { id, body ->
+                ids += id
+                if (fail) error("offline")
+                sent += body
+            }, delete = {}, onBack = {})
+        }
+        waitFor("Hali xabar yo'q")
+        rule.onNodeWithText("Xabar yozing").performTextInput("  Menga ham  ")
+        rule.onNodeWithContentDescription("Yuborish").performClick()
+        waitFor("Yuborilmadi. Internetni tekshirib, qayta urining")
+        rule.onNodeWithText("  Menga ham  ").assertExists() // draft kept
+        fail = false
+        rule.onNodeWithContentDescription("Yuborish").performClick()
+        rule.waitUntil(5000) { sent.isNotEmpty() }
+        assertEquals(listOf("Menga ham"), sent)
+        assertEquals("a retry of the same text reuses its id", 1, ids.toSet().size)
+        rule.waitUntil(5000) { rule.onAllNodesWithText("  Menga ham  ").fetchSemanticsNodes().isEmpty() }
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithContentDescriptionCount(label: String) =

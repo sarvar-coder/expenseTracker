@@ -115,6 +115,29 @@ class DataTest {
         }
     }
 
+    @Test fun upgradesV5NeedsWithZeroComments() = runBlocking {
+        val name = "v5-upgrade.db"
+        context.deleteDatabase(name)
+        // v5 schema as MIGRATION_1_2..4_5 leave it.
+        android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use {
+            it.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, `icon_key` TEXT NOT NULL, `is_archived` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `description` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category_id` TEXT NOT NULL, `date` INTEGER NOT NULL, `source` TEXT NOT NULL, `raw_input` TEXT, `is_private` INTEGER NOT NULL, `pending_category` TEXT, `frozen` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `transfer_to` TEXT, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_category_id` ON `expenses` (`category_id`)")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `needs` (`id` TEXT NOT NULL, `text` TEXT NOT NULL, `done` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `status` TEXT NOT NULL DEFAULT 'new', `need_money` INTEGER NOT NULL DEFAULT 0, `link` TEXT, `photo_path` TEXT, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `contributions` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, `note` TEXT NOT NULL, `date` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("INSERT INTO needs (id, text, done, family_id, created_at, updated_at, dirty, status) VALUES ('n1', 'Non', 0, 'f1', 1, 1, 0, 'pending')")
+            it.version = 5
+        }
+        val upgraded = AppDatabase.open(context, name)
+        try {
+            val n1 = upgraded.dao().getNeed("n1")!!
+            assertEquals(listOf<Any?>(0, NeedStatus.PENDING, false), listOf(n1.commentCount, n1.status, n1.dirty))
+        } finally {
+            upgraded.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     @Test fun needsOpenFirstSoftDeleteAndCountAsDirty() = runBlocking {
         db.insertNeed(Need(text = "a", createdAt = 1))
         db.insertNeed(Need(text = "b", createdAt = 2, done = true))
