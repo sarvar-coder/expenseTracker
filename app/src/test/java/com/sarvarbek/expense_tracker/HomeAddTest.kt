@@ -41,6 +41,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
+import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
@@ -68,6 +69,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.LocalDate
+import java.time.YearMonth
 
 /** Fake STT: `listen` emits a canned transcript at once, no microphone. */
 private class FakeSpeech(context: Context, val transcript: String) : SpeechService(context) {
@@ -132,7 +134,7 @@ class HomeAddTest {
     @Test fun emptyDayShowsEmptyStateAndBudgetHint() {
         show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
         waitFor("Bugun hali xarajat yo'q")
-        rule.onNodeWithText("byudjet belgilang", substring = true).assertExists()
+        rule.onNodeWithText("hali hissa yo'q", substring = true).assertExists()
         rule.onNodeWithContentDescription("Sozlamalar").assertHeightIsAtLeast(48.dp)
     }
 
@@ -148,7 +150,8 @@ class HomeAddTest {
             FamilyExpense(Expense(description = "Bread", amount = 10000, categoryId = food.id, date = now - 1000, source = ExpenseSource.manual, ownerId = "ali"), "Ali"),
             FamilyExpense(Expense(description = "Old bread", amount = 5000, categoryId = food.id, date = now - 40L * 86_400_000, source = ExpenseSource.manual, ownerId = "ali"), "Ali"),
         )
-        settings.setBudget(1_000_000)
+        runBlocking { db.insertContribution(Contribution(amount = 1_000_000, note = "Oylik")) }
+        settings.setReceived(YearMonth.now().toString(), 200_000) // a transfer from Ali
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         show { HomeScreen(db, settings, feed, offline = true, inFamily = true, onSettings = {}, onEdit = {}) }
         waitFor("Coffee")
@@ -160,11 +163,32 @@ class HomeAddTest {
         // Hero: mine big, family's line; budget line stays personal.
         rule.onNodeWithText("Men · bugun · 1 ta").assertExists()
         rule.onNodeWithText("Oila bugun: 55 000 UZS").assertExists()
-        rule.onNodeWithText("Oy: 45 000 / 1 000 000", substring = true).assertExists()
+        rule.onNodeWithText("Oy: 45 000 / 1 200 000", substring = true).assertExists()
         rule.onNodeWithText("Internet yo'q", substring = true).assertExists()
         // Others' row opens the read-only sheet, not edit.
         rule.onNodeWithText("Bread").performClick()
         waitFor("Faqat o'qish uchun")
+    }
+
+    @Test fun addsContributionWithRequiredNoteThenDeletes() {
+        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
+        waitFor("+ Hissa qo'shish")
+        rule.onNodeWithText("+ Hissa qo'shish").performClick()
+        waitFor("Bu oy hali hissa qo'shilmagan")
+        rule.onNodeWithTag("contrib_amount").performTextInput("400000")
+        rule.onNodeWithText("Qo'shish").performClick()
+        rule.waitForIdle()
+        assertTrue("note is required", runBlocking { db.getContributions() }.isEmpty())
+        rule.onNodeWithTag("contrib_note").performTextInput("Oylik")
+        rule.onNodeWithText("Qo'shish").performClick()
+        rule.waitUntil(5000) { runBlocking { db.getContributions() }.isNotEmpty() }
+        assertEquals(listOf(400_000L to "Oylik"), runBlocking { db.getContributions() }.map { it.amount to it.note })
+        waitFor("Bu oy: 400 000 UZS")
+        waitFor("Oy: 0 / 400 000", substring = true) // Home's month line counts it
+        rule.onNodeWithContentDescription("O'chirish").performClick()
+        waitFor("Hissani o'chirasizmi?")
+        rule.onNodeWithText("O'chirish").performClick()
+        rule.waitUntil(5000) { runBlocking { db.getContributions() }.isEmpty() }
     }
 
     @Test fun notInFamilyHasNoFamilyLine() {

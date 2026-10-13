@@ -125,12 +125,7 @@ class SettingsScreenTest : ScreenTest() {
         waitFor("Ruscha")
         assertEquals("ru_RU", store.settings.value.sttLocale)
 
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Belgilanmagan"))
-        rule.onNodeWithText("Belgilanmagan").performClick()
-        rule.onNode(hasSetTextAction()).performTextReplacement("4000000")
-        rule.onNodeWithText("Saqlash").performClick()
-        waitFor("4 000 000 UZS")
-        assertEquals(4_000_000L, store.settings.value.monthlyBudget)
+        assertTrue("budget replaced by Hissa", rule.onAllNodesWithText("Oylik byudjet").fetchSemanticsNodes().isEmpty())
 
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("me@oila.uz"))
         rule.onNodeWithText("Ism").assertExists()
@@ -258,7 +253,10 @@ class SettingsFamilyTest : ScreenTest() {
 
         waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
         rule.onNodeWithText("Uy").assertExists() // title = family name
-        rule.onNodeWithText("Byudjet: 1 500 000").assertExists()
+        rule.onNodeWithText("Jami hissa: 1 500 000").assertExists()
+        rule.onNodeWithText("Hissa 500 000 · sarf 20 000").assertExists()
+        rule.onNodeWithText("480 000 UZS").assertExists() // Vali's qolgan
+        rule.onNodeWithText("Hissa qo'shish").assertExists()
         rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
         assertTrue("rows live on the list page", rule.onAllNodesWithText("Taksi").fetchSemanticsNodes().isEmpty())
         // management lives behind the gear now

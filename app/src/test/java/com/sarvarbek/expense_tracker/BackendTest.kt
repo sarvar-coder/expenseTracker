@@ -24,7 +24,8 @@ import com.sarvarbek.expense_tracker.services.familyErrorText
 import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.services.parseOthers
 import com.sarvarbek.expense_tracker.services.parseGeminiJson
-import com.sarvarbek.expense_tracker.services.shouldPushProfile
+import com.sarvarbek.expense_tracker.services.parseMember
+import com.sarvarbek.expense_tracker.services.FamilyOverview
 import com.sarvarbek.expense_tracker.ui.AuthGate
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import io.github.jan.supabase.auth.auth
@@ -207,11 +208,19 @@ class BackendTest {
         assertEquals(listOf("Mine"), db.watchNeeds().first().map { it.text })
     }
 
-    @Test fun shouldPushProfileLocalEditsAndUnsyncedBudgetsWin() {
-        assertTrue(shouldPushProfile(dirty = true, serverBudget = null, localBudget = 0))
-        assertTrue(shouldPushProfile(dirty = false, serverBudget = 0, localBudget = 900000))
-        assertFalse(shouldPushProfile(dirty = false, serverBudget = 500000, localBudget = 900000))
-        assertFalse(shouldPushProfile(dirty = false, serverBudget = 0, localBudget = 0))
+    @Test fun parsesFamilySummaryOldAndNewServers() {
+        fun row(extra: String) = kotlinx.serialization.json.Json.decodeFromString<kotlinx.serialization.json.JsonObject>(
+            """{"user_id":"u1","display_name":"Ali","role":"admin","shared_total":300,"contribution":1000,"title":null$extra}""",
+        )
+        // 20261013120000: B got 200 from a transfer, gave 100 away.
+        val m = parseMember(row(""",
+            "own_contribution":800,"received":200,"given":100,"available":600"""))
+        assertEquals(listOf(800L, 200L, 100L, 600L), listOf(m.ownContribution, m.received, m.given, m.available))
+        // Older server: no Hissa columns, derived from contribution/shared.
+        val old = parseMember(row(""))
+        assertEquals(listOf(1000L, 0L, 0L, 700L), listOf(old.ownContribution, old.received, old.given, old.available))
+        val f = FamilyOverview("f", "Uy", "u1", true, listOf(m, m.copy(userId = "u2", ownContribution = 0, contribution = 100)))
+        assertEquals("family budget counts own contributions only", 800L, f.budget)
     }
 
     // --- family_test (logic) ---

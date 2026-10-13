@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Category
+import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
@@ -43,7 +44,7 @@ class DataTest {
     private fun expense(desc: String, amount: Long, catId: String, date: LocalDate, source: ExpenseSource = ExpenseSource.manual) =
         Expense(description = desc, amount = amount, categoryId = catId, date = date.startMillis(), source = source)
 
-    @Test fun upgradesV1DatabaseKeepingRowsAddingNeedsAndTransfers() = runBlocking {
+    @Test fun upgradesV1DatabaseKeepingRowsAddingNeedsTransfersAndContributions() = runBlocking {
         val name = "v1-upgrade.db"
         context.deleteDatabase(name)
         // v1 schema as Room 1 created it (copied from the generated AppDatabase_Impl).
@@ -68,6 +69,14 @@ class DataTest {
             val range = day.startMillis() to day.plusDays(1).startMillis()
             assertEquals(20L, dao.totalSpent(range.first, range.second))
             assertEquals(mapOf("c1" to 20L), dao.categoryTotals(range.first, range.second))
+            // v4 (3→4): contributions, soft delete, dirty count
+            dao.insertContribution(Contribution(amount = 400_000, note = "Oylik"))
+            val gone = Contribution(amount = 5, note = "x").also { dao.insertContribution(it) }
+            dao.deleteContribution(gone.id)
+            assertEquals(listOf("Oylik"), dao.watchContributions().first().map { it.note })
+            assertEquals(2, dao.dirtyContributions().size) // the deletion waits to be pushed
+            dao.resetLocal()
+            assertTrue(dao.getContributions().isEmpty())
         } finally {
             upgraded.close()
             context.deleteDatabase(name)
@@ -205,19 +214,17 @@ class DataTest {
     @Test fun settingsDefaultThenPersist() {
         val prefs = context.getSharedPreferences("test_settings", Context.MODE_PRIVATE)
         val store = SettingsStore(prefs)
-        assertEquals(0L, store.settings.value.monthlyBudget) // unset
         assertEquals("uz_UZ", store.settings.value.sttLocale)
         assertFalse(store.profileDirty)
 
-        store.setBudget(5_000_000)
-        assertEquals(5_000_000L, store.settings.value.monthlyBudget)
-        assertEquals(5_000_000L, SettingsStore(prefs).load().monthlyBudget) // written through
-        assertTrue(store.profileDirty)
-
-        store.markProfileClean()
-        store.applyProfile(budget = 1000, displayName = "Ali")
+        store.applyProfile(displayName = "Ali")
         assertFalse("pulled values aren't pushed back", store.profileDirty)
-        assertEquals(1000L to "Ali", store.settings.value.let { it.monthlyBudget to it.displayName })
+        assertEquals("Ali", store.settings.value.displayName)
+
+        // received: cached per month, written through, 0 in another month
+        store.setReceived("2026-10", 500)
+        assertEquals(500L, SettingsStore(prefs).load().receivedIn(LocalDate.of(2026, 10, 31)))
+        assertEquals(0L, store.settings.value.receivedIn(LocalDate.of(2026, 11, 1)))
 
         store.markProfileClean()
         store.setDisplayName("Vali")

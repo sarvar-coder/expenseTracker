@@ -7,7 +7,9 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.groupExpenses
 import com.sarvarbek.expense_tracker.ui.common.startMillis
 import com.sarvarbek.expense_tracker.ui.common.toLocalDate
-import com.sarvarbek.expense_tracker.features.home.summarize
+import com.sarvarbek.expense_tracker.features.home.Balance
+import com.sarvarbek.expense_tracker.features.home.balance
+import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.features.home.todayExpenses
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
@@ -35,27 +37,40 @@ class HelpersTest {
             source = ExpenseSource.manual, dirty = false)
 
     // --- home_summary ---
-    @Test fun summarizeSumsCurrentMonthAgainstBudget() {
-        val s = summarize(
+    @Test fun balanceSumsCurrentMonth() {
+        val b = balance(
             listOf(
                 exp(1, 45000, 1, at(2026, 9, 10)),
                 exp(2, 30000, 1, at(2026, 9, 1)), // first instant of month: in
                 exp(3, 20000, 2, at(2026, 9, 30, 23, 59)),
                 exp(4, 99000, 1, at(2026, 8, 15)), // prior month: out
                 exp(5, 11000, 1, at(2026, 10, 1)), // next month: out
+                exp(6, 100_000, 1, at(2026, 9, 12)).copy(transferTo = "sister"), // given, not spent
             ),
-            4_000_000, LocalDate.of(2026, 9, 26),
+            listOf(
+                Contribution(amount = 4_000_000, note = "Oylik", date = at(2026, 9, 2)),
+                Contribution(amount = 400_000, note = "Yana", date = at(2026, 9, 20)),
+                Contribution(amount = 9_000_000, note = "O'tgan oy", date = at(2026, 8, 31, 23, 59)), // no carry-over
+            ),
+            received = 50_000, LocalDate.of(2026, 9, 26),
         )
-        assertEquals(95000L, s.spent)
-        assertEquals(3_905_000L, s.remaining)
-        assertEquals(95000f / 4_000_000, s.progress, 1e-6f)
-        assertEquals(0f, summarize(emptyList(), 0, LocalDate.of(2026, 9, 1)).progress)
+        assertEquals(Balance(contributed = 4_400_000, received = 50_000, spent = 95000, given = 100_000), b)
+        // available = in + received − spent − given
+        assertEquals(4_255_000L, b.available)
+        assertEquals(4_350_000L, b.summary.budget)
+        assertEquals(b.available, b.summary.remaining)
+        assertEquals(95000f / 4_350_000, b.summary.progress, 1e-6f)
+        // Overspent: negative available, full bar.
+        val over = balance(listOf(exp(1, 300, 1, at(2026, 9, 3))), listOf(Contribution(amount = 100, note = "n", date = at(2026, 9, 1))), 0, LocalDate.of(2026, 9, 5))
+        assertEquals(-200L, over.available)
+        assertEquals(1f, over.summary.progress)
+        assertEquals(0f, balance(emptyList(), emptyList(), 0, LocalDate.of(2026, 9, 1)).summary.progress)
     }
 
     @Test fun transfersAreNotSpending() {
         val day = at(2026, 9, 10)
         val list = listOf(exp(1, 45000, 1, day), exp(2, 500000, 1, day).copy(transferTo = "sister"))
-        assertEquals(45000L, summarize(list, 0, LocalDate.of(2026, 9, 26)).spent)
+        assertEquals(45000L, balance(list, emptyList(), 0, LocalDate.of(2026, 9, 26)).spent)
         val data = insightsFor(list, cats, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1))
         assertEquals(45000L, data.total)
         assertEquals(listOf(45000L), data.slices.map { it.amount })

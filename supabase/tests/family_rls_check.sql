@@ -82,6 +82,19 @@ begin
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);
   update public.profiles set budget = 1000 where id = b;
+  -- contributions (#97): own rows, note required, owner can't be spoofed; profiles.budget no longer counts
+  insert into public.contributions (id, amount, note) values (gen_random_uuid(), 800, 'Oylik');
+  begin
+    insert into public.contributions (id, amount, note) values (gen_random_uuid(), 5, '  '); ok := false;
+  exception when check_violation then ok := true; end;
+  assert ok, 'contribution note required';
+  begin
+    insert into public.contributions (id, amount, note) values (gen_random_uuid(), 0, 'x'); ok := false;
+  exception when check_violation then ok := true; end;
+  assert ok, 'contribution amount > 0';
+  insert into public.contributions (id, owner_id, amount, note) values (gen_random_uuid(), a, 7, 'spoof');
+  select count(*) into n from public.contributions where owner_id = b; assert n = 2, 'spoofed owner forced to B, got ' || n;
+  update public.contributions set deleted_at = now(), updated_at = now() + interval '1 second' where note = 'spoof';
   begin
     insert into public.categories (id, family_id, name, color_hex) values (gen_random_uuid(), fid, 'X', 'AAAAAA');
     ok := false;
@@ -123,7 +136,15 @@ begin
   assert r.amount is null and r.is_private and r.raw_input is null, 'transfer row is a tombstone';
   select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = b;
   assert r.shared_total = 170, 'B shared total 170, got ' || r.shared_total;
-  assert r.contribution = 1000, 'B contribution = budget 1000, got ' || r.contribution;
+  assert r.own_contribution = 800 and r.contribution = 800, 'B contribution = own 800 (not budget), got ' || r.contribution;
+  assert r.given = 500 and r.received = 0 and r.available = 130, 'B gave 500: available 800-170-500, got ' || r.available;
+  select * into r from public.family_summary(now() - interval '1 day', now() + interval '1 day') where user_id = a;
+  assert r.received = 500 and r.own_contribution = 0 and r.contribution = 500, 'A received 500 from B, got ' || r.contribution;
+  select sum(own_contribution) into n from public.family_summary(now() - interval '1 day', now() + interval '1 day');
+  assert n = 800, 'family budget counts the transfer once, got ' || n;
+  select count(*) into n from public.contributions; assert n = 0, 'A cannot read B contributions';
+  update public.contributions set amount = 1 where owner_id = b;
+  get diagnostics n = row_count; assert n = 0, 'A cannot edit B contributions';
   select id into req from public.category_requests where name = 'Gym';
   newcat := public.approve_category_request(req, '5B8DB8', null);
   perform set_config('request.jwt.claims', json_build_object('sub', b, 'email', 'b@test.uz', 'role', 'authenticated')::text, true);

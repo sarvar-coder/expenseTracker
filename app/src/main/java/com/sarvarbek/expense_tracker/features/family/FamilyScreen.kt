@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +74,7 @@ import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterPage
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilterSaver
 import com.sarvarbek.expense_tracker.features.activity.FilterButton
+import com.sarvarbek.expense_tracker.features.home.ContributionSheet
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
 import com.sarvarbek.expense_tracker.features.insights.CategoryBreakdown
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
@@ -196,6 +198,7 @@ fun FamilyScreen(
     val actions = rememberFamilyActions(state)
     var filter by filterState
     var filterOpen by remember { mutableStateOf(false) }
+    var contribute by rememberSaveable { mutableStateOf(false) }
     val show = actions.show
     val act = actions.act
     LaunchedEffect(state, active) { if (active) state.refresh() } // every time the tab opens
@@ -230,7 +233,7 @@ fun FamilyScreen(
                 val f = state.overview
                 when {
                     state.loaded && f == null -> NoFamily(state.invites, show, act) { NeedsCard(db, onNeeds) }
-                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onCategory, onList) { NeedsCard(db, onNeeds) }
+                    state.loaded && f != null -> InFamily(f, rows, cats, filter, { filter = it }, onEdit, onCategory, onList, { contribute = true }) { NeedsCard(db, onNeeds) }
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                         NeedsCard(db, onNeeds) // local, works offline
@@ -241,6 +244,8 @@ fun FamilyScreen(
         }
     }
     actions.dialog()?.invoke()
+    // Closing refetches: overview() syncs first, so new contributions count.
+    if (contribute) ContributionSheet(db) { contribute = false; scope.launch { state.refresh() } }
     val f = state.overview
     if (filterOpen && f != null) {
         val categories by remember(db) { db.watchCategories() }.collectAsStateWithLifecycle(emptyList())
@@ -313,6 +318,7 @@ private fun InFamily(
     onEdit: (Expense) -> Unit,
     onCategory: (CategoryPick) -> Unit,
     onList: () -> Unit,
+    onContribute: () -> Unit,
     needs: @Composable () -> Unit,
 ) {
     val catById = cats.associateBy { it.id }
@@ -323,7 +329,7 @@ private fun InFamily(
     val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
 
     Column {
-        BudgetCard(HomeSummary(f.spent, f.budget))
+        BudgetCard(HomeSummary(f.spent, f.budget), onContribute)
         needs()
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
@@ -415,17 +421,23 @@ internal fun memberLabel(m: FamilyMember, myId: String) = listOfNotNull(
     m.name, t("family.you_suffix").takeIf { m.userId == myId }, m.title?.let { "· $it" }, t("family.admin_suffix").takeIf { m.isAdmin },
 ).joinToString(" ")
 
+/** Name, "Hissa X · sarf Y", and Qolgan on the right (red when overspent). Hissa includes transfers received. */
 @Composable
 private fun MemberRow(m: FamilyMember, myId: String) = Row(
     Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 16.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
+    val c = AppTheme.colors
+    val ty = MaterialTheme.typography
     Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-        Text(memberLabel(m, myId), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(t("family.contribution", formatMoney(m.contribution)), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
+        Text(memberLabel(m, myId), style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(t("family.member_money", formatMoney(m.contribution), formatMoney(m.shared)), color = c.muted, style = ty.bodySmall)
     }
     Spacer(Modifier.width(8.dp))
-    Money(m.shared)
+    Column(horizontalAlignment = Alignment.End) {
+        Money(m.available, color = if (m.available < 0) c.danger else Color.Unspecified)
+        Text(t("family.available"), color = c.muted, style = ty.bodySmall)
+    }
 }
 
 /** Square outlined icon button, as on Home's header. */
@@ -441,9 +453,9 @@ internal fun GearButton(label: String, onClick: () -> Unit) {
     ) { Icon(Icons.Outlined.Settings, label) }
 }
 
-/** Family budget (sum of contributions) vs shared spending this month. */
+/** Family budget (sum of members' own contributions) vs shared spending this month, + Hissa qo'shish. */
 @Composable
-private fun BudgetCard(summary: HomeSummary) {
+private fun BudgetCard(summary: HomeSummary, onContribute: () -> Unit) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -472,6 +484,12 @@ private fun BudgetCard(summary: HomeSummary) {
                     style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
                 )
             }
+        }
+        Spacer(Modifier.height(14.dp))
+        PrimaryButton(onContribute, Modifier.fillMaxWidth()) {
+            Icon(Icons.Filled.Add, null)
+            Spacer(Modifier.width(8.dp))
+            Text(t("contrib.add"))
         }
     }
 }
