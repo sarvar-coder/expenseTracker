@@ -77,7 +77,6 @@ import com.sarvarbek.expense_tracker.features.activity.FilterButton
 import com.sarvarbek.expense_tracker.features.home.ContributionSheet
 import com.sarvarbek.expense_tracker.features.home.HomeSummary
 import com.sarvarbek.expense_tracker.features.insights.Donut
-import com.sarvarbek.expense_tracker.features.insights.CategoryPick
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.FamilyException
 import com.sarvarbek.expense_tracker.services.FamilyExpense
@@ -352,8 +351,8 @@ internal fun familyRange(filter: ActivityFilter) = filter.range ?: monthStart().
 /**
  * The Oila feed as this tab shows it. Own rows: only the family's, no transfers;
  * ownerId set so the member filter sees them. Current members' labels carry their
- * title; ex-members keep the server name. Also the category screen's
- * [CategoryPick.select] and [FamilyListScreen]'s rows, so their rows and totals match.
+ * title; ex-members keep the server name. Also [FamilyListScreen]'s rows, so
+ * its rows and totals match.
  */
 internal fun familySelect(f: FamilyOverview, filter: ActivityFilter): (List<FamilyExpense>) -> List<FamilyExpense> {
     val names = f.memberNames
