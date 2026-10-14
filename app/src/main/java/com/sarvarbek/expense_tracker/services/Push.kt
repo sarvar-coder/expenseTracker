@@ -75,7 +75,7 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     }
 
     /** App switch, permission and every channel: what the server sees as `can_notify`. */
-    private fun reportable() = listOf(CH_REQUESTS, CH_EXPENSES, CH_NEEDS).all { canNotify(context, it) }
+    private fun reportable() = listOf(CH_REQUESTS, CH_EXPENSES).all { canNotify(context, it) }
 
     /** What the last successful [register] reported; null until one lands. */
     @Volatile private var sentCanNotify: Boolean? = null
@@ -124,11 +124,12 @@ class Push(private val context: Context, private val client: SupabaseClient) {
 
     private fun createChannels() {
         if (Build.VERSION.SDK_INT < 26) return
-        context.getSystemService(NotificationManager::class.java).createNotificationChannels(listOf(
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannels(listOf(
             NotificationChannel(CH_REQUESTS, t("push.channel_requests"), NotificationManager.IMPORTANCE_DEFAULT),
             NotificationChannel(CH_EXPENSES, t("push.channel_expenses"), NotificationManager.IMPORTANCE_DEFAULT),
-            NotificationChannel(CH_NEEDS, t("push.channel_needs"), NotificationManager.IMPORTANCE_DEFAULT),
         ))
+        nm.deleteNotificationChannel("need_comments") // Kerakli (removed in 2.3.0)
     }
 
     private suspend fun attempt(what: String, f: suspend () -> Unit): Boolean = withContext(Dispatchers.IO) {
@@ -148,19 +149,15 @@ class Push(private val context: Context, private val client: SupabaseClient) {
         private const val RETRY_MS = 30_000L
         const val CH_REQUESTS = "category_requests"
         const val CH_EXPENSES = "new_expenses"
-        const val CH_NEEDS = "need_comments"
         const val EXTRA_ROUTE = "route"
         const val ROUTE_REQUESTS = "family-settings"
         /** `expense/<id>`: that expense's read-only sheet. */
         const val ROUTE_EXPENSE = "expense/"
         private val expenseRoute = Regex("expense/[0-9a-fA-F-]{36}")
-        /** `need/<id>`: that Kerakli item's chat. */
-        const val ROUTE_NEED = "need/"
-        private val needRoute = Regex("need/[0-9a-fA-F-]{36}")
 
         /** Tap targets a notification may open; anything else in the intent is ignored. */
         fun route(intent: Intent?) = intent?.getStringExtra(EXTRA_ROUTE)
-            ?.takeIf { it == ROUTE_REQUESTS || expenseRoute.matches(it) || needRoute.matches(it) }
+            ?.takeIf { it == ROUTE_REQUESTS || expenseRoute.matches(it) }
     }
 }
 
@@ -190,15 +187,6 @@ fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
                 Push.CH_EXPENSES, t("push.expense_title"),
                 t("push.expense", name, data["description"].orEmpty(), formatMoney(data["amount"]?.toLongOrNull() ?: 0)),
                 Push.ROUTE_EXPENSE + id, "expense:$id", "expenses:${data["owner"].orEmpty()}",
-            )
-        }
-        // One notification per need: a newer message replaces the last.
-        "need_comment" -> {
-            val id = data["need_id"] ?: return null.also { Log.i("push", "drop need_comment: no id") }
-            PushContent(
-                Push.CH_NEEDS, t("push.need_title", data["item"].orEmpty()),
-                t("push.need", data["name"].orEmpty(), data["text"].orEmpty()),
-                Push.ROUTE_NEED + id, "need:$id",
             )
         }
         else -> null.also { Log.i("push", "drop: unknown type ${data["type"]}") }

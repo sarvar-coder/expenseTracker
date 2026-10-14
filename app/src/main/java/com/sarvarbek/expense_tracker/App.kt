@@ -6,7 +6,6 @@ import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.AiParser
 import com.sarvarbek.expense_tracker.services.FamilyService
-import com.sarvarbek.expense_tracker.services.NeedPhotos
 import com.sarvarbek.expense_tracker.services.Push
 import com.sarvarbek.expense_tracker.services.SpeechService
 import com.sarvarbek.expense_tracker.services.SyncService
@@ -28,6 +27,8 @@ class App : Application() {
         super.onCreate()
         // Upgrade from the Flutter app: its Drift DB is replaced by a re-sync from the cloud.
         File(filesDir.parentFile, "app_flutter").deleteRecursively()
+        // Kerakli removed in 2.3.0: its pending uploads and cached photos.
+        File(filesDir, "need-photos").deleteRecursively(); File(cacheDir, "need-photos").deleteRecursively()
         I18n.load(this, container.settings.settings.value.uiLanguage)
         container.sync.start()
         container.push.start()
@@ -57,8 +58,7 @@ class AppContainer(context: Context) {
         install(Functions)
         install(Storage)
     }
-    val photos = NeedPhotos(context, supabase)
-    val sync = SyncService(database, supabase, prefs, settings, photos)
+    val sync = SyncService(database, supabase, prefs, settings)
     val family = FamilyService(supabase, sync)
     val aiParser = AiParser(supabase)
     val speech = SpeechService(context)

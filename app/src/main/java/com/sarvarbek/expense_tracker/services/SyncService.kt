@@ -12,7 +12,6 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
-import com.sarvarbek.expense_tracker.data.Need
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -44,7 +43,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
@@ -68,7 +66,6 @@ class SyncService(
     private val client: SupabaseClient,
     private val prefs: SharedPreferences,
     private val settings: SettingsStore,
-    private val photos: NeedPhotos,
 ) {
     private val db = database.dao()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -154,7 +151,7 @@ class SyncService(
         val prevFamily = prefs.getString(K_FAMILY, null)
         prefs.edit {
             if (prevFamily != null && prevFamily != (familyId ?: "")) {
-                remove("sync.categories"); remove("sync.expenses"); remove("sync.needs"); remove("sync.contributions")
+                remove("sync.categories"); remove("sync.expenses"); remove("sync.contributions")
             }
             putString(K_FAMILY, familyId ?: "")
             putBoolean(K_ADMIN, member?.str("role") == "admin")
@@ -174,17 +171,6 @@ class SyncService(
         push("categories", db.dirtyCategories(), Category::toJson) { db.markCategoryClean(it.id, it.updatedAt) }
         push("expenses", db.dirtyExpenses(), Expense::toJson) { db.markExpenseClean(it.id, it.updatedAt) }
         pull("expenses") { applyExpenses(database, it) }
-        // A need the guard refuses (stale status, e.g. rejected meanwhile) is
-        // dropped: marked clean and the next pull re-fetches the server's copy.
-        val deniedNeed: suspend (Need) -> Unit = {
-            db.markNeedClean(it.id, it.updatedAt)
-            prefs.edit { remove("sync.needs") }
-        }
-        push("needs", db.dirtyNeeds(), Need::toJson, deniedNeed) { db.markNeedClean(it.id, it.updatedAt) }
-        pull("needs") { applyNeeds(database, it) }
-        // Photos after their rows exist on the server; then push the new photo_path.
-        if (photos.upload(db)) push("needs", db.dirtyNeeds(), Need::toJson, deniedNeed) { db.markNeedClean(it.id, it.updatedAt) }
-        db.dropForeignNeeds(familyId)
         push("contributions", db.dirtyContributions(), Contribution::toJson) { db.markContributionClean(it.id, it.updatedAt) }
         pull("contributions") { applyContributions(database, it) }
         cacheReceived(uid, familyId)
@@ -227,7 +213,6 @@ class SyncService(
         table: String,
         rows: List<T>,
         toJson: (T) -> JsonObject,
-        onDenied: (suspend (T) -> Unit)? = null,
         markClean: suspend (T) -> Unit,
     ) {
         val pushed = mutableListOf<T>()
@@ -243,7 +228,6 @@ class SyncService(
                         pushed += r
                     } catch (e: PostgrestRestException) {
                         Log.w(TAG, "sync: $table ${toJson(r)["id"]} refused: ${e.error}")
-                        if (e.code == "42501") onDenied?.invoke(r) // permanent: a guard said no
                     }
                 }
             }
@@ -341,21 +325,6 @@ suspend fun applyExpenses(database: AppDatabase, rows: List<JsonObject>) {
     })
 }
 
-suspend fun applyNeeds(database: AppDatabase, rows: List<JsonObject>) {
-    val db = database.dao()
-    val pending = db.dirtyNeeds().associate { it.id to it.updatedAt }
-    db.upsertNeeds(rows.filter { isFresh(it, pending) }.map { r ->
-        Need(
-            id = r.str("id")!!, ownerId = r.str("owner_id"), familyId = r.str("family_id"), text = r.str("text")!!,
-            done = r.bool("done"), status = r.str("status")!!, needMoney = r.bool("need_money"),
-            link = r.str("link"), photoPath = r.str("photo_path"),
-            commentCount = r["comment_count"]?.jsonPrimitive?.intOrNull ?: 0, // absent before 20261013190000
-            createdAt = r.ts("created_at")!!, updatedAt = r.ts("updated_at")!!,
-            deletedAt = r.ts("deleted_at"), dirty = false,
-        )
-    })
-}
-
 suspend fun applyContributions(database: AppDatabase, rows: List<JsonObject>) {
     val db = database.dao()
     val pending = db.dirtyContributions().associate { it.id to it.updatedAt }
@@ -403,10 +372,4 @@ private fun Expense.toJson() = jsonOf(
 private fun Contribution.toJson() = jsonOf(
     "id" to id, "amount" to amount, "note" to note, "date" to iso(date),
     "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
-)
-
-private fun Need.toJson() = jsonOf(
-    "id" to id, "owner_id" to ownerId, "family_id" to familyId, "text" to text, "done" to done,
-    "status" to status, "need_money" to needMoney, "link" to link, "photo_path" to photoPath,
-    "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
 )

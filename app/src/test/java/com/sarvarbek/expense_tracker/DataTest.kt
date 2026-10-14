@@ -8,9 +8,6 @@ import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
-import com.sarvarbek.expense_tracker.data.Need
-import com.sarvarbek.expense_tracker.data.NeedStatus
-import com.sarvarbek.expense_tracker.data.withStatus
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.ResolvedCategory
 import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
@@ -46,7 +43,7 @@ class DataTest {
     private fun expense(desc: String, amount: Long, catId: String, date: LocalDate, source: ExpenseSource = ExpenseSource.manual) =
         Expense(description = desc, amount = amount, categoryId = catId, date = date.startMillis(), source = source)
 
-    @Test fun upgradesV1DatabaseKeepingRowsAddingNeedsTransfersAndContributions() = runBlocking {
+    @Test fun upgradesV1DatabaseKeepingRowsAddingTransfersAndContributions() = runBlocking {
         val name = "v1-upgrade.db"
         context.deleteDatabase(name)
         // v1 schema as Room 1 created it (copied from the generated AppDatabase_Impl).
@@ -61,8 +58,7 @@ class DataTest {
         try {
             val dao = upgraded.dao()
             assertEquals(listOf("Old"), dao.getCategories().map { it.name })
-            dao.insertNeed(Need(text = "Non"))
-            assertEquals(listOf("Non"), dao.watchNeeds().first().map { it.text })
+            assertFalse("v7 drops Kerakli", upgraded.hasTable("needs"))
             // v3: transfer_to round-trips and stays out of the sums
             val day = LocalDate.of(2026, 10, 7)
             dao.insertExpense(expense("gift", 500, "c1", day).copy(transferTo = "u2"))
@@ -85,75 +81,33 @@ class DataTest {
         }
     }
 
-    @Test fun upgradesV4NeedsToStatusKeepingDone() = runBlocking {
-        val name = "v4-upgrade.db"
+    private fun AppDatabase.hasTable(name: String) =
+        openHelper.readableDatabase.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(name)).use { it.moveToFirst() }
+
+    @Test fun upgradesV6DroppingNeedsKeepingExpenses() = runBlocking {
+        val name = "v6-upgrade.db"
         context.deleteDatabase(name)
-        // v4 schema as MIGRATION_1_2..3_4 leave it.
+        // v6 schema as MIGRATION_1_2..5_6 leave it.
         android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use {
             it.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, `icon_key` TEXT NOT NULL, `is_archived` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
             it.execSQL("CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `description` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category_id` TEXT NOT NULL, `date` INTEGER NOT NULL, `source` TEXT NOT NULL, `raw_input` TEXT, `is_private` INTEGER NOT NULL, `pending_category` TEXT, `frozen` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `transfer_to` TEXT, PRIMARY KEY(`id`))")
             it.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_category_id` ON `expenses` (`category_id`)")
-            it.execSQL("CREATE TABLE IF NOT EXISTS `needs` (`id` TEXT NOT NULL, `text` TEXT NOT NULL, `done` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            it.execSQL("CREATE TABLE IF NOT EXISTS `needs` (`id` TEXT NOT NULL, `text` TEXT NOT NULL, `done` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `status` TEXT NOT NULL DEFAULT 'new', `need_money` INTEGER NOT NULL DEFAULT 0, `link` TEXT, `photo_path` TEXT, `comment_count` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
             it.execSQL("CREATE TABLE IF NOT EXISTS `contributions` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, `note` TEXT NOT NULL, `date` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
-            it.execSQL("INSERT INTO needs VALUES ('n1', 'Non', 1, NULL, NULL, 1, 1, NULL, 0), ('n2', 'Sut', 0, NULL, 'f1', 2, 2, NULL, 0)")
-            it.version = 4
+            it.execSQL("INSERT INTO categories VALUES ('c1', 'Old', 'AAAAAA', 'category', 0, NULL, NULL, 1, NULL, 0)")
+            it.execSQL("INSERT INTO expenses (id, description, amount, category_id, date, source, is_private, frozen, created_at, updated_at, dirty) VALUES ('e1', 'Non', 5000, 'c1', 1, 'manual', 0, 0, 1, 1, 0)")
+            it.execSQL("INSERT INTO needs (id, text, done, created_at, updated_at, dirty) VALUES ('n1', 'Non', 0, 1, 1, 1)")
+            it.version = 6
         }
         val upgraded = AppDatabase.open(context, name)
         try {
-            val dao = upgraded.dao()
-            val rows = dao.watchNeeds().first().associateBy { it.id }
-            assertEquals(NeedStatus.DONE, rows.getValue("n1").status)
-            assertEquals(NeedStatus.NEW, rows.getValue("n2").status)
-            assertEquals(listOf(false, null, null), rows.getValue("n2").let { listOf(it.needMoney, it.link, it.photoPath) })
-            assertEquals(0, dao.dirtyNeeds().size) // nothing to re-push
-            dao.updateNeed(rows.getValue("n2").withStatus(NeedStatus.DONE).copy(needMoney = true, link = "https://a.uz"))
-            val n2 = dao.getNeed("n2")!!
-            assertEquals(listOf(true, true, "https://a.uz", true), listOf(n2.done, n2.needMoney, n2.link, n2.dirty))
+            assertEquals(listOf("Non"), upgraded.dao().getExpenses().map { it.description })
+            assertFalse(upgraded.hasTable("needs"))
+            assertEquals("dirty needs no longer counted", 0, upgraded.dao().watchDirtyCount().first())
         } finally {
             upgraded.close()
             context.deleteDatabase(name)
         }
-    }
-
-    @Test fun upgradesV5NeedsWithZeroComments() = runBlocking {
-        val name = "v5-upgrade.db"
-        context.deleteDatabase(name)
-        // v5 schema as MIGRATION_1_2..4_5 leave it.
-        android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use {
-            it.execSQL("CREATE TABLE IF NOT EXISTS `categories` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `color_hex` TEXT NOT NULL, `icon_key` TEXT NOT NULL, `is_archived` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
-            it.execSQL("CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `description` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category_id` TEXT NOT NULL, `date` INTEGER NOT NULL, `source` TEXT NOT NULL, `raw_input` TEXT, `is_private` INTEGER NOT NULL, `pending_category` TEXT, `frozen` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `transfer_to` TEXT, PRIMARY KEY(`id`))")
-            it.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_category_id` ON `expenses` (`category_id`)")
-            it.execSQL("CREATE TABLE IF NOT EXISTS `needs` (`id` TEXT NOT NULL, `text` TEXT NOT NULL, `done` INTEGER NOT NULL, `owner_id` TEXT, `family_id` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, `status` TEXT NOT NULL DEFAULT 'new', `need_money` INTEGER NOT NULL DEFAULT 0, `link` TEXT, `photo_path` TEXT, PRIMARY KEY(`id`))")
-            it.execSQL("CREATE TABLE IF NOT EXISTS `contributions` (`id` TEXT NOT NULL, `amount` INTEGER NOT NULL, `note` TEXT NOT NULL, `date` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))")
-            it.execSQL("INSERT INTO needs (id, text, done, family_id, created_at, updated_at, dirty, status) VALUES ('n1', 'Non', 0, 'f1', 1, 1, 0, 'pending')")
-            it.version = 5
-        }
-        val upgraded = AppDatabase.open(context, name)
-        try {
-            val n1 = upgraded.dao().getNeed("n1")!!
-            assertEquals(listOf<Any?>(0, NeedStatus.PENDING, false), listOf(n1.commentCount, n1.status, n1.dirty))
-        } finally {
-            upgraded.close()
-            context.deleteDatabase(name)
-        }
-    }
-
-    @Test fun needsOpenFirstSoftDeleteAndCountAsDirty() = runBlocking {
-        db.insertNeed(Need(text = "a", createdAt = 1))
-        db.insertNeed(Need(text = "b", createdAt = 2, done = true))
-        db.insertNeed(Need(text = "c", createdAt = 3))
-        assertEquals(listOf("c", "a", "b"), db.watchNeeds().first().map { it.text })
-        val c = db.watchNeeds().first().first()
-        db.deleteNeed(c.id)
-        assertEquals(listOf("a", "b"), db.watchNeeds().first().map { it.text })
-        assertTrue("deletion waits to be pushed", db.dirtyNeeds().any { it.id == c.id && it.deletedAt != null })
-        assertTrue(db.watchDirtyCount().first() >= 3)
-        // Undo and the photo upload touch only their columns.
-        db.updateNeed(c.withStatus(NeedStatus.DONE).copy(deletedAt = db.getNeed(c.id)!!.deletedAt))
-        db.restoreNeed(c.id)
-        db.setNeedPhoto(c.id, "${c.id}/photo.jpg")
-        val back = db.getNeed(c.id)!!
-        assertEquals(listOf<Any?>(null, NeedStatus.DONE, "${c.id}/photo.jpg", true), listOf(back.deletedAt, back.status, back.photoPath, back.dirty))
     }
 
     @Test fun seedsFiveDefaultCategories() = runBlocking {
