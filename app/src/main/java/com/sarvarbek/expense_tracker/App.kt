@@ -27,6 +27,8 @@ class App : Application() {
         super.onCreate()
         // Upgrade from the Flutter app: its Drift DB is replaced by a re-sync from the cloud.
         File(filesDir.parentFile, "app_flutter").deleteRecursively()
+        // Kerakli removed in 2.3.0: its pending uploads and cached photos.
+        File(filesDir, "need-photos").deleteRecursively(); File(cacheDir, "need-photos").deleteRecursively()
         I18n.load(this, container.settings.settings.value.uiLanguage)
         container.sync.start()
         container.push.start()
