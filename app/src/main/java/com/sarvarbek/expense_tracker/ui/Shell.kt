@@ -25,13 +25,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.DonutLarge
 import androidx.compose.material.icons.outlined.FamilyRestroom
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.DonutLarge
 import androidx.compose.material.icons.rounded.FamilyRestroom
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +68,7 @@ private data class Tab(val labelKey: String, val icon: ImageVector, val selected
 private val tabs = listOf(
     Tab("shell.home", Icons.Outlined.Home, Icons.Rounded.Home),
     Tab("shell.insights", Icons.Outlined.DonutLarge, Icons.Rounded.DonutLarge),
-    Tab("shell.needs", Icons.Outlined.Checklist, Icons.Rounded.Checklist),
+    Tab("shell.discuss", Icons.Outlined.Forum, Icons.Rounded.Forum),
     Tab("shell.family", Icons.Outlined.FamilyRestroom, Icons.Rounded.FamilyRestroom),
 )
 
@@ -87,9 +87,9 @@ fun Shell(
     onTab: () -> Unit = {},
     page: @Composable (index: Int, active: Boolean) -> Unit = { i, _ -> Placeholder(tabs[i].labelKey) },
 ) {
-    // Keys name the tab layout: a state saved by another layout (index 2 was Oila) is ignored, not restored.
-    var index by rememberSaveable(key = "tab4") { mutableIntStateOf(0) }
-    var visited by rememberSaveable(key = "visited4") { mutableStateOf(listOf(0)) }
+    // Keys name the tab layout: a state saved by another layout (index 2 was Oila, then Kerakli) is ignored, not restored.
+    var index by rememberSaveable(key = "tab5") { mutableIntStateOf(0) }
+    var visited by rememberSaveable(key = "visited5") { mutableStateOf(listOf(0)) }
     LaunchedEffect(tab) { if (tab != null) { index = tab; onTab() } }
     if (index !in visited) visited = visited + index
     Scaffold(

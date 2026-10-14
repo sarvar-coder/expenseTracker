@@ -65,7 +65,7 @@ class ShellTest {
         var added = false
         rule.setContent { AppTheme { Shell(onAdd = { added = true }) } }
 
-        for (label in listOf("Asosiy", "Tahlil", "Kerakli", "Oila")) {
+        for (label in listOf("Asosiy", "Tahlil", "Muhokama", "Oila")) {
             rule.onNodeWithText(label, useUnmergedTree = true).assertExists()
         }
         rule.onNodeWithText("Tarix", useUnmergedTree = true).assertDoesNotExist()

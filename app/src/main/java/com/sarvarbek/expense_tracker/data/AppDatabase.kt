@@ -64,9 +64,14 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) = db.execSQL("ALTER TABLE `needs` ADD COLUMN `comment_count` INTEGER NOT NULL DEFAULT 0")
 }
 
+/** v7: Kerakli removed. */
+internal val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) = db.execSQL("DROP TABLE IF EXISTS `needs`")
+}
+
 // ponytail: exportSchema off, migrations hand-written and checked by DataTest's
 // v1 upgrade test; export schemas if migrations pile up.
-@Database(entities = [Category::class, Expense::class, Need::class, Contribution::class], version = 6, exportSchema = false)
+@Database(entities = [Category::class, Expense::class, Contribution::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): ExpenseDao
 
@@ -78,7 +83,7 @@ abstract class AppDatabase : RoomDatabase() {
             (if (name == null) Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .setQueryExecutor { it.run() }.setTransactionExecutor { it.run() }.allowMainThreadQueries()
             else Room.databaseBuilder(context, AppDatabase::class.java, name))
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         for (c in seedCategories()) {
@@ -165,30 +170,6 @@ abstract class ExpenseDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL AND transfer_to IS NULL AND date >= :start AND date < :end")
     abstract suspend fun totalSpent(start: Long, end: Long): Long
 
-    // --- Needs ---
-    /** Open first, newest first. */
-    @Query("SELECT * FROM needs WHERE deleted_at IS NULL ORDER BY done, created_at DESC")
-    abstract fun watchNeeds(): Flow<List<Need>>
-
-    @Insert abstract suspend fun insertNeed(n: Need)
-
-    @Query("SELECT * FROM needs WHERE id = :id") abstract suspend fun getNeed(id: String): Need?
-
-    @Upsert abstract suspend fun upsertNeeds(rows: List<Need>)
-
-    suspend fun updateNeed(n: Need) = upsertNeeds(listOf(n.copy(updatedAt = System.currentTimeMillis(), dirty = true)))
-
-    @Query("UPDATE needs SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
-    abstract suspend fun deleteNeed(id: String, now: Long = System.currentTimeMillis())
-
-    /** Undo of [deleteNeed]: only the tombstone, so edits since (status, photo) stay. */
-    @Query("UPDATE needs SET deleted_at = NULL, updated_at = :now, dirty = 1 WHERE id = :id")
-    abstract suspend fun restoreNeed(id: String, now: Long = System.currentTimeMillis())
-
-    /** Sets only the photo, so a status change made during the upload isn't overwritten. */
-    @Query("UPDATE needs SET photo_path = :path, updated_at = :now, dirty = 1 WHERE id = :id")
-    abstract suspend fun setNeedPhoto(id: String, path: String, now: Long = System.currentTimeMillis())
-
     // --- Contributions (own only) ---
     /** Newest first. */
     @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
@@ -226,13 +207,11 @@ abstract class ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE dirty = 1") abstract suspend fun dirtyExpenses(): List<Expense>
 
-    @Query("SELECT * FROM needs WHERE dirty = 1") abstract suspend fun dirtyNeeds(): List<Need>
-
     @Query("SELECT * FROM contributions WHERE dirty = 1") abstract suspend fun dirtyContributions(): List<Contribution>
 
     @Query(
         "SELECT (SELECT count(*) FROM categories WHERE dirty = 1) + (SELECT count(*) FROM expenses WHERE dirty = 1) " +
-            "+ (SELECT count(*) FROM needs WHERE dirty = 1) + (SELECT count(*) FROM contributions WHERE dirty = 1)",
+            "+ (SELECT count(*) FROM contributions WHERE dirty = 1)",
     )
     abstract fun watchDirtyCount(): Flow<Int>
 
@@ -243,15 +222,8 @@ abstract class ExpenseDao {
     @Query("UPDATE expenses SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     abstract suspend fun markExpenseClean(id: String, updatedAt: Long)
 
-    @Query("UPDATE needs SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
-    abstract suspend fun markNeedClean(id: String, updatedAt: Long)
-
     @Query("UPDATE contributions SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     abstract suspend fun markContributionClean(id: String, updatedAt: Long)
-
-    /** Drops family items of any family but [familyId] (left or removed); the server refuses their edits anyway. */
-    @Query("DELETE FROM needs WHERE family_id IS NOT NULL AND (:familyId IS NULL OR family_id != :familyId)")
-    abstract suspend fun dropForeignNeeds(familyId: String?)
 
     /** Repoints expenses (dirty); [pending] null keeps their pendingCategory. */
     @Query(
@@ -283,8 +255,6 @@ abstract class ExpenseDao {
 
     @Query("DELETE FROM categories") abstract suspend fun deleteAllCategories()
 
-    @Query("DELETE FROM needs") abstract suspend fun deleteAllNeeds()
-
     @Query("DELETE FROM contributions") abstract suspend fun deleteAllContributions()
 
     /** Another account signed in on this device: drop the previous one's rows. */
@@ -292,7 +262,6 @@ abstract class ExpenseDao {
     open suspend fun resetLocal() {
         deleteAllExpenses()
         deleteAllCategories()
-        deleteAllNeeds()
         deleteAllContributions()
         upsertCategories(seedCategories())
     }

@@ -39,10 +39,9 @@ import com.sarvarbek.expense_tracker.features.family.FamilyScreen
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
-import com.sarvarbek.expense_tracker.features.family.memberNames
-import com.sarvarbek.expense_tracker.features.needs.NeedChatScreen
-import com.sarvarbek.expense_tracker.features.needs.NeedsScreen
-import kotlinx.coroutines.flow.map
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Forum
+import com.sarvarbek.expense_tracker.ui.common.EmptyState
 import com.sarvarbek.expense_tracker.features.family.LedgerScreen
 import com.sarvarbek.expense_tracker.features.home.ContributionScreen
 import com.sarvarbek.expense_tracker.services.SyncService
@@ -138,11 +137,6 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                 nav.popBackStack("shell", inclusive = false)
                 tab = TAB_FAMILY
             }
-        } else if (pushRoute?.startsWith(Push.ROUTE_NEED) == true) {
-            // Over the shell only, so back lands on the tabs; a sync brings the need's header.
-            nav.popBackStack("shell", inclusive = false)
-            nav.navigate(pushRoute)
-            container.sync.schedule()
         }
         if (pushRoute != null) onPushRouted()
     }
@@ -176,19 +170,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                             container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
                             onCategory = openCategory, onEdit = edit,
                         )
-                        2 -> {
-                            // Re-read on each visit: a sync may have joined, left or changed role.
-                            val prefs = container.prefs
-                            val familyId = remember(active) { prefs.getString(SyncService.K_FAMILY, null)?.ifEmpty { null } }
-                            val isAdmin = remember(active) { prefs.getBoolean(SyncService.K_ADMIN, false) }
-                            // Owner names come from the Oila overview; fetch it if that tab wasn't opened yet.
-                            LaunchedEffect(active, familyId) { if (active && familyId != null && family.overview == null) family.refresh() }
-                            NeedsScreen(
-                                container.db, familyId, container.supabase.auth.currentUserOrNull()?.id, isAdmin,
-                                names = family.overview?.memberNames.orEmpty(), photos = container.photos, onSync = container.sync::run,
-                                onChat = { nav.go(Push.ROUTE_NEED + it.id) },
-                            )
-                        }
+                        2 -> EmptyState(Icons.Outlined.Forum, t("discuss.title"), t("discuss.soon"))
                         else -> {
                             FamilyScreen(
                                 family, container.db, active, onEdit = edit,
@@ -240,24 +222,12 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                     CategoryExpensesScreen(container.db, family.feed, p, offline = stale, onBack = { nav.back() }, onEdit = edit)
                 }
             }
-            composable(Push.ROUTE_NEED + "{id}") { entry ->
-                val id = entry.arguments?.getString("id").orEmpty()
-                val need by remember(id) { container.db.watchNeeds().map { all -> all.firstOrNull { it.id == id } } }
-                    .collectAsStateWithLifecycle(null)
-                NeedChatScreen(
-                    need, container.supabase.auth.currentUserOrNull()?.id,
-                    load = { container.family.comments(id) },
-                    send = { cid, body -> container.family.sendComment(id, cid, body) },
-                    delete = container.family::deleteComment,
-                    onBack = { nav.back() },
-                )
-            }
             composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.back() } }
         }
     }
 }
 
-/** Shell tab indices: Asosiy, Tahlil, Kerakli, Oila. */
+/** Shell tab indices: Asosiy, Tahlil, Muhokama, Oila. */
 private const val TAB_FAMILY = 3
 
 /**
