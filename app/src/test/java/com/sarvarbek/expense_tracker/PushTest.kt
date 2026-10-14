@@ -31,25 +31,13 @@ class PushTest {
         I18n.strings = I18n.parse(File("src/main/assets/i18n/uz.json").readText())
     }
 
-    private val request = mapOf("type" to "category_request", "uid" to "u1", "name" to "Ali", "category" to "Taksi")
-
-    @Test fun requestPushTextAndRoute() {
-        val p = pushContent(request, "u1")!!
-        assertEquals(Push.CH_REQUESTS, p.channel)
-        assertEquals("Ali yangi turkum so'radi: Taksi", p.text)
-        assertEquals(Push.ROUTE_REQUESTS, p.route)
-    }
-
-    @Test fun resolvedPushText() {
-        val base = mapOf("type" to "category_resolved", "uid" to "u1", "category" to "Taksi")
-        assertEquals("\"Taksi\" turkumi tasdiqlandi", pushContent(base + ("status" to "approved"), "u1")!!.text)
-        assertEquals("\"Taksi\" turkumi rad etildi", pushContent(base + ("status" to "rejected"), "u1")!!.text)
-    }
-
     @Test fun dropsPushForAnotherAccountOrUnknownType() {
-        assertNull("signed out", pushContent(request, null))
-        assertNull("other account", pushContent(request, "u2"))
-        assertNull("newer server type", pushContent(request + ("type" to "something_new"), "u1"))
+        assertNull("signed out", pushContent(expense, null))
+        assertNull("other account", pushContent(expense, "u2"))
+        assertNull("newer server type", pushContent(expense + ("type" to "something_new"), "u1"))
+        // category requests are gone (2.3.0): an old queued push is dropped
+        assertNull(pushContent(mapOf("type" to "category_request", "uid" to "u1", "name" to "Ali", "category" to "Taksi"), "u1"))
+        assertNull(pushContent(mapOf("type" to "category_resolved", "uid" to "u1", "category" to "Taksi", "status" to "approved"), "u1"))
     }
 
     private val eid = "0b9a7c1e-3f4d-4e5a-9b8c-7d6e5f4a3b2c"
@@ -80,7 +68,7 @@ class PushTest {
     }
 
     @Test fun tapRouteIsWhitelisted() {
-        assertEquals(Push.ROUTE_REQUESTS, Push.route(Intent().putExtra(Push.EXTRA_ROUTE, Push.ROUTE_REQUESTS)))
+        assertNull("requests page is gone", Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "family-settings")))
         assertNull(Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "settings")))
         assertNull(Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "expense/../settings")))
         assertNull("Kerakli is gone", Push.route(Intent().putExtra(Push.EXTRA_ROUTE, "need/1c9a7c1e-3f4d-4e5a-9b8c-7d6e5f4a3b2c")))
@@ -110,7 +98,7 @@ class PushTest {
         nm.createNotificationChannel(NotificationChannel(Push.CH_EXPENSES, "x", NotificationManager.IMPORTANCE_NONE))
         assertTrue(canNotify(app))
         assertFalse(canNotify(app, Push.CH_EXPENSES))
-        assertTrue("unknown channel isn't blocked", canNotify(app, Push.CH_REQUESTS))
+        assertTrue("unknown channel isn't blocked", canNotify(app, "category_requests"))
     }
 
     @Test fun canNotifyFollowsRuntimePermission() { // robolectric sdk 34

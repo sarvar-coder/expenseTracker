@@ -153,21 +153,16 @@ class BackendTest {
         assertEquals(Triple("srv-food", "u1", true), Triple(e.categoryId, e.ownerId, e.dirty))
     }
 
-    @Test fun adoptLocalInFamilyGivesCategoriesToFamily() = runBlocking {
-        adoptLocal(database, "u1", "fam")
-        assertTrue(db.getAllCategories().all { it.familyId == "fam" && it.ownerId == null })
-    }
-
-    @Test fun adoptLocalAsMemberTurnsUnknownCategoriesIntoRequests() = runBlocking {
+    @Test fun adoptLocalInFamilyKeepsCategoriesPersonal() = runBlocking {
         val gym = db.insertCategory(Category(name = "Gym", colorHex = "AAAAAA"))
         val expenseId = addExpense(gym)
-        applyCategories(database, listOf(serverCategory("srv-boshqa", "Boshqa", owner = null, family = "fam")))
 
-        adoptLocal(database, "u1", "fam", canCreate = false)
+        adoptLocal(database, "u1", "fam")
 
-        val e = db.getExpenses().first { it.id == expenseId }
-        assertEquals(Triple("srv-boshqa", "Gym", true), Triple(e.categoryId, e.pendingCategory, e.dirty))
-        assertEquals("member creates no categories", listOf("srv-boshqa"), db.getAllCategories().map { it.id })
+        assertTrue(db.getAllCategories().all { it.ownerId == "u1" && it.familyId == null })
+        val e = db.getExpenses().single { it.id == expenseId }
+        assertEquals(Triple(gym, "u1", "fam"), Triple(e.categoryId, e.ownerId, e.familyId))
+        assertNull(e.pendingCategory)
     }
 
     @Test fun applyExpensesNewerServerWinsUnpushedNewerLocalKept() = runBlocking {
@@ -204,19 +199,15 @@ class BackendTest {
     }
 
     // --- family_test (logic) ---
-    @Test fun hideForeignCategoriesHidesOnlyOtherFamilies() = runBlocking {
+    @Test fun hideFamilyCategoriesHidesEveryFamilyRow() = runBlocking {
         db.insertCategory(Category(name = "Old", colorHex = "AAAAAA", familyId = "old"))
         db.insertCategory(Category(name = "Cur", colorHex = "AAAAAA", familyId = "cur"))
         db.insertCategory(Category(name = "Mine", colorHex = "AAAAAA", ownerId = "u1"))
 
-        db.hideForeignCategories("cur")
-        var names = db.getCategories().map { it.name }.toSet()
-        assertTrue(names.containsAll(setOf("Cur", "Mine")))
-        assertFalse("Old" in names)
+        db.hideFamilyCategories()
 
-        db.hideForeignCategories(null) // left every family
-        names = db.getCategories().map { it.name }.toSet()
-        assertFalse("Cur" in names)
+        val names = db.getCategories().map { it.name }.toSet()
+        assertFalse("Old" in names || "Cur" in names)
         assertTrue("Mine" in names)
         assertTrue("never pushed", db.allCategoryRows().filter { it.deletedAt != null }.none { it.dirty })
     }
@@ -231,7 +222,7 @@ class BackendTest {
     @Test fun familyFeedMergesMineAndOthersSkipsHiddenDedupesById() {
         fun row(id: String, date: String?, deletedAt: String? = null) = Json.parseToJsonElement(
             if (date == null) """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":null,"description":null,"amount":null,"date":null,"is_private":true,"frozen":false,"deleted_at":null}"""
-            else """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":"c1","description":"d","amount":5000,"date":"$date","source":"voice","raw_input":"d 5000","is_private":false,"frozen":false,"deleted_at":${deletedAt?.let { "\"$it\"" }}}""",
+            else """{"id":"$id","owner_id":"u2","owner_name":"Vali","category_id":"c1","description":"d","amount":5000,"date":"$date","source":"voice","raw_input":"d 5000","is_private":false,"frozen":false,"deleted_at":${deletedAt?.let { "\"$it\"" }},"category_name":"Ovqat","category_color":"E08A5B","category_icon":"category"}""",
         ).jsonObject
         val others = parseOthers(listOf(
             row("o1", "2026-10-01T10:00:00Z"),
@@ -242,6 +233,7 @@ class BackendTest {
         assertEquals(listOf("o1", "dup"), others.map { it.expense.id })
         assertTrue(others.all { !it.mine && it.ownerName == "Vali" && it.expense.familyId == "f1" })
         assertTrue(others.all { it.expense.source == ExpenseSource.voice && it.expense.rawInput == "d 5000" && !it.editable })
+        assertTrue("owner's category from the feed", others.all { it.categoryName == "Ovqat" && it.categoryColor == "E08A5B" && it.categoryIcon == "category" })
 
         val own = listOf(
             Expense(id = "m1", description = "Non", amount = 1, categoryId = "c1", date = Instant.parse("2026-10-05T00:00:00Z").toEpochMilli(), source = ExpenseSource.manual),

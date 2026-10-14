@@ -38,20 +38,4 @@ suspend fun matchOrCreateCategory(db: ExpenseDao, rawName: String): String {
     return db.insertCategory(Category(name = rawName.trim(), colorHex = uniqueColor(used)))
 }
 
-data class ResolvedCategory(val id: String, val pending: String? = null)
-
-/**
- * Like [matchOrCreateCategory], but a family member (not admin) can't create:
- * an unknown name lands in Boshqa with `pending` set, and the server files a
- * request to the admin when the expense syncs.
- */
-suspend fun resolveCategory(db: ExpenseDao, rawName: String, canCreate: Boolean): ResolvedCategory {
-    // ponytail: no Boshqa yet (family not synced) — create locally; the next
-    // sync's adoptLocal turns it into Boshqa + request.
-    val boshqa = (if (canCreate) null else find(db.getAllCategories(), "Boshqa"))
-        ?: return ResolvedCategory(matchOrCreateCategory(db, rawName))
-    val hit = find(db.getCategories(), rawName)
-    return if (hit != null) ResolvedCategory(hit) else ResolvedCategory(boshqa, rawName.trim())
-}
-
 private fun find(cats: List<Category>, name: String) = cats.firstOrNull { norm(it.name) == norm(name) }?.id

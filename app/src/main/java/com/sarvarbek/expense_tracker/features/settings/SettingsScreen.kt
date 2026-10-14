@@ -268,10 +268,9 @@ private fun OptionPicker(title: String, options: Map<String, String>, current: S
 /**
  * Manage categories: add (name only, color auto-assigned), rename,
  * archive/unarchive. Archived stay listed (muted) so they can be restored.
- * Family categories are the admin's; a member only views them.
  */
 @Composable
-fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
+fun CategoriesScreen(db: ExpenseDao, onBack: () -> Unit) {
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
     val scope = rememberCoroutineScope()
     var dialog by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
@@ -296,7 +295,7 @@ fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
     }
 
     AppBarScaffold(t("settings.categories"), onBack, actions = {
-        if (canEdit) IconButton(add) { Icon(Icons.Filled.Add, t("settings.add_category")) }
+        IconButton(add) { Icon(Icons.Filled.Add, t("settings.add_category")) }
     }) { pad ->
         // ponytail: local DB, resolves in a frame — blank beats a spinner flash.
         val all = cats ?: return@AppBarScaffold
@@ -309,7 +308,7 @@ fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
             for ((label, group) in listOf(t("settings.active") to active, t("settings.archived") to archived)) {
                 if (group.isNotEmpty()) item(label) {
                     SectionLabel(label, top = 12.dp)
-                    DividedCard(group) { cat -> CategoryRow(cat, canEdit, { rename(cat) }) { scope.launch { db.updateCategory(cat.copy(isArchived = !cat.isArchived)) } } }
+                    DividedCard(group) { cat -> CategoryRow(cat, { rename(cat) }) { scope.launch { db.updateCategory(cat.copy(isArchived = !cat.isArchived)) } } }
                     Spacer(Modifier.size(AppSpace.gap))
                 }
             }
@@ -319,7 +318,7 @@ fun CategoriesScreen(db: ExpenseDao, canEdit: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun CategoryRow(c: Category, canEdit: Boolean, onRename: () -> Unit, onToggleArchive: () -> Unit) = Row(
+private fun CategoryRow(c: Category, onRename: () -> Unit, onToggleArchive: () -> Unit) = Row(
     Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(start = 16.dp, end = 4.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
@@ -329,14 +328,12 @@ private fun CategoryRow(c: Category, canEdit: Boolean, onRename: () -> Unit, onT
         c.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.titleSmall.let { if (c.isArchived) it.copy(color = AppTheme.colors.muted) else it },
     )
-    if (canEdit) {
-        IconButton(onRename) { Icon(Icons.Outlined.Edit, t("settings.rename"), Modifier.size(20.dp)) }
-        IconButton(onToggleArchive) {
-            Icon(
-                if (c.isArchived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
-                if (c.isArchived) t("settings.unarchive") else t("settings.archive"), Modifier.size(20.dp),
-            )
-        }
+    IconButton(onRename) { Icon(Icons.Outlined.Edit, t("settings.rename"), Modifier.size(20.dp)) }
+    IconButton(onToggleArchive) {
+        Icon(
+            if (c.isArchived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+            if (c.isArchived) t("settings.unarchive") else t("settings.archive"), Modifier.size(20.dp),
+        )
     }
 }
 

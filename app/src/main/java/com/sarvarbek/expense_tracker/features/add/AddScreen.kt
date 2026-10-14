@@ -94,9 +94,8 @@ import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.ParsedExpense
-import com.sarvarbek.expense_tracker.services.ResolvedCategory
 import com.sarvarbek.expense_tracker.services.SpeechService
-import com.sarvarbek.expense_tracker.services.resolveCategory
+import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDeleteDialog
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.colorFromHex
@@ -140,7 +139,6 @@ fun AddScreen(
     settings: SettingsStore,
     parse: suspend (raw: String, categories: List<String>) -> ParsedExpense?,
     speech: SpeechService,
-    canCreate: () -> Boolean,
     onClose: () -> Unit,
     editing: Expense? = null,
     /** Other family members (id to label) for O'tkazma; empty outside a family. */
@@ -184,10 +182,10 @@ fun AddScreen(
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, settings, canCreate, editing, prefill ?: Prefill("", "", null), members, onClose)
+                    ManualForm(db, settings, editing, prefill ?: Prefill("", "", null), members, onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
-                    TypeForm(db, settings, parse, speech, canCreate, voice = mode == AddMode.speak, onClose) { raw ->
+                    TypeForm(db, settings, parse, speech, voice = mode == AddMode.speak, onClose) { raw ->
                         prefill = Prefill("", raw, null)
                         mode = AddMode.manual
                     }
@@ -205,7 +203,6 @@ private fun Label(text: String) =
 private fun ManualForm(
     db: ExpenseDao,
     settings: SettingsStore,
-    canCreate: () -> Boolean,
     editing: Expense?,
     init: Prefill,
     members: List<Pair<String, String>>,
@@ -218,8 +215,6 @@ private fun ManualForm(
     var amount by rememberSaveable { mutableStateOf(init.amount) }
     var desc by rememberSaveable { mutableStateOf(init.desc) }
     var categoryId by rememberSaveable { mutableStateOf(init.categoryId) }
-    // Requested (not yet approved) category name; expense sits in Boshqa meanwhile.
-    var pending by rememberSaveable { mutableStateOf(editing?.pendingCategory) }
     var date by rememberSaveable { mutableStateOf(editing?.date?.toLocalDateTime() ?: LocalDateTime.now()) }
     var transfer by rememberSaveable { mutableStateOf(editing?.transferTo != null) }
     var transferTo by rememberSaveable { mutableStateOf(editing?.transferTo) }
@@ -249,10 +244,9 @@ private fun ManualForm(
         saving = true
         scope.launch {
             // Transfers sit in Boshqa (no category of their own); every total skips them.
-            val cat = if (to != null) resolveCategory(db, "Boshqa", canCreate()).id else categoryId!!
-            val pend = pending.takeIf { to == null }
-            val e = editing?.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = pend, transferTo = to)
-                ?: Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, pendingCategory = pend, transferTo = to)
+            val cat = if (to != null) matchOrCreateCategory(db, "Boshqa") else categoryId!!
+            val e = editing?.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = null, transferTo = to)
+                ?: Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, transferTo = to)
             if (saveChecked(e, editing) != null) onClose() else saving = false
         }
     }
@@ -318,10 +312,7 @@ private fun ManualForm(
             ) {
                 Dot(selected?.let { colorFromHex(it.colorHex) } ?: c.border)
                 Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(selected?.name ?: t("add.err_category"), style = ty.bodyLarge.copy(color = if (selected == null) c.muted else c.text))
-                    if (pending != null) Text(t("add.requested", pending), color = AppTheme.colors.muted, style = ty.bodySmall)
-                }
+                Text(selected?.name ?: t("add.err_category"), style = ty.bodyLarge.copy(color = if (selected == null) c.muted else c.text), modifier = Modifier.weight(1f))
                 Icon(Icons.Filled.ExpandMore, null, tint = c.muted)
             }
         }
@@ -357,9 +348,8 @@ private fun ManualForm(
     }
 
     if (sheet) {
-        CategorySheet(db, canCreate(), selectedId = categoryId.takeIf { pending == null }, onDismiss = { sheet = false }) { r ->
-            categoryId = r.id
-            pending = r.pending
+        CategorySheet(db, selectedId = categoryId, onDismiss = { sheet = false }) { id ->
+            categoryId = id
             sheet = false
         }
     }
@@ -379,12 +369,9 @@ private fun ManualForm(
 @Composable
 private fun Dot(color: Color) = Box(Modifier.size(16.dp).background(color, CircleShape))
 
-/**
- * Pick a category, or add one (admin/solo) / request one (family member —
- * expense waits in Boshqa until the admin approves).
- */
+/** Pick a category, or add a new one. */
 @Composable
-private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String?, onDismiss: () -> Unit, onPick: (ResolvedCategory) -> Unit) {
+private fun CategorySheet(db: ExpenseDao, selectedId: String?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val scope = rememberCoroutineScope()
@@ -394,7 +381,7 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = AppSpace.section)) {
             for (cat in cats) {
                 Row(
-                    Modifier.fillMaxWidth().clickable { hide { onPick(ResolvedCategory(cat.id)) } }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
+                    Modifier.fillMaxWidth().clickable { hide { onPick(cat.id) } }.defaultMinSize(minHeight = 56.dp).padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Dot(colorFromHex(cat.colorHex))
@@ -410,28 +397,25 @@ private fun CategorySheet(db: ExpenseDao, canCreate: Boolean, selectedId: String
             ) {
                 Icon(Icons.Filled.Add, null)
                 Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(if (canCreate) t("add.new_category") else t("add.request_category"), style = ty.bodyLarge)
-                    if (!canCreate) Text(t("add.request_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
-                }
+                Text(t("add.new_category"), style = ty.bodyLarge)
             }
         }
     }
     if (ask) {
-        NameDialog(canCreate, onDismiss = { ask = false }) { name ->
+        NameDialog(onDismiss = { ask = false }) { name ->
             ask = false
-            if (name.isNotEmpty()) scope.launch { onPick(resolveCategory(db, name, canCreate)) }
+            if (name.isNotEmpty()) scope.launch { onPick(matchOrCreateCategory(db, name)) }
         }
     }
 }
 
 @Composable
-private fun NameDialog(canCreate: Boolean, onDismiss: () -> Unit, onDone: (String) -> Unit) {
+private fun NameDialog(onDismiss: () -> Unit, onDone: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (canCreate) t("add.new_category") else t("add.request_category")) },
+        title = { Text(t("add.new_category")) },
         text = {
             OutlinedTextField(
                 name, { name = it }, Modifier.fillMaxWidth().focusRequester(focus),
@@ -441,7 +425,7 @@ private fun NameDialog(canCreate: Boolean, onDismiss: () -> Unit, onDone: (Strin
             )
         },
         dismissButton = { LinkButton(onDismiss) { Text(t("common.cancel")) } },
-        confirmButton = { LinkButton({ onDone(name.trim()) }) { Text(if (canCreate) t("add.add") else t("add.request")) } },
+        confirmButton = { LinkButton({ onDone(name.trim()) }) { Text(t("add.add")) } },
     )
     DisposableEffect(Unit) { runCatching { focus.requestFocus() }; onDispose {} }
 }
@@ -479,7 +463,6 @@ private fun TypeForm(
     settings: SettingsStore,
     parse: suspend (String, List<String>) -> ParsedExpense?,
     speech: SpeechService,
-    canCreate: () -> Boolean,
     voice: Boolean,
     onClose: () -> Unit,
     onFail: (String) -> Unit,
@@ -526,12 +509,12 @@ private fun TypeForm(
                 onFail(raw)
                 return@launch
             }
-            val cat = resolveCategory(db, p.category, canCreate())
+            val cat = matchOrCreateCategory(db, p.category)
             val undo = saveChecked(
                 Expense(
-                    description = p.item, amount = p.amount, categoryId = cat.id, date = p.date.startMillis(),
+                    description = p.item, amount = p.amount, categoryId = cat, date = p.date.startMillis(),
                     source = if (voice) ExpenseSource.voice else ExpenseSource.typed, rawInput = raw,
-                    pendingCategory = cat.pending, isPrivate = false,
+                    isPrivate = false,
                 ),
                 null,
             ) ?: return@launch run { busy = false }

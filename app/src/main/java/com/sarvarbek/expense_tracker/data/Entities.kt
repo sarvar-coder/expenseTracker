@@ -44,7 +44,7 @@ data class Expense(
     val source: ExpenseSource,
     @ColumnInfo(name = "raw_input") val rawInput: String? = null,
     @ColumnInfo(name = "is_private") val isPrivate: Boolean = false,
-    @ColumnInfo(name = "pending_category") val pendingCategory: String? = null, // awaiting admin approval
+    @ColumnInfo(name = "pending_category") val pendingCategory: String? = null, // legacy (category requests, gone in 2.3.0): ignored
     val frozen: Boolean = false, // ex-member history
     /** O'tkazma: money given to this family member (user id). Kept out of every spending total. */
     @ColumnInfo(name = "transfer_to") val transferTo: String? = null,

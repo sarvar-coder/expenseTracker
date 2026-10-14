@@ -75,7 +75,7 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     }
 
     /** App switch, permission and every channel: what the server sees as `can_notify`. */
-    private fun reportable() = listOf(CH_REQUESTS, CH_EXPENSES).all { canNotify(context, it) }
+    private fun reportable() = canNotify(context, CH_EXPENSES)
 
     /** What the last successful [register] reported; null until one lands. */
     @Volatile private var sentCanNotify: Boolean? = null
@@ -125,11 +125,9 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     private fun createChannels() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannels(listOf(
-            NotificationChannel(CH_REQUESTS, t("push.channel_requests"), NotificationManager.IMPORTANCE_DEFAULT),
-            NotificationChannel(CH_EXPENSES, t("push.channel_expenses"), NotificationManager.IMPORTANCE_DEFAULT),
-        ))
+        nm.createNotificationChannel(NotificationChannel(CH_EXPENSES, t("push.channel_expenses"), NotificationManager.IMPORTANCE_DEFAULT))
         nm.deleteNotificationChannel("need_comments") // Kerakli (removed in 2.3.0)
+        nm.deleteNotificationChannel("category_requests") // category requests (removed in 2.3.0)
     }
 
     private suspend fun attempt(what: String, f: suspend () -> Unit): Boolean = withContext(Dispatchers.IO) {
@@ -147,17 +145,15 @@ class Push(private val context: Context, private val client: SupabaseClient) {
     companion object {
         private const val TAG = "push"
         private const val RETRY_MS = 30_000L
-        const val CH_REQUESTS = "category_requests"
         const val CH_EXPENSES = "new_expenses"
         const val EXTRA_ROUTE = "route"
-        const val ROUTE_REQUESTS = "family-settings"
         /** `expense/<id>`: that expense's read-only sheet. */
         const val ROUTE_EXPENSE = "expense/"
         private val expenseRoute = Regex("expense/[0-9a-fA-F-]{36}")
 
         /** Tap targets a notification may open; anything else in the intent is ignored. */
         fun route(intent: Intent?) = intent?.getStringExtra(EXTRA_ROUTE)
-            ?.takeIf { it == ROUTE_REQUESTS || expenseRoute.matches(it) }
+            ?.takeIf { expenseRoute.matches(it) }
     }
 }
 
@@ -169,17 +165,7 @@ data class PushContent(val channel: String, val title: String, val text: String,
 
 fun pushContent(data: Map<String, String>, signedInUid: String?): PushContent? {
     if (signedInUid == null || data["uid"] != signedInUid) return null.also { Log.i("push", "drop ${data["type"]}: for another account") }
-    val category = data["category"].orEmpty()
     return when (data["type"]) {
-        "category_request" -> PushContent(
-            Push.CH_REQUESTS, t("push.request_title"), t("push.request", data["name"].orEmpty(), category),
-            Push.ROUTE_REQUESTS, "request:$category",
-        )
-        "category_resolved" -> PushContent(
-            Push.CH_REQUESTS, t("push.request_title"),
-            t(if (data["status"] == "approved") "push.approved" else "push.rejected", category),
-            null, "resolved:$category",
-        )
         "expense" -> {
             val id = data["id"] ?: return null.also { Log.i("push", "drop expense: no id") }
             val name = data["name"].orEmpty()
