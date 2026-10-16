@@ -110,7 +110,8 @@ abstract class ScreenTest {
 class SettingsScreenTest : ScreenTest() {
     @Test fun settingsShowsUzbekRows() {
         val store = SettingsStore(prefs).apply { setDisplayName("Ali") }
-        show { SettingsScreen(store, db, "me@oila.uz", {}, {}) }
+        var categories = false
+        show { SettingsScreen(store, db, "me@oila.uz", { categories = true }, {}, {}) }
 
         rule.onNodeWithText("Sozlamalar").assertExists()
         rule.onNodeWithText("Ovoz tili").assertExists()
@@ -126,7 +127,6 @@ class SettingsScreenTest : ScreenTest() {
         waitFor("Ruscha")
         assertEquals("ru_RU", store.settings.value.sttLocale)
 
-        assertTrue("Turkumlar moved to Oila", rule.onAllNodesWithText("Turkumlar").fetchSemanticsNodes().isEmpty())
         assertTrue("budget replaced by Hissa", rule.onAllNodesWithText("Oylik byudjet").fetchSemanticsNodes().isEmpty())
 
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("me@oila.uz"))
@@ -134,11 +134,13 @@ class SettingsScreenTest : ScreenTest() {
         rule.onNodeWithText("Ali").assertExists()
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("Ma'lumotni eksport (CSV)"))
         rule.onNodeWithText("Ma'lumotni eksport (CSV)").assertExists()
+        rule.onNodeWithText("Turkumlar").performClick() // Categories live in Settings (no longer on Oila)
+        assertTrue(categories)
     }
 
     @Test fun languageRowSwitchesUiToCyrillic() {
         val store = SettingsStore(prefs)
-        show { SettingsScreen(store, db, "me@oila.uz", {}, {}) }
+        show { SettingsScreen(store, db, "me@oila.uz", {}, {}, {}) }
         try {
             rule.onNode(hasScrollAction()).performScrollToNode(hasText("O'zbekcha (lotin)"))
             rule.onNodeWithText("O'zbekcha (lotin)").performClick()
@@ -170,37 +172,26 @@ class SettingsFamilyTest : ScreenTest() {
         rule.waitUntil(5000) { rule.onAllNodesWithText("Arxivlangan").fetchSemanticsNodes().isEmpty() }
     }
 
-    @Test fun familyBudgetIsSumOfContributions() {
-        val f = FamilyOverview(
-            "f1", "Uy", "u1", false,
-            members = listOf(FamilyMember("u1", "Ali", true, 300_000, 1_000_000), FamilyMember("u2", "Vali", false, 200_000, -50_000)),
-            )
-        assertEquals(950_000L, f.budget)
-        assertEquals(500_000L, f.spent)
-    }
-
     @Test fun notInFamilyShowsInvitesAndCreate() {
         val state = FamilyState(null, load = { null }, loadInvites = { listOf(FamilyInvite("i1", "Uy", "Ali")) })
-        var categories = false
-        show { FamilyScreen(state, db, onCategories = { categories = true }) }
+        show { FamilyScreen(state, db) }
 
         waitFor("“Uy” oilasiga taklif")
         rule.onNodeWithText("Siz hali oilada emassiz").assertExists()
         rule.onNodeWithText("Qabul qilish").assertExists()
         rule.onNodeWithText("Oila yaratish").assertExists()
         assertTapTargets()
-        rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick)
-        assertTrue(categories)
+        rule.onNodeWithText("Turkumlar").assertDoesNotExist() // in Settings now
         rule.onNodeWithText("Hissa").assertDoesNotExist() // moved to Home
     }
 
     @Test fun offlineFamilyShowsError() {
         show { FamilyScreen(FamilyState(null, load = { error("offline") }, loadInvites = { emptyList() }), db) }
         waitFor("Oila ma'lumotini yuklab bo'lmadi")
-        rule.onNodeWithText("Turkumlar").assertExists() // local page, reachable offline
+        rule.onNodeWithText("Turkumlar").assertDoesNotExist() // in Settings now
     }
 
-    @Test fun inFamilyShowsBudgetMembersSharedList() {
+    @Test fun inFamilyShowsSpentMembersSharedList() {
         val cat = runBlocking { db.getCategories().first { it.name == "Groceries" }.id }
         runBlocking {
             fun e(desc: String, family: String?, legacyPrivate: Boolean = false) =
@@ -211,35 +202,36 @@ class SettingsFamilyTest : ScreenTest() {
         }
         val overview = FamilyOverview(
             "f1", "Uy", "u1", isAdmin = true,
-            members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000, title = "Ota"), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
+            members = listOf(FamilyMember("u1", "Ali", true, 10_000, title = "Ota"), FamilyMember("u2", "Vali", false, 20_000)),
         )
-        val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
+        val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali", categoryName = "groceries", categoryColor = "6FA86A"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
         var edited: Expense? = null
-        var categories = false
         val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = feed)
         show {
             // Tab and its Ro'yxat page share the state, as in Routes.
             var list by remember { mutableStateOf(false) }
             if (list) FamilyListScreen(state, db, onBack = { list = false }, onEdit = { edited = it })
-            else FamilyScreen(state, db, onEdit = { edited = it }, onList = { list = true }, onCategories = { categories = true })
+            else FamilyScreen(state, db, onList = { list = true })
         }
 
         waitFor("3 ta xarajat · 40 000 UZS") // the Ro'yxat banner instead of inline rows
         rule.onNodeWithText("Uy").assertExists() // title = family name
-        rule.onNodeWithText("Jami hissa: 1 500 000").assertExists()
-        rule.onNodeWithText("Hissa 500 000 · sarf 20 000").assertExists()
-        rule.onNodeWithText("480 000 UZS").assertExists() // Vali's qolgan
-        rule.onNodeWithText("Hissa qo'shish").assertDoesNotExist() // only the Hissa banner's page adds
+        rule.onNodeWithText("Oila bu oy sarfladi").assertExists()
+        rule.onNodeWithText("30 000 UZS").assertExists() // family spent = members' shared_total
+        rule.onNodeWithText("20 000 UZS").assertExists() // Vali's month
+        // No family budget, Hissa or Qolgan on Oila.
+        for (gone in listOf("hissa", "byudjet", "qolgan", "qoldi", "oshdi")) {
+            assertTrue(gone, rule.onAllNodesWithText(gone, substring = true, ignoreCase = true).fetchSemanticsNodes().isEmpty())
+        }
         rule.onNodeWithText("Ali (siz) · Ota · admin").assertExists()
         assertTrue("rows live on the list page", rule.onAllNodesWithText("Taksi").fetchSemanticsNodes().isEmpty())
         // management lives behind the gear now
         assertTrue(rule.onAllNodesWithText("Oilani o'chirish").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithContentDescription("Oila sozlamalari").assertExists()
         rule.onNodeWithContentDescription("Filtr").assertDoesNotExist() // header: gear only
-        rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick) // banner to the categories page
-        assertTrue(categories)
         rule.onNodeWithContentDescription("Jami 40 000 UZS").assertExists() // donut over the shared list
+        rule.onNodeWithText("Groceries").assertExists() // mine + Vali's "groceries": one legend row
 
         assertTapTargets()
 
@@ -273,9 +265,35 @@ class SettingsFamilyTest : ScreenTest() {
         waitFor("3 ta xarajat · 40 000 UZS")
     }
 
+    @Test fun oilaBreakdownMergesCategoriesByName() {
+        val now = System.currentTimeMillis()
+        val ovqat = runBlocking { db.insertCategory(Category(name = "Ovqat", colorHex = "E08A5B")) }
+        runBlocking { db.insertExpense(Expense(description = "Non", amount = 10_000, categoryId = ovqat, date = now, source = ExpenseSource.manual, familyId = "f1")) }
+        fun vali(id: String, desc: String, amount: Long, cat: String) = FamilyExpense(
+            Expense(id = id, description = desc, amount = amount, categoryId = "vali-$cat", date = now, source = ExpenseSource.manual, ownerId = "u2"),
+            "Vali", categoryName = cat, categoryColor = "6FA86A",
+        )
+        // Vali's "ovqat " is my "Ovqat"; "Kiyim" only Vali has; an old-server row has no category.
+        val others = listOf(vali("o1", "Osh", 5_000, "ovqat "), vali("o2", "Ko'ylak", 7_000, "Kiyim"), FamilyExpense(
+            Expense(id = "o3", description = "Eski", amount = 1_000, categoryId = "x", date = now, source = ExpenseSource.manual, ownerId = "u2"), "Vali",
+        ))
+        val overview = FamilyOverview("f1", "Uy", "u1", isAdmin = true, members = listOf(FamilyMember("u1", "Ali", true, 10_000), FamilyMember("u2", "Vali", false, 13_000)))
+        val state = FamilyState(null, load = { overview }, loadInvites = { emptyList() }, feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") })
+        show { FamilyScreen(state, db) }
+
+        waitFor("Kiyim")
+        rule.onNodeWithContentDescription("Jami 23 000 UZS").assertExists() // donut: every family row
+        rule.onNode(hasText("Ovqat") and hasText("15 000")).assertExists() // one slice for both members
+        rule.onNode(hasText("Kiyim") and hasText("7 000")).assertExists() // one member's category: own slice
+        rule.onNode(hasText("Turkumsiz") and hasText("1 000")).assertExists()
+        assertTrue(rule.onAllNodesWithText("ovqat", substring = true, ignoreCase = true).fetchSemanticsNodes().size == 1)
+        assertTrue("no budget on Oila", rule.onAllNodesWithText("byudjet", substring = true, ignoreCase = true).fetchSemanticsNodes().isEmpty())
+        assertTapTargets()
+    }
+
     private fun overview(admin: Boolean) = FamilyOverview(
         "f1", "Uy", "u1", isAdmin = admin,
-        members = listOf(FamilyMember("u1", "Ali", admin, 0, 0), FamilyMember("u2", "Vali", !admin, 0, 0)),
+        members = listOf(FamilyMember("u1", "Ali", admin, 0), FamilyMember("u2", "Vali", !admin, 0)),
     )
 
     @Test fun adminFamilySettingsManageMembersAndDelete() {

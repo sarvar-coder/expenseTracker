@@ -10,9 +10,8 @@ Three ways to add an expense:
 - **Speak** — say it; on-device STT → transcript → same AI parse.
 - **Manual** — fill amount / description / category / date by hand.
 
-AI auto-creates categories when none match (in a family, non-admins get
-**Boshqa** + a category request instead). Plus: dashboard, insights (charts),
-search, category filters, and the **Oila** (family) tab.
+AI auto-creates a category (the user's own) when none match. Plus: dashboard,
+insights (charts), search, category filters, and the **Oila** (family) tab.
 
 ## Locked decisions
 
@@ -26,19 +25,21 @@ search, category filters, and the **Oila** (family) tab.
   every 30s after a failure. Multi-device per user allowed.
 - **Family**: one family per user, one admin. Admin invites by email (in-app
   Accept/Decline, no email sent), removes members, sets members' titles (Ota,
-  Ona… — members can't set even their own), approves/rejects category
-  requests, renames/archives categories, transfers admin, deletes the family.
+  Ona… — members can't set even their own), transfers admin, deletes the family.
   Admin can't edit others' expenses; must transfer admin
   before leaving; last member leaving deletes the family. Ex-member's shared
-  expenses stay in family history as read-only (`frozen`).
-- **Categories** are shared per family; only the admin creates them directly.
-  On join, same-name categories merge; unmatched ones go to Boshqa + requests.
+  expenses stay in family history as read-only (`frozen`). Home/Tahlil show
+  only own rows; the Oila tab shows family spending only: month total, members'
+  spending, a category donut merged by name (trim+lowercase), and Ro'yxat.
+- **Categories** are per user (own rows, any member creates them; Settings →
+  Turkumlar). No category requests, no merge on join; others' category
+  name/color reach the Oila feed via `family_expenses_since`.
 - **No private expenses** (2.1.0): every family member's expense is shared and
   counts in family spending. `is_private` stays in Room/sync (always false; a
   server trigger forces it) and `profiles.default_private` stays for old APKs.
-- **Budget**: personal budget per member. Family contribution = `budget`
-  (no budget → 0). Family budget = sum of contributions, computed server-side
-  (`family_summary` RPC).
+- **Budget**: personal only (Hissa on Home: contributions + transfers). No
+  family budget. Family spending = members' `shared_total` from `family_summary`;
+  transfers never count in it.
 - **AI parsing**: Google Gemini free tier, model `gemini-3.6-flash`, called from
   the Supabase Edge Function `parse-expense` (key is a function secret; signed-in
   users only). Free-tier prompts may be used by Google for training (note in Settings).
@@ -82,7 +83,7 @@ Dark mode follows the system. Radii via `AppRadii`.
 Category colors are stored per category row (hex): Food `#E08A5B`, Groceries
 `#6FA86A`, Shopping `#C07FA6`, Transport `#5B8DB8`, Bills `#D9A24E`.
 Currency is **UZS only** (whole units, no decimals). UI language is Uzbek.
-Four tabs (Asosiy, Tahlil, Kerakli, Oila) + FAB; Settings opens from the Home gear.
+Four tabs (Asosiy, Tahlil, Muhokama — blank for now, Oila) + FAB; Settings opens from the Home gear.
 
 ## Layout
 
@@ -96,8 +97,8 @@ app/src/main/java/com/sarvarbek/expense_tracker/
   ui/common/              // Format.kt (money/dates), Widgets.kt (shared widgets)
   data/                   // Room entities, AppDatabase + DAO, SettingsStore
   services/               // AiParser, CategoryMatcher, SyncService, FamilyService,
-                          // SpeechService, CsvExport, Push (FCM), NeedPhotos (storage)
-  features/home|add|activity|insights|settings|auth|family|needs/
+                          // SpeechService, CsvExport, Push (FCM)
+  features/home|add|activity|insights|settings|auth|family/
 app/src/test/             // Robolectric + Compose tests
 supabase/
   migrations/             // schema, RLS, RPCs
@@ -111,15 +112,16 @@ docs/                     // privacy.html, font licence
 
 Synced tables share: id (UUID, client-generated), ownerId, familyId, updatedAt,
 deletedAt (soft delete), dirty (local only).
-- **Category**: name (unique per scope, case-insensitive), iconKey, colorHex,
+- **Category** (per user): name (unique per owner, case-insensitive), iconKey, colorHex,
   isArchived. Seed: Food & dining, Groceries, Shopping, Transport, Bills. AI adds more.
 - **Expense**: description, amount (int, UZS), categoryId (FK), date,
   source (`typed`/`voice`/`manual`), rawInput?, isPrivate (always false, legacy), pendingCategory?
-  (awaiting admin approval), frozen (ex-member history), createdAt.
-- **Settings** (SharedPreferences): monthlyBudget + displayName (synced to
-  `profiles`), uiLanguage, sttLocale, lastAddMode.
-- **Server only**: families, family_members(role), invites(email), category_requests,
-  device_tokens, private.push_outbox.
+  (legacy, unused), frozen (ex-member history), createdAt.
+- **Contribution** (Hissa, own rows): amount, note, date. Transfers are expenses with `transferTo`.
+- **Settings** (SharedPreferences): displayName (synced to `profiles`),
+  uiLanguage, sttLocale, lastAddMode.
+- **Server only**: families, family_members(role), invites(email),
+  device_tokens, private.push_outbox. (needs, category_requests: dropped in 2.3.0.)
 
 ## Conventions
 

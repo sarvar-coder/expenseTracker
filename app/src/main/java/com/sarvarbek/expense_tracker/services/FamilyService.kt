@@ -24,7 +24,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.LocalDate
@@ -35,25 +34,14 @@ import com.sarvarbek.expense_tracker.ui.common.startMillis
 /** A pending invite addressed to the signed-in user. */
 data class FamilyInvite(val id: String, val familyName: String, val invitedBy: String)
 
-/**
- * One current member's month, computed server-side (family_summary).
- * [contribution] = own contributions + transfers received; [shared] = spending.
- */
+/** One current member's month, computed server-side (family_summary): [shared] = spending (transfers excluded). */
 data class FamilyMember(
     val userId: String,
     val name: String,
     val isAdmin: Boolean,
     val shared: Long,
-    val contribution: Long,
     /** Role in the family: Ota, Ona, Farzand… or free text; null = not set. */
     val title: String? = null,
-    /** Own Hissa only: the family budget sums these, so a transfer isn't counted twice. */
-    val ownContribution: Long = contribution,
-    val received: Long = 0,
-    /** Transfers to other members. */
-    val given: Long = 0,
-    /** Qolgan: contribution − shared − given (negative = overspent). */
-    val available: Long = contribution - shared - given,
 ) {
     /** "Ali · Ota". */
     val label get() = listOfNotNull(name, title).joinToString(" · ")
@@ -89,8 +77,7 @@ data class FamilyOverview(
     /** Admin only: sent invites. */
     val invites: List<SentInvite> = emptyList(),
 ) {
-    /** Family budget = sum of members' own contributions (transfers only move money inside); spent = shared spending. */
-    val budget get() = members.sumOf { it.ownContribution }
+    /** Family spending this month (transfers excluded). */
     val spent get() = members.sumOf { it.shared }
 }
 
@@ -263,18 +250,9 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 
 private fun JsonObject.num(k: String) = getValue(k).jsonPrimitive.long
 
-/** A family_summary row. Servers before 20261013120000 lack the Hissa columns: derived from the old ones. */
-internal fun parseMember(it: JsonObject): FamilyMember {
-    val shared = it.num("shared_total")
-    val contribution = it.num("contribution")
-    fun opt(k: String) = (it[k] as? JsonPrimitive)?.longOrNull
-    val given = opt("given") ?: 0
-    return FamilyMember(
-        it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin", shared, contribution, it.str("title"),
-        ownContribution = opt("own_contribution") ?: contribution, received = opt("received") ?: 0, given = given,
-        available = opt("available") ?: (contribution - shared - given),
-    )
-}
+/** A family_summary row. Its Hissa columns are personal (Home) and ignored here. */
+internal fun parseMember(it: JsonObject) =
+    FamilyMember(it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin", it.num("shared_total"), it.str("title"))
 
 /**
  * `family_ledger` rows that are [me]'s (sent or received; the RPC returns the whole
