@@ -326,7 +326,7 @@ internal fun familyCategories(rows: List<FamilyExpense>, own: List<Category>): M
         val name = (local?.name ?: fe.categoryName)?.trim().orEmpty()
         val key = categoryKey(name)
         // ponytail: a bad hex from the feed would crash the donut; fall back to the no-category grey.
-        val color = (local?.colorHex ?: fe.categoryColor)?.takeIf { it.length == 6 && it.toLongOrNull(16) != null }
+        val color = listOfNotNull(local?.colorHex, fe.categoryColor).firstOrNull { HEX6.matches(it) }
         fe.expense.id to byKey.getOrPut(key) {
             if (key.isEmpty()) Category(id = "", name = t("widgets.no_category"), colorHex = NO_CATEGORY_HEX)
             else Category(id = key, name = name, colorHex = color ?: NO_CATEGORY_HEX, iconKey = local?.iconKey ?: fe.categoryIcon ?: "category")
@@ -335,6 +335,7 @@ internal fun familyCategories(rows: List<FamilyExpense>, own: List<Category>): M
 }
 
 private const val NO_CATEGORY_HEX = "9AA0A6"
+private val HEX6 = Regex("[0-9A-Fa-f]{6}")
 
 /** [insightsFor] over [rows] with their [familyCategories] ([byExpense]): one slice per merged name. */
 internal fun familyInsights(rows: List<FamilyExpense>, byExpense: Map<String, Category>, start: LocalDate, end: LocalDate) =
