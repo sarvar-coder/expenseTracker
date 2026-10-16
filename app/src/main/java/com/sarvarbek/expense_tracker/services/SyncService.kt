@@ -141,33 +141,26 @@ class SyncService(
         }
         prefs.edit { putString(K_UID, uid) }
 
-        val member = client.from("family_members").select(Columns.list("family_id", "role")) {
+        val member = client.from("family_members").select(Columns.list("family_id")) {
             filter { eq("user_id", uid) }
         }.decodeSingleOrNull<JsonObject>()
         val familyId = member?.str("family_id")
 
-        // Joined, left, or was removed (maybe on another device): re-pull from
-        // scratch, the new family's categories are older than our cursor.
+        // Joined, left, or was removed (maybe on another device): re-pull from scratch.
         val prevFamily = prefs.getString(K_FAMILY, null)
         prefs.edit {
             if (prevFamily != null && prevFamily != (familyId ?: "")) {
                 remove("sync.categories"); remove("sync.expenses"); remove("sync.contributions")
             }
             putString(K_FAMILY, familyId ?: "")
-            putBoolean(K_ADMIN, member?.str("role") == "admin")
         }
         syncProfile(uid)
 
         // Categories first: merge local ones into same-name server ones before
         // pushing (a fresh device seeds defaults that already exist remotely).
-        pull("categories") { rows ->
-            database.withTransaction {
-                applyCategories(database, rows)
-                db.hideForeignCategories(familyId)
-            }
-        }
-        db.hideForeignCategories(familyId) // no rows pulled after leaving
-        adoptLocal(database, uid, familyId, canCreate = canCreateCategories(prefs))
+        pull("categories") { applyCategories(database, it) }
+        db.hideFamilyCategories()
+        adoptLocal(database, uid, familyId)
         push("categories", db.dirtyCategories(), Category::toJson) { db.markCategoryClean(it.id, it.updatedAt) }
         push("expenses", db.dirtyExpenses(), Expense::toJson) { db.markExpenseClean(it.id, it.updatedAt) }
         pull("expenses") { applyExpenses(database, it) }
@@ -259,36 +252,37 @@ class SyncService(
         private const val TAG = "sync"
         private const val K_UID = "sync.uid"
         const val K_FAMILY = "sync.family" // "" = not in a family
-        const val K_ADMIN = "sync.admin"
         private const val RETRY_MS = 30_000L
         private const val PAGE = 1000
     }
 }
 
-/** Outside a family, or as its admin, the user may create categories. As of the last sync; true before the first one. */
-fun canCreateCategories(prefs: SharedPreferences) =
-    prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty() || prefs.getBoolean(SyncService.K_ADMIN, false)
-
 /**
  * Gives unowned local rows (made before sign-in or since the last sync) to
  * [uid]. Unowned categories named like an existing one are merged into it;
- * if the user can't create categories, the rest become Boshqa + request.
+ * the rest become the user's own (in a family too). An owned, still unpushed
+ * category whose name a pulled row now holds (another device, the 2.3.0
+ * server copy) is merged too (the server's unique name would refuse it forever) and tombstoned.
  */
-suspend fun adoptLocal(database: AppDatabase, uid: String, familyId: String?, canCreate: Boolean = true) =
+suspend fun adoptLocal(database: AppDatabase, uid: String, familyId: String?) =
     database.withTransaction {
         val db = database.dao()
-        val (orphans, rest) = db.allCategoryRows().partition { it.ownerId == null && it.familyId == null }
-        val owned = rest.filter { it.deletedAt == null }.associate { norm(it.name) to it.id }
-        val boshqa = if (canCreate) null else owned["boshqa"]
-        for (k in orphans) {
-            val twin = owned[norm(k.name)]
-            if (twin == null && boshqa == null) continue
-            db.moveExpenses(k.id, twin ?: boshqa!!, pending = if (twin == null) k.name else null)
-            db.hardDeleteCategory(k.id) // never pushed, so a hard delete is safe
+        suspend fun merge(k: Category, into: Map<String, String>) {
+            val twin = into[norm(k.name)]?.takeIf { it != k.id } ?: return
+            db.moveExpenses(k.id, twin)
+            // Unowned: never pushed, drop it. Owned: may be on the server under an
+            // older name (renamed offline), so push a tombstone.
+            if (k.ownerId == null) db.hardDeleteCategory(k.id)
+            else db.updateCategory(k.copy(deletedAt = System.currentTimeMillis()))
         }
-        // In a family, new categories are the family's (admin only; a member's
-        // were all turned into requests above).
-        db.claimCategories(uid, familyId)
+        val live = db.allCategoryRows().filter { it.deletedAt == null }
+        val pulled = live.filter { it.ownerId != null && !it.dirty }.associate { norm(it.name) to it.id }
+        for (k in live.filter { it.ownerId != null && it.dirty }) merge(k, pulled)
+        val (orphans, owned) = db.allCategoryRows().filter { it.deletedAt == null }
+            .partition { it.ownerId == null && it.familyId == null }
+        val byName = owned.associate { norm(it.name) to it.id }
+        for (k in orphans) merge(k, byName)
+        db.claimCategories(uid)
         db.claimExpenses(uid, familyId)
     }
 

@@ -42,7 +42,6 @@ import com.sarvarbek.expense_tracker.features.family.FamilySettingsScreen
 import com.sarvarbek.expense_tracker.features.family.FamilyState
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
 import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
-import com.sarvarbek.expense_tracker.services.CategoryRequest
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.FamilyInvite
 import com.sarvarbek.expense_tracker.services.FamilyMember
@@ -157,7 +156,7 @@ class SettingsScreenTest : ScreenTest() {
 class SettingsFamilyTest : ScreenTest() {
     @Test fun categoriesSplitActiveAndArchived() {
         runBlocking { db.insertCategory(Category(name = "Kitob", colorHex = "5B8DB8", isArchived = true)) }
-        show { CategoriesScreen(db, canEdit = true) {} }
+        show { CategoriesScreen(db) {} }
 
         waitFor("Kitob")
         rule.onNodeWithText("Faol").assertExists()
@@ -169,13 +168,6 @@ class SettingsFamilyTest : ScreenTest() {
 
         rule.onNodeWithContentDescription("Arxivdan chiqarish").performClick()
         rule.waitUntil(5000) { rule.onAllNodesWithText("Arxivlangan").fetchSemanticsNodes().isEmpty() }
-    }
-
-    @Test fun memberCannotEditCategories() {
-        show { CategoriesScreen(db, canEdit = false) {} }
-        waitFor("Transport")
-        assertTrue(rule.onAllNodesWithContentDescription("Turkum qo'shish").fetchSemanticsNodes().isEmpty())
-        assertTrue(rule.onAllNodesWithContentDescription("Arxivlash").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun familyBudgetIsSumOfContributions() {
@@ -210,7 +202,7 @@ class SettingsFamilyTest : ScreenTest() {
         rule.onNodeWithText("Turkumlar").assertExists() // local page, reachable offline
     }
 
-    @Test fun inFamilyShowsBudgetMembersSharedListAndRequests() {
+    @Test fun inFamilyShowsBudgetMembersSharedList() {
         val cat = runBlocking { db.getCategories().first { it.name == "Groceries" }.id }
         runBlocking {
             fun e(desc: String, family: String?, legacyPrivate: Boolean = false) =
@@ -222,7 +214,6 @@ class SettingsFamilyTest : ScreenTest() {
         val overview = FamilyOverview(
             "f1", "Uy", "u1", isAdmin = true,
             members = listOf(FamilyMember("u1", "Ali", true, 10_000, 1_000_000, title = "Ota"), FamilyMember("u2", "Vali", false, 20_000, 500_000)),
-            requests = listOf(CategoryRequest("r1", "Dorilar")),
         )
         val others = listOf(FamilyExpense(Expense(id = "o1", description = "Taksi", amount = 20_000, categoryId = cat, date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = "u2"), "Vali"))
         val feed = db.watchExpenses().map { mergeFeed(it, others, "Siz") }
@@ -287,7 +278,6 @@ class SettingsFamilyTest : ScreenTest() {
     private fun overview(admin: Boolean) = FamilyOverview(
         "f1", "Uy", "u1", isAdmin = admin,
         members = listOf(FamilyMember("u1", "Ali", admin, 0, 0), FamilyMember("u2", "Vali", !admin, 0, 0)),
-        requests = if (admin) listOf(CategoryRequest("r1", "Dorilar")) else emptyList(),
     )
 
     @Test fun adminFamilySettingsManageMembersAndDelete() {
@@ -296,8 +286,8 @@ class SettingsFamilyTest : ScreenTest() {
             LaunchedEffect(Unit) { state.refresh() }
             if (state.loaded) FamilySettingsScreen(state) {}
         }
-        waitFor("Dorilar")
-        rule.onNodeWithText("Oilani o'chirish").assertExists()
+        waitFor("Oilani o'chirish")
+        assertTrue("no category requests", rule.onAllNodesWithText("Turkum so'rovlari").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithText("Oiladan chiqish").assertExists()
         rule.onNodeWithText("A'zo taklif qilish").assertExists()
         rule.onNodeWithContentDescription("Amallar: Vali").performClick()

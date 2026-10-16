@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
@@ -69,7 +68,7 @@ import com.sarvarbek.expense_tracker.ui.common.t
 
 /**
  * Oila sozlamalari (gear on the Oila tab): name, member roles, invites,
- * category requests, leave, and delete (admins). Pops itself once the user
+ * leave, and delete (admins). Pops itself once the user
  * is no longer in a family.
  */
 @Composable
@@ -218,7 +217,6 @@ private fun TitleDialog(initial: String, onDismiss: () -> Unit, onDone: (String)
 
 @Composable
 private fun AdminSection(f: FamilyOverview, a: FamilyActions) {
-    val c = AppTheme.colors
     val close = { a.show(null) }
     SectionLabel(t("familySettings.invites"))
     // null = the trailing "invite a member" row.
@@ -235,17 +233,6 @@ private fun AdminSection(f: FamilyOverview, a: FamilyActions) {
                     }
                 }
             })
-        }
-    }
-    SectionLabel(t("familySettings.requests"), badge = f.requests.size)
-    if (f.requests.isEmpty()) {
-        Text(t("familySettings.no_requests"), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp))
-    } else {
-        DividedCard(f.requests, indent = 16.dp) { r ->
-            IconRow(null, r.name, t("familySettings.in_other")) {
-                IconButton({ a.act(null) { rejectRequest(r.id) } }) { Icon(Icons.Filled.Close, t("family.decline")) }
-                IconButton({ a.act(t("familySettings.category_created", r.name)) { approveRequest(r.id) } }) { Icon(Icons.Filled.Check, t("auth.confirm"), tint = c.accent) }
-            }
         }
     }
 }

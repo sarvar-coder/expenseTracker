@@ -50,7 +50,6 @@ import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
-import com.sarvarbek.expense_tracker.services.canCreateCategories
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
@@ -97,7 +96,6 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val toaster = Toaster(remember { SnackbarHostState() }, scope)
-    val canCreate = { canCreateCategories(container.prefs) }
     // Above the tab so the last overview survives tab switches.
     val family = remember { FamilyState(container.family) }
     // Activity-scoped ViewModel: survives rotation / theme switch. Holds a lambda, so not process death: then the route pops.
@@ -112,7 +110,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
         }
         val members = family.overview?.let { f -> f.members.filter { it.userId != f.myId }.map { it.userId to it.label } }.orEmpty()
         AddScreen(
-            container.db, container.settings, container.aiParser::parse, container.speech, canCreate,
+            container.db, container.settings, container.aiParser::parse, container.speech,
             onClose = { nav.back() }, editing = editing, members = members,
         )
     }
@@ -121,17 +119,15 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     var tab by remember { mutableStateOf<Int?>(null) }
     pushed?.let { (fe, category) -> ExpenseDetailSheet(fe, category) { pushed = null } }
     LaunchedEffect(pushRoute) {
-        // The requests screen pops itself without an overview, so load it first.
-        if (pushRoute == Push.ROUTE_REQUESTS) {
-            family.refresh()
-            if (family.overview != null && nav.currentDestination?.route != pushRoute) nav.navigate(pushRoute)
-        } else if (pushRoute?.startsWith(Push.ROUTE_EXPENSE) == true) {
+        if (pushRoute?.startsWith(Push.ROUTE_EXPENSE) == true) {
             val id = pushRoute.removePrefix(Push.ROUTE_EXPENSE)
             suspend fun find() = family.feed.first().firstOrNull { it.expense.id == id }
             // Others' rows arrive with a sync pass; the pushed one is usually newer than the last.
             val fe = find() ?: run { container.sync.run(); find() }
             if (fe != null) {
-                pushed = fe to container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
+                // Others' categories aren't local: the feed carries name/color/icon.
+                pushed = fe to (container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
+                    ?: fe.categoryName?.let { Category(fe.expense.categoryId, it, fe.categoryColor ?: "9E9E9E", fe.categoryIcon ?: "category") })
             } else {
                 // Offline or since deleted: the Oila tab instead.
                 nav.popBackStack("shell", inclusive = false)
@@ -222,7 +218,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                     CategoryExpensesScreen(container.db, family.feed, p, offline = stale, onBack = { nav.back() }, onEdit = edit)
                 }
             }
-            composable("categories") { CategoriesScreen(container.db, canCreate()) { nav.back() } }
+            composable("categories") { CategoriesScreen(container.db) { nav.back() } }
         }
     }
 }

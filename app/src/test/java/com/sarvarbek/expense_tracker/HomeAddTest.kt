@@ -113,7 +113,7 @@ class HomeAddTest {
         speech: SpeechService = FakeSpeech(context, ""),
         members: List<Pair<String, String>> = emptyList(),
         aiModes: Boolean = true,
-    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, canCreate = { true }, onClose = {}, editing = editing, members = members, aiModes = aiModes)
+    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, onClose = {}, editing = editing, members = members, aiModes = aiModes)
 
     private fun waitFor(text: String, substring: Boolean = false) =
         rule.waitUntil(5000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }

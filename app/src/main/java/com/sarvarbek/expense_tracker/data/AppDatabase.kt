@@ -225,31 +225,26 @@ abstract class ExpenseDao {
     @Query("UPDATE contributions SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     abstract suspend fun markContributionClean(id: String, updatedAt: Long)
 
-    /** Repoints expenses (dirty); [pending] null keeps their pendingCategory. */
-    @Query(
-        "UPDATE expenses SET category_id = :to, pending_category = COALESCE(:pending, pending_category), " +
-            "updated_at = :now, dirty = 1 WHERE category_id = :from",
-    )
-    abstract suspend fun moveExpenses(from: String, to: String, pending: String?, now: Long = System.currentTimeMillis())
+    /** Repoints expenses (dirty). */
+    @Query("UPDATE expenses SET category_id = :to, updated_at = :now, dirty = 1 WHERE category_id = :from")
+    abstract suspend fun moveExpenses(from: String, to: String, now: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM categories WHERE id = :id") abstract suspend fun hardDeleteCategory(id: String)
 
-    /** Unowned categories become the family's, or the user's outside one. */
-    @Query(
-        "UPDATE categories SET owner_id = CASE WHEN :familyId IS NULL THEN :uid END, family_id = :familyId " +
-            "WHERE owner_id IS NULL AND family_id IS NULL",
-    )
-    abstract suspend fun claimCategories(uid: String, familyId: String?)
+    /** Unowned categories become the user's (categories are per user, in a family too). */
+    @Query("UPDATE categories SET owner_id = :uid WHERE owner_id IS NULL AND family_id IS NULL")
+    abstract suspend fun claimCategories(uid: String)
 
     @Query("UPDATE expenses SET owner_id = :uid, family_id = :familyId WHERE owner_id IS NULL")
     abstract suspend fun claimExpenses(uid: String, familyId: String?)
 
-    /** Hides categories of any family but [familyId] (null = all); never pushed. */
-    @Query(
-        "UPDATE categories SET deleted_at = :now, dirty = 0 WHERE family_id IS NOT NULL " +
-            "AND (:familyId IS NULL OR family_id != :familyId) AND deleted_at IS NULL",
-    )
-    abstract suspend fun hideForeignCategories(familyId: String?, now: Long = System.currentTimeMillis())
+    /**
+     * Hides family-owned categories (gone since 2.3.0: the server copied them
+     * per member and repointed expenses); never pushed. RLS no longer returns
+     * them, so their server tombstones never arrive.
+     */
+    @Query("UPDATE categories SET deleted_at = :now, dirty = 0 WHERE family_id IS NOT NULL AND deleted_at IS NULL")
+    abstract suspend fun hideFamilyCategories(now: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM expenses") abstract suspend fun deleteAllExpenses()
 

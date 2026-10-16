@@ -9,9 +9,7 @@ import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
-import com.sarvarbek.expense_tracker.services.ResolvedCategory
 import com.sarvarbek.expense_tracker.services.matchOrCreateCategory
-import com.sarvarbek.expense_tracker.services.resolveCategory
 import com.sarvarbek.expense_tracker.ui.common.parseAmount
 import com.sarvarbek.expense_tracker.ui.common.startMillis
 import com.sarvarbek.expense_tracker.ui.common.toMillis
@@ -196,22 +194,6 @@ class DataTest {
         repeat(20) { matchOrCreateCategory(db, "Cat $it") }
         val cats = db.getAllCategories()
         assertEquals(cats.size, cats.map { it.colorHex }.toSet().size)
-    }
-
-    @Test fun familyMemberUnknownNameGoesToBoshqaPending() = runBlocking {
-        val food = cat("Food & dining")
-        val boshqa = db.insertCategory(Category(name = "Boshqa", colorHex = "9E9E9E"))
-        val before = db.getAllCategories().size
-
-        assertEquals(ResolvedCategory(food.id), resolveCategory(db, "food & dining", canCreate = false))
-        assertEquals(ResolvedCategory(boshqa, "Gym"), resolveCategory(db, " Gym ", canCreate = false))
-        assertEquals("nothing created", before, db.getAllCategories().size)
-    }
-
-    @Test fun canCreateCreatesAsBefore() = runBlocking {
-        val r = resolveCategory(db, "Gym", canCreate = true)
-        assertNull(r.pending)
-        assertTrue(db.getCategories().any { it.id == r.id && it.name == "Gym" })
     }
 
     @Test fun manualExpensePersistsWithSource() = runBlocking {

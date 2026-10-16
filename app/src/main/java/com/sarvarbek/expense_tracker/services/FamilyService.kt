@@ -9,7 +9,6 @@ import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.result.PostgrestResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -36,9 +34,6 @@ import com.sarvarbek.expense_tracker.ui.common.startMillis
 
 /** A pending invite addressed to the signed-in user. */
 data class FamilyInvite(val id: String, val familyName: String, val invitedBy: String)
-
-/** A member's request for a new family category (admin sees all pending). */
-data class CategoryRequest(val id: String, val name: String)
 
 /**
  * One current member's month, computed server-side (family_summary).
@@ -67,8 +62,17 @@ data class FamilyMember(
 /**
  * A family feed row with who added it. [mine] = own row from Room (its
  * ownerId may still be null before the first sync); others' rows are read-only.
+ * Others' rows carry their owner's category name/color (6-hex)/icon from the
+ * feed (categories are per user, so not in Room); null on own rows.
  */
-data class FamilyExpense(val expense: Expense, val ownerName: String, val mine: Boolean = false) {
+data class FamilyExpense(
+    val expense: Expense,
+    val ownerName: String,
+    val mine: Boolean = false,
+    val categoryName: String? = null,
+    val categoryColor: String? = null,
+    val categoryIcon: String? = null,
+) {
     /** Tap routing for every list: own, non-frozen rows open edit; the rest open the read-only sheet. */
     val editable get() = mine && !expense.frozen
 }
@@ -82,9 +86,8 @@ data class FamilyOverview(
     val myId: String,
     val isAdmin: Boolean,
     val members: List<FamilyMember>,
-    /** Admin only: sent invites and pending category requests. */
+    /** Admin only: sent invites. */
     val invites: List<SentInvite> = emptyList(),
-    val requests: List<CategoryRequest> = emptyList(),
 ) {
     /** Family budget = sum of members' own contributions (transfers only move money inside); spent = shared spending. */
     val budget get() = members.sumOf { it.ownContribution }
@@ -170,7 +173,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                 else call { client.from("invites").select(Columns.list("id", "email")) { filter { eq("family_id", fid) } }.decodeList<JsonObject>() }
                     .map { SentInvite(it.str("id")!!, it.str("email")!!) }
             }
-            val requests = async { if (isAdmin) categoryRequests() else emptyList() }
             FamilyOverview(
                 id = fid,
                 name = me.getValue("families").jsonObject.str("name")!!,
@@ -178,7 +180,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
                 isAdmin = isAdmin,
                 members = summary.await().map { parseMember(it) },
                 invites = invites.await(),
-                requests = requests.await(),
             )
         }
     }
@@ -239,27 +240,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 
     suspend fun deleteFamily() { change { rpc("delete_family") } }
 
-    /** Pending category requests: all of them for the admin, own for a member (RLS). */
-    suspend fun categoryRequests(): List<CategoryRequest> = call {
-        client.from("category_requests").select(Columns.list("id", "name")) {
-            filter { eq("status", "pending") }
-            order("created_at", Order.ASCENDING)
-        }.decodeList<JsonObject>()
-    }.map { CategoryRequest(it.str("id")!!, it.str("name")!!) }
-
-    /** Creates the category (unused color) and moves waiting expenses into it. */
-    suspend fun approveRequest(id: String) {
-        val used = sync.database.dao().allCategoryRows().map { it.colorHex.uppercase() }.toSet()
-        change {
-            rpc("approve_category_request", buildJsonObject {
-                put("p_id", id); put("p_color_hex", uniqueColor(used)); put("p_icon_key", JsonNull)
-            })
-        }
-    }
-
-    /** Waiting expenses stay in Boshqa. */
-    suspend fun rejectRequest(id: String) { change { rpc("reject_category_request", buildJsonObject { put("p_id", id) }) } }
-
     private suspend fun rpc(fn: String, params: JsonObject = JsonObject(emptyMap())): PostgrestResult =
         call { client.postgrest.rpc(fn, params) }
 
@@ -319,6 +299,8 @@ internal fun parseOthers(rows: List<JsonObject>, familyId: String) = rows.mapNot
             frozen = (e["frozen"] as? JsonPrimitive)?.booleanOrNull == true, dirty = false,
         ),
         e.str("owner_name")!!,
+        // Servers before 20261014150000 don't send these.
+        categoryName = e.str("category_name"), categoryColor = e.str("category_color"), categoryIcon = e.str("category_icon"),
     )
 }
 
@@ -342,7 +324,6 @@ fun familyErrorText(message: String, code: String? = null) = when {
     message == "last_admin" -> t("svc.family.last_admin")
     message == "cannot_remove_self" -> t("svc.family.cannot_remove_self")
     message == "not_a_member" -> t("svc.family.not_a_member")
-    message == "request_not_found" -> t("svc.family.request_not_found")
     code == "23505" -> t("svc.family.already_invited")
     else -> t("svc.family.unknown")
 }

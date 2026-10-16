@@ -167,7 +167,7 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
  * Oila tab. Not in a family: pending invites + create. In one: this month's
  * family budget vs shared spending, members, then this month's shared
  * expenses as a category donut and a Ro'yxat banner.
- * Management (roles, invites, requests, leave, delete) is behind the gear.
+ * Management (roles, invites, leave, delete) is behind the gear.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
