@@ -125,7 +125,9 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             // Others' rows arrive with a sync pass; the pushed one is usually newer than the last.
             val fe = find() ?: run { container.sync.run(); find() }
             if (fe != null) {
-                pushed = fe to container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
+                // Others' categories aren't local: the feed carries name/color/icon.
+                pushed = fe to (container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
+                    ?: fe.categoryName?.let { Category(fe.expense.categoryId, it, fe.categoryColor ?: "9E9E9E", fe.categoryIcon ?: "category") })
             } else {
                 // Offline or since deleted: the Oila tab instead.
                 nav.popBackStack("shell", inclusive = false)

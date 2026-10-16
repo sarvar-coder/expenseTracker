@@ -160,7 +160,8 @@ class BackendTest {
 
         adoptLocal(database, "u1", "fam")
 
-        assertEquals(listOf("srv-kino"), db.allCategoryRows().filter { "kino" in it.name.lowercase() }.map { it.id })
+        assertEquals(listOf("srv-kino"), db.getAllCategories().filter { "kino" in it.name.lowercase() }.map { it.id })
+        assertTrue("tombstone pushed", db.dirtyCategories().single { it.id == local }.deletedAt != null)
         assertEquals("srv-kino", db.getExpenses().single { it.id == expenseId }.categoryId)
     }
 

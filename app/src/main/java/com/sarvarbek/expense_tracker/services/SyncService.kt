@@ -262,7 +262,7 @@ class SyncService(
  * [uid]. Unowned categories named like an existing one are merged into it;
  * the rest become the user's own (in a family too). An owned, still unpushed
  * category whose name a pulled row now holds (another device, the 2.3.0
- * server copy) is merged too: the server's unique name would refuse it forever.
+ * server copy) is merged too (the server's unique name would refuse it forever) and tombstoned.
  */
 suspend fun adoptLocal(database: AppDatabase, uid: String, familyId: String?) =
     database.withTransaction {
@@ -270,7 +270,10 @@ suspend fun adoptLocal(database: AppDatabase, uid: String, familyId: String?) =
         suspend fun merge(k: Category, into: Map<String, String>) {
             val twin = into[norm(k.name)]?.takeIf { it != k.id } ?: return
             db.moveExpenses(k.id, twin)
-            db.hardDeleteCategory(k.id) // the server can't hold it under this name, so nothing to tombstone
+            // Unowned: never pushed, drop it. Owned: may be on the server under an
+            // older name (renamed offline), so push a tombstone.
+            if (k.ownerId == null) db.hardDeleteCategory(k.id)
+            else db.updateCategory(k.copy(deletedAt = System.currentTimeMillis()))
         }
         val live = db.allCategoryRows().filter { it.deletedAt == null }
         val pulled = live.filter { it.ownerId != null && !it.dirty }.associate { norm(it.name) to it.id }

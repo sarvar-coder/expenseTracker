@@ -1,6 +1,7 @@
 -- Per-user categories (#119): every member keeps their own categories. No
 -- family-owned categories, no category requests, no Boshqa + pending fallback.
--- Old APKs in a family stop syncing new categories (accepted).
+-- Old APKs in a family stop syncing new categories, and expenses filed under
+-- such a category stay unsynced on that phone until it updates (accepted).
 
 -- ---------------------------------------------------------------- requests out
 
