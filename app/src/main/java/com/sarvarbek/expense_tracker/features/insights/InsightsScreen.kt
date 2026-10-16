@@ -268,9 +268,9 @@ private fun YearSheet(selected: Int, onDismiss: () -> Unit, onPick: (Int) -> Uni
     }
 }
 
-/** Donut card, then "Turkumlar" with one share row per category; [onClick] opens a category. */
+/** Donut card, then "Turkumlar" with one share row per category; [onClick] opens a category (null: rows aren't tappable, as on Oila). */
 @Composable
-internal fun CategoryBreakdown(data: InsightsData, onClick: (Category) -> Unit) {
+internal fun CategoryBreakdown(data: InsightsData, onClick: ((Category) -> Unit)? = null) {
     AppCard(Modifier.fillMaxWidth()) { Donut(data) }
     Spacer(Modifier.height(AppSpace.section))
     Text(t("insights.categories"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 4.dp))
@@ -279,15 +279,15 @@ internal fun CategoryBreakdown(data: InsightsData, onClick: (Category) -> Unit) 
         Column(Modifier.padding(vertical = 6.dp)) {
             data.slices.forEachIndexed { i, s ->
                 if (i > 0) HorizontalDivider(Modifier.padding(start = 74.dp, end = 16.dp), color = AppTheme.colors.border)
-                LegendRow(s, data.fraction(s.amount)) { onClick(s.category) }
+                LegendRow(s, data.fraction(s.amount), onClick?.let { { it(s.category) } })
             }
         }
     }
 }
 
-/** Share donut (3dp gaps between slices) with "Jami" + total in the hole. Read out as one label. Oila shows it alone. */
+/** Share donut (3dp gaps between slices) with "Jami" + total in the hole. Read out as one label. */
 @Composable
-internal fun Donut(data: InsightsData) {
+private fun Donut(data: InsightsData) {
     val ty = MaterialTheme.typography
     val colors = data.slices.map { colorFromHex(it.category.colorHex) }
     Box(
@@ -326,12 +326,12 @@ internal fun Donut(data: InsightsData) {
 
 /** Badge; name + amount over a share bar in the category color + percent. Read as "Name, 1 200 UZS, 34%". */
 @Composable
-private fun LegendRow(slice: Slice, fraction: Double, onClick: () -> Unit) {
+private fun LegendRow(slice: Slice, fraction: Double, onClick: (() -> Unit)?) {
     val ty = MaterialTheme.typography
     val percent = "${Math.round(fraction * 100)}%"
     Row(
-        Modifier.fillMaxWidth().clickable(onClickLabel = t("insights.open_category"), onClick = onClick)
-            .semantics { contentDescription = t("insights.legend_a11y", slice.category.name, formatMoney(slice.amount), percent) }
+        Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClickLabel = t("insights.open_category"), onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) { contentDescription = t("insights.legend_a11y", slice.category.name, formatMoney(slice.amount), percent) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

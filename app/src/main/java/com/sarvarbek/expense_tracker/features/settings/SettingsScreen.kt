@@ -108,6 +108,7 @@ fun SettingsScreen(
     settings: SettingsStore,
     db: ExpenseDao,
     email: String,
+    onCategories: () -> Unit,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -165,6 +166,8 @@ fun SettingsScreen(
             item {
                 SectionLabel(t("settings.data"))
                 DividedCard(listOf<@Composable () -> Unit>({
+                    SettingRow(Icons.Outlined.Category, t("settings.categories"), t("settings.categories_hint"), onCategories)
+                }, {
                     SettingRow(Icons.Outlined.IosShare, t("settings.export"), t("settings.export_hint")) {
                         scope.launch {
                             val rows = db.getExpenses()

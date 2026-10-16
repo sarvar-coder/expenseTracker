@@ -38,7 +38,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
@@ -53,9 +52,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,8 +60,7 @@ import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
-import com.sarvarbek.expense_tracker.features.home.HomeSummary
-import com.sarvarbek.expense_tracker.features.insights.Donut
+import com.sarvarbek.expense_tracker.features.insights.CategoryBreakdown
 import com.sarvarbek.expense_tracker.features.insights.insightsFor
 import com.sarvarbek.expense_tracker.services.FamilyException
 import com.sarvarbek.expense_tracker.services.FamilyExpense
@@ -162,9 +157,9 @@ internal fun rememberFamilyActions(state: FamilyState): FamilyActions {
 }
 
 /**
- * Oila tab. Not in a family: pending invites + create. In one: this month's
- * family budget vs shared spending, members, then this month's shared
- * expenses as a category donut and a Ro'yxat banner.
+ * Oila tab. Not in a family: pending invites + create. In one: what the
+ * family spent this month, members with their spending, then this month's
+ * family expenses by category (merged by name) and a Ro'yxat banner.
  * Management (roles, invites, leave, delete) is behind the gear.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,9 +168,7 @@ fun FamilyScreen(
     state: FamilyState,
     db: ExpenseDao,
     active: Boolean = true,
-    onEdit: (Expense) -> Unit = {},
     onList: () -> Unit = {},
-    onCategories: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -210,12 +203,9 @@ fun FamilyScreen(
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories)
-                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onCategories)
-                    state.failed -> Column {
-                        EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
-                        CategoriesBanner(onCategories) // categories are local: work offline
-                    }
+                    state.loaded && f == null -> NoFamily(state.invites, show, act)
+                    state.loaded && f != null -> InFamily(f, rows, cats, onList)
+                    state.failed -> EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                 }
             }
@@ -237,7 +227,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act) {
     val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -273,37 +263,26 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, on
             Spacer(Modifier.width(8.dp))
             Text(t("family.create"))
         }
-        Spacer(Modifier.height(AppSpace.section))
-        CategoriesBanner(onCategories)
     }
 }
 
 private val hhmm = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-private fun InFamily(
-    f: FamilyOverview,
-    rows: List<FamilyExpense>,
-    cats: List<Category>,
-    onEdit: (Expense) -> Unit,
-    onList: () -> Unit,
-    onCategories: () -> Unit,
-) {
+private fun InFamily(f: FamilyOverview, rows: List<FamilyExpense>, cats: List<Category>, onList: () -> Unit) {
     val range = familyRange()
     val list = familySelect(f)(rows)
-    val data = insightsFor(list.map { it.expense }, cats, range.start, range.endInclusive.plusDays(1))
+    val data = familyInsights(list, familyCategories(list, cats), range.start, range.endInclusive.plusDays(1))
 
     Column {
-        BudgetCard(HomeSummary(f.spent, f.budget))
-        Spacer(Modifier.height(AppSpace.section))
-        CategoriesBanner(onCategories)
+        SpentCard(f.spent)
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
         SectionLabel(t("family.shared_month"))
         if (list.isEmpty()) {
             EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month"))
         } else {
-            AppCard(Modifier.fillMaxWidth()) { Donut(data) } // ponytail: no per-category legend here; Ro'yxat covers browsing
+            CategoryBreakdown(data)
             Spacer(Modifier.height(AppSpace.section))
             ListBanner(t("family.list"), t("family.list_summary", list.count { it.expense.transferTo == null }, formatMoney(data.total)), onList) // same rows as the total
         }
@@ -329,11 +308,40 @@ internal fun familySelect(f: FamilyOverview): (List<FamilyExpense>) -> List<Fami
     }
 }
 
-@Composable
-private fun CategoriesBanner(onClick: () -> Unit) = ListBanner(t("settings.categories"), t("family.categories_hint"), onClick)
+/** Category name as the family groups it: categories are per user, so the same name (any case/spacing) is one category. */
+internal fun categoryKey(name: String) = name.trim().lowercase()
+
+/**
+ * Each row's category as the family sees it, by expense id: one synthetic [Category]
+ * per [categoryKey] (its id), so the same name across members is one category and a
+ * name only one member has is its own. Own rows take name/color/icon from Room ([own]),
+ * others' from the feed; own first, so on a clash my color wins. No category (old
+ * server, missing row): "Turkumsiz".
+ */
+internal fun familyCategories(rows: List<FamilyExpense>, own: List<Category>): Map<String, Category> {
+    val ownById = own.associateBy { it.id }
+    val byKey = HashMap<String, Category>()
+    return rows.sortedByDescending { it.mine }.associate { fe ->
+        val local = if (fe.mine) ownById[fe.expense.categoryId] else null
+        val name = (local?.name ?: fe.categoryName)?.trim().orEmpty()
+        val key = categoryKey(name)
+        // ponytail: a bad hex from the feed would crash the donut; fall back to the no-category grey.
+        val color = (local?.colorHex ?: fe.categoryColor)?.takeIf { it.length == 6 && it.toLongOrNull(16) != null }
+        fe.expense.id to byKey.getOrPut(key) {
+            if (key.isEmpty()) Category(id = "", name = t("widgets.no_category"), colorHex = NO_CATEGORY_HEX)
+            else Category(id = key, name = name, colorHex = color ?: NO_CATEGORY_HEX, iconKey = local?.iconKey ?: fe.categoryIcon ?: "category")
+        }
+    }
+}
+
+private const val NO_CATEGORY_HEX = "9AA0A6"
+
+/** [insightsFor] over [rows] with their [familyCategories] ([byExpense]): one slice per merged name. */
+internal fun familyInsights(rows: List<FamilyExpense>, byExpense: Map<String, Category>, start: LocalDate, end: LocalDate) =
+    insightsFor(rows.map { it.expense.copy(categoryId = byExpense.getValue(it.expense.id).id) }, byExpense.values.distinct(), start, end)
 
 @Composable
-internal fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?, onEdit: (Expense) -> Unit) = Row(
+internal fun SharedRow(fe: FamilyExpense, category: Category?, onEdit: (Expense) -> Unit) = Row(
     Modifier.fillMaxWidth().clickable(onClick = rememberExpenseTap(fe, category, onEdit)).padding(horizontal = 16.dp, vertical = 12.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
@@ -356,22 +364,18 @@ internal fun memberLabel(m: FamilyMember, myId: String) = listOfNotNull(
     m.name, t("family.you_suffix").takeIf { m.userId == myId }, m.title?.let { "· $it" }, t("family.admin_suffix").takeIf { m.isAdmin },
 ).joinToString(" ")
 
-/** Name, "Hissa X · sarf Y", and Qolgan on the right (red when overspent). Hissa includes transfers received. */
+/** "Ali (siz) · Ota · admin", and what they spent this month on the right. */
 @Composable
 private fun MemberRow(m: FamilyMember, myId: String) = Row(
-    Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 16.dp),
+    Modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).padding(horizontal = 16.dp, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
 ) {
-    val c = AppTheme.colors
     val ty = MaterialTheme.typography
-    Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-        Text(memberLabel(m, myId), style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(t("family.member_money", formatMoney(m.contribution), formatMoney(m.shared)), color = c.muted, style = ty.bodySmall)
-    }
+    Text(memberLabel(m, myId), style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
     Spacer(Modifier.width(8.dp))
     Column(horizontalAlignment = Alignment.End) {
-        Money(m.available, color = if (m.available < 0) c.danger else Color.Unspecified)
-        Text(t("family.available"), color = c.muted, style = ty.bodySmall)
+        Money(m.shared)
+        Text(t("family.member_spent"), color = AppTheme.colors.muted, style = ty.bodySmall)
     }
 }
 
@@ -388,37 +392,14 @@ internal fun GearButton(label: String, onClick: () -> Unit) {
     ) { Icon(Icons.Outlined.Settings, label) }
 }
 
-/** Family budget (sum of members' own contributions) vs shared spending this month, + Hissa qo'shish. */
+/** What the family spent this month (transfers excluded), on the hero card. */
 @Composable
-private fun BudgetCard(summary: HomeSummary) {
+private fun SpentCard(spent: Long) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
-    val soft = c.onHero.copy(alpha = 0.72f)
-    val over = summary.budget > 0 && summary.spent > summary.budget
-    Column(Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp)) {
-        Text(t("family.spent"), style = ty.labelMedium.copy(color = soft))
+    Column(Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp)) {
+        Text(t("family.spent"), style = ty.labelMedium.copy(color = c.onHero.copy(alpha = 0.72f)))
         Spacer(Modifier.height(6.dp))
-        Money(summary.spent, style = ty.displayMedium, color = c.onHero, autoSize = true)
-        Spacer(Modifier.height(16.dp))
-        if (summary.budget <= 0) {
-            Text(t("family.no_budget"), style = ty.labelSmall.copy(color = soft))
-        } else {
-            LinearProgressIndicator(
-                progress = { summary.progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(AppRadii.chip)),
-                color = if (over) c.danger else c.accent,
-                trackColor = c.onHero.copy(alpha = 0.15f),
-                gapSize = 0.dp,
-                drawStopIndicator = {},
-            )
-            Spacer(Modifier.height(8.dp))
-            Row {
-                Text(t("family.budget", formatMoney(summary.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
-                Text(
-                    if (over) t("family.over", formatMoney(-summary.remaining)) else t("family.left", formatMoney(summary.remaining)),
-                    style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
-                )
-            }
-        }
+        Money(spent, style = ty.displayMedium, color = c.onHero, autoSize = true)
     }
 }

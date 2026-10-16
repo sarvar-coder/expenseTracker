@@ -24,6 +24,7 @@ import com.sarvarbek.expense_tracker.services.parseOthers
 import com.sarvarbek.expense_tracker.services.parseGeminiJson
 import com.sarvarbek.expense_tracker.services.parseMember
 import com.sarvarbek.expense_tracker.services.FamilyOverview
+import com.sarvarbek.expense_tracker.services.FamilyMember
 import com.sarvarbek.expense_tracker.ui.AuthGate
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import io.github.jan.supabase.auth.auth
@@ -199,15 +200,13 @@ class BackendTest {
         fun row(extra: String) = kotlinx.serialization.json.Json.decodeFromString<kotlinx.serialization.json.JsonObject>(
             """{"user_id":"u1","display_name":"Ali","role":"admin","shared_total":300,"contribution":1000,"title":null$extra}""",
         )
-        // 20261013120000: B got 200 from a transfer, gave 100 away.
+        // Hissa columns (20261013120000) are personal: ignored here.
         val m = parseMember(row(""",
             "own_contribution":800,"received":200,"given":100,"available":600"""))
-        assertEquals(listOf(800L, 200L, 100L, 600L), listOf(m.ownContribution, m.received, m.given, m.available))
-        // Older server: no Hissa columns, derived from contribution/shared.
-        val old = parseMember(row(""))
-        assertEquals(listOf(1000L, 0L, 0L, 700L), listOf(old.ownContribution, old.received, old.given, old.available))
-        val f = FamilyOverview("f", "Uy", "u1", true, listOf(m, m.copy(userId = "u2", ownContribution = 0, contribution = 100)))
-        assertEquals("family budget counts own contributions only", 800L, f.budget)
+        assertEquals(FamilyMember("u1", "Ali", true, 300), m)
+        assertEquals(m, parseMember(row("")))
+        val f = FamilyOverview("f", "Uy", "u1", true, listOf(m, m.copy(userId = "u2", shared = 100)))
+        assertEquals("family spent = members' spending", 400L, f.spent)
     }
 
     // --- family_test (logic) ---

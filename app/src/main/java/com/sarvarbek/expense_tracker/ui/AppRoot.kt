@@ -154,10 +154,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                         )
                         2 -> EmptyState(Icons.Outlined.Forum, t("discuss.title"), t("discuss.soon"))
                         else -> {
-                            FamilyScreen(
-                                family, container.db, active, onEdit = edit,
-                                onList = { nav.go("family-list") }, onCategories = { nav.go("categories") },
-                            ) { nav.go("family-settings") }
+                            FamilyScreen(family, container.db, active, onList = { nav.go("family-list") }) { nav.go("family-settings") }
                         }
                     }
                 }
@@ -174,6 +171,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                 SettingsScreen(
                     container.settings, container.db,
                     email = container.supabase.auth.currentUserOrNull()?.email.orEmpty(),
+                    onCategories = { nav.go("categories") },
                     onBack = { nav.back() },
                 ) {
                     // Routes' scope: Settings' own is cancelled by the pop below.

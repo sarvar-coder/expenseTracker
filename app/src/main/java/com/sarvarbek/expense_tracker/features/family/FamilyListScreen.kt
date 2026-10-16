@@ -64,8 +64,9 @@ fun FamilyListScreen(
     if (state.loaded && f == null) LaunchedEffect(Unit) { onBack() }
     val all by state.feed.collectAsStateWithLifecycle(null) // null = loading
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
-    val catById = cats.orEmpty().associateBy { it.id }
     val rows = if (f == null) null else all?.let(familySelect(f))
+    // Same name-merged categories as the tab's donut (others' come from the feed).
+    val catOf = familyCategories(rows.orEmpty(), cats.orEmpty())
     // Transfers left out of the total, like the tab's donut.
     val total = rows.orEmpty().filter { it.expense.transferTo == null }.sumOf { it.expense.amount }
 
@@ -94,8 +95,8 @@ fun FamilyListScreen(
                         Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
                     }
                     rows.isEmpty() -> item { EmptyState(Icons.Outlined.ReceiptLong, t("family.empty_month")) }
-                    else -> daySections(groupExpenses(rows.map { it.expense }, today = LocalDate.now()), rows.associateBy { it.expense.id }, catById, db, onEdit) { fe, cat ->
-                        SharedRow(fe, cat, onEdit)
+                    else -> daySections(groupExpenses(rows.map { it.expense }, today = LocalDate.now()), rows.associateBy { it.expense.id }, emptyMap(), db, onEdit) { fe, _ ->
+                        SharedRow(fe, catOf[fe.expense.id], onEdit)
                     }
                 }
             }
