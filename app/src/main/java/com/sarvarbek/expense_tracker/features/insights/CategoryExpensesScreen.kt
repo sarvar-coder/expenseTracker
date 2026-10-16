@@ -64,10 +64,10 @@ fun periodLabel(range: ClosedRange<LocalDate>?, month: LocalDate): String = when
 
 /**
  * One category's expenses (transfers left out, like the legend), newest
- * first in day groups. [offline]: others' rows are as last fetched.
+ * first in day groups.
  */
 @Composable
-fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick: CategoryPick, offline: Boolean = false, onBack: () -> Unit, onEdit: (Expense) -> Unit) {
+fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick: CategoryPick, onBack: () -> Unit, onEdit: (Expense) -> Unit) {
     val ty = MaterialTheme.typography
     val all by feed.collectAsStateWithLifecycle(null) // null = loading
     val cats by remember(db) { db.watchAllCategories() }.collectAsStateWithLifecycle(null)
@@ -92,7 +92,6 @@ fun CategoryExpensesScreen(db: ExpenseDao, feed: Flow<List<FamilyExpense>>, pick
                         Money(total, style = ty.headlineMedium, autoSize = true)
                     }
                 }
-                if (offline) OfflineNote()
             }
             when {
                 rows.isEmpty() -> item { EmptyState(Icons.Outlined.ReceiptLong, t("insights.category_empty")) }

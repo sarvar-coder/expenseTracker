@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -46,6 +48,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -384,5 +389,34 @@ fun <T> DividedCard(items: List<T>, indent: Dp = 72.dp, row: @Composable (T) -> 
     items.forEachIndexed { i, item ->
         if (i > 0) HorizontalDivider(Modifier.padding(start = indent), color = AppTheme.colors.border)
         row(item)
+    }
+}
+
+/** Edge-to-edge rounded hero strip: title + subtitle, opens a page (Oila's "Ro'yxat", Asosiy's "Hissa"). */
+@Composable
+fun ListBanner(title: String, subtitle: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val ty = MaterialTheme.typography
+    Row(
+        Modifier
+            // Escape the page's horizontal padding: full screen width.
+            .layout { m, k ->
+                val extra = (AppSpace.page * 2).roundToPx()
+                val w = k.maxWidth + extra
+                val p = m.measure(k.copy(minWidth = w, maxWidth = w))
+                layout(k.maxWidth, p.height) { p.place(-extra / 2, 0) }
+            }
+            .clip(RoundedCornerShape(20.dp))
+            .background(c.hero)
+            .clickable(role = Role.Button, onClick = onClick)
+            .defaultMinSize(minHeight = 76.dp)
+            .padding(horizontal = AppSpace.page, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = ty.titleMedium.copy(color = c.onHero))
+            Text(subtitle, style = ty.bodySmall.copy(color = c.onHero.copy(alpha = 0.72f)))
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.onHero)
     }
 }

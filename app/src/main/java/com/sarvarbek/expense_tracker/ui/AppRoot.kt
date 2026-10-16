@@ -21,11 +21,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import com.sarvarbek.expense_tracker.data.Category
 import com.sarvarbek.expense_tracker.data.Expense
-import com.sarvarbek.expense_tracker.services.FamilyExpense
-import com.sarvarbek.expense_tracker.ui.common.ExpenseDetailSheet
-import kotlinx.coroutines.flow.first
+import com.sarvarbek.expense_tracker.services.mergeFeed
+import kotlinx.coroutines.flow.map
 import com.sarvarbek.expense_tracker.features.add.AddScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryExpensesScreen
 import com.sarvarbek.expense_tracker.features.insights.CategoryPick
@@ -114,25 +112,17 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             onClose = { nav.back() }, editing = editing, members = members,
         )
     }
-    // Notification taps: a new member expense opens read-only over any screen.
-    var pushed by remember { mutableStateOf<Pair<FamilyExpense, Category?>?>(null) }
+    // Asosiy, Tahlil and a category's page show only my rows; others' live on the Oila tab.
+    val mine = remember { container.db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } }
     var tab by remember { mutableStateOf<Int?>(null) }
-    pushed?.let { (fe, category) -> ExpenseDetailSheet(fe, category) { pushed = null } }
+    // Notification taps: a new member expense is someone else's, so it opens Oila's Ro'yxat
+    // (back lands on the Oila tab). A sync pass refreshes others' rows, so the new one shows.
     LaunchedEffect(pushRoute) {
         if (pushRoute?.startsWith(Push.ROUTE_EXPENSE) == true) {
-            val id = pushRoute.removePrefix(Push.ROUTE_EXPENSE)
-            suspend fun find() = family.feed.first().firstOrNull { it.expense.id == id }
-            // Others' rows arrive with a sync pass; the pushed one is usually newer than the last.
-            val fe = find() ?: run { container.sync.run(); find() }
-            if (fe != null) {
-                // Others' categories aren't local: the feed carries name/color/icon.
-                pushed = fe to (container.db.getAllCategories().firstOrNull { it.id == fe.expense.categoryId }
-                    ?: fe.categoryName?.let { Category(fe.expense.categoryId, it, fe.categoryColor ?: "9E9E9E", fe.categoryIcon ?: "category") })
-            } else {
-                // Offline or since deleted: the Oila tab instead.
-                nav.popBackStack("shell", inclusive = false)
-                tab = TAB_FAMILY
-            }
+            scope.launch { container.sync.run() }
+            nav.popBackStack("shell", inclusive = false)
+            tab = TAB_FAMILY
+            nav.navigate("family-list")
         }
         if (pushRoute != null) onPushRouted()
     }
@@ -154,23 +144,19 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                     snackbarHost = { SnackbarHost(toaster.host) { AppSnackbar(it) } },
                 ) { index, active ->
                     when (index) {
-                        0 -> {
-                            val stale by container.family.othersStale.collectAsStateWithLifecycle()
-                            HomeScreen(
-                                container.db, container.settings, family.feed, offline = stale,
-                                inFamily = !container.prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty(),
-                                onSettings = { nav.go("settings") }, onEdit = edit,
-                            )
-                        }
+                        0 -> HomeScreen(
+                            container.db, container.settings, mine,
+                            onSettings = { nav.go("settings") }, onLedger = { nav.go("ledger") }, onEdit = edit,
+                        )
                         1 -> InsightsScreen(
-                            container.db, family.feed, container.settings.insightsList, { container.settings.insightsList = it },
+                            container.db, mine, container.settings.insightsList, { container.settings.insightsList = it },
                             onCategory = openCategory, onEdit = edit,
                         )
                         2 -> EmptyState(Icons.Outlined.Forum, t("discuss.title"), t("discuss.soon"))
                         else -> {
                             FamilyScreen(
                                 family, container.db, active, onEdit = edit,
-                                onList = { nav.go("family-list") }, onLedger = { nav.go("ledger") }, onCategories = { nav.go("categories") },
+                                onList = { nav.go("family-list") }, onCategories = { nav.go("categories") },
                             ) { nav.go("family-settings") }
                         }
                     }
@@ -214,8 +200,7 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                 if (p == null) {
                     LaunchedEffect(Unit) { nav.popBackStack() }
                 } else {
-                    val stale by container.family.othersStale.collectAsStateWithLifecycle()
-                    CategoryExpensesScreen(container.db, family.feed, p, offline = stale, onBack = { nav.back() }, onEdit = edit)
+                    CategoryExpensesScreen(container.db, mine, p, onBack = { nav.back() }, onEdit = edit)
                 }
             }
             composable("categories") { CategoriesScreen(container.db) { nav.back() } }

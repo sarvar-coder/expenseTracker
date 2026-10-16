@@ -105,8 +105,7 @@ private fun lastMonth(year: Int): Int = LocalDate.now().let { if (year == it.yea
  * [CategoryExpensesScreen] via [onCategory]). Period is a month of the chosen
  * year, narrowed by the shared filter page (its Sana range replaces
  * the month); both modes see the same rows. Aggregation lives in the pure
- * [insightsFor]. Data is the family [feed]: all my rows plus other members'
- * shared rows (others' as last fetched when offline); not in a family, just mine.
+ * [insightsFor]. Data is [feed]: only my rows (others' live on the Oila tab).
  * [showList]/[onMode]: the remembered mode (SettingsStore.insightsList).
  */
 @Composable
@@ -129,16 +128,12 @@ fun InsightsScreen(
     val now = LocalDate.now()
     var year by rememberSaveable { mutableIntStateOf(now.year) }
     var month by rememberSaveable { mutableIntStateOf(now.monthValue) }
-    var saved by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
+    var filter by rememberSaveable(stateSaver = ActivityFilterSaver) { mutableStateOf(ActivityFilter()) }
     var filterOpen by remember { mutableStateOf(false) }
     var list by rememberSaveable { mutableStateOf(showList) }
     var query by rememberSaveable { mutableStateOf("") }
     var yearSheet by remember { mutableStateOf(false) }
 
-    // Everyone in the feed, ex-members' history included; A'zo row only with someone besides me.
-    val members = rows.mapNotNull { r -> r.expense.ownerId?.let { it to r.ownerName } }.toMap()
-    // A picked member who left the feed (left the family) stops filtering instead of hiding everything.
-    val filter = saved.copy(memberIds = saved.memberIds.filterTo(HashSet()) { it in members })
     val range = filter.range
     val (start, end) = if (range == null) {
         LocalDate.of(year, month, 1).let { it to it.plusMonths(1) }
@@ -165,7 +160,7 @@ fun InsightsScreen(
             Spacer(Modifier.height(AppSpace.gap))
             if (!filter.isEmpty) {
                 ActiveFilters(
-                    filter, categories.associateBy { it.id }, onChange = { saved = it }, members = members,
+                    filter, categories.associateBy { it.id }, onChange = { filter = it },
                     // No Sana in the filter: the month still applies, so show it.
                     leading = if (range == null) {
                         { SuggestionChip({}, { Text("${monthName(month)} $year") }) }
@@ -232,8 +227,7 @@ fun InsightsScreen(
     if (filterOpen) {
         ActivityFilterPage(
             filter, categories.filter { !it.isArchived }, onDismiss = { filterOpen = false },
-            members = if (members.size > 1) members else emptyMap(),
-        ) { saved = it; filterOpen = false }
+        ) { filter = it; filterOpen = false }
     }
 }
 

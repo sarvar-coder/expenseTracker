@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -56,8 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +78,7 @@ import com.sarvarbek.expense_tracker.ui.common.rememberExpenseTap
 import com.sarvarbek.expense_tracker.ui.common.ConfirmDialog
 import com.sarvarbek.expense_tracker.ui.common.DividedCard
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
+import com.sarvarbek.expense_tracker.ui.common.ListBanner
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Money
 import com.sarvarbek.expense_tracker.ui.common.SectionLabel
@@ -177,7 +175,6 @@ fun FamilyScreen(
     active: Boolean = true,
     onEdit: (Expense) -> Unit = {},
     onList: () -> Unit = {},
-    onLedger: () -> Unit = {},
     onCategories: () -> Unit = {},
     onSettings: () -> Unit = {},
 ) {
@@ -213,12 +210,10 @@ fun FamilyScreen(
             item {
                 val f = state.overview
                 when {
-                    state.loaded && f == null -> NoFamily(state.invites, show, act, onLedger, onCategories)
-                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onLedger, onCategories)
+                    state.loaded && f == null -> NoFamily(state.invites, show, act, onCategories)
+                    state.loaded && f != null -> InFamily(f, rows, cats, onEdit, onList, onCategories)
                     state.failed -> Column {
                         EmptyState(Icons.Outlined.WifiOff, t("family.load_failed"), t("family.load_failed_hint"))
-                        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // adding a Hissa is local-first
-                        Spacer(Modifier.height(AppSpace.gap))
                         CategoriesBanner(onCategories) // categories are local: work offline
                     }
                     else -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = AppTheme.colors.accent) }
@@ -242,7 +237,7 @@ private fun HistoryDialog(onDismiss: () -> Unit, onPick: (Boolean) -> Unit) = Al
 )
 
 @Composable
-private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onLedger: () -> Unit, onCategories: () -> Unit) {
+private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, onCategories: () -> Unit) {
     val ty = MaterialTheme.typography
     val close = { show(null) }
     Column {
@@ -279,8 +274,6 @@ private fun NoFamily(invites: List<FamilyInvite>, show: ShowDialog, act: Act, on
             Text(t("family.create"))
         }
         Spacer(Modifier.height(AppSpace.section))
-        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // the only way to add a Hissa
-        Spacer(Modifier.height(AppSpace.gap))
         CategoriesBanner(onCategories)
     }
 }
@@ -294,7 +287,6 @@ private fun InFamily(
     cats: List<Category>,
     onEdit: (Expense) -> Unit,
     onList: () -> Unit,
-    onLedger: () -> Unit,
     onCategories: () -> Unit,
 ) {
     val range = familyRange()
@@ -304,8 +296,6 @@ private fun InFamily(
     Column {
         BudgetCard(HomeSummary(f.spent, f.budget))
         Spacer(Modifier.height(AppSpace.section))
-        ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger)
-        Spacer(Modifier.height(AppSpace.gap))
         CategoriesBanner(onCategories)
         SectionLabel(t("family.members"))
         DividedCard(f.members, indent = 16.dp) { m -> MemberRow(m, f.myId) }
@@ -341,35 +331,6 @@ internal fun familySelect(f: FamilyOverview): (List<FamilyExpense>) -> List<Fami
 
 @Composable
 private fun CategoriesBanner(onClick: () -> Unit) = ListBanner(t("settings.categories"), t("family.categories_hint"), onClick)
-
-/** Edge-to-edge rounded hero strip: title + subtitle, opens a page ("Ro'yxat" → [FamilyListScreen], "Hissa" → [LedgerScreen], "Turkumlar"). */
-@Composable
-private fun ListBanner(title: String, subtitle: String, onClick: () -> Unit) {
-    val c = AppTheme.colors
-    val ty = MaterialTheme.typography
-    Row(
-        Modifier
-            // Escape the page's horizontal padding: full screen width.
-            .layout { m, k ->
-                val extra = (AppSpace.page * 2).roundToPx()
-                val w = k.maxWidth + extra
-                val p = m.measure(k.copy(minWidth = w, maxWidth = w))
-                layout(k.maxWidth, p.height) { p.place(-extra / 2, 0) }
-            }
-            .clip(RoundedCornerShape(20.dp))
-            .background(c.hero)
-            .clickable(role = Role.Button, onClick = onClick)
-            .defaultMinSize(minHeight = 76.dp)
-            .padding(horizontal = AppSpace.page, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = ty.titleMedium.copy(color = c.onHero))
-            Text(subtitle, style = ty.bodySmall.copy(color = c.onHero.copy(alpha = 0.72f)))
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.onHero)
-    }
-}
 
 @Composable
 internal fun SharedRow(fe: FamilyExpense, category: com.sarvarbek.expense_tracker.data.Category?, onEdit: (Expense) -> Unit) = Row(
