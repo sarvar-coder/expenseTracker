@@ -6,7 +6,7 @@ declare
   a uuid := gen_random_uuid(); b uuid := gen_random_uuid();
   ca uuid := gen_random_uuid(); cb1 uuid := gen_random_uuid(); cb2 uuid := gen_random_uuid();
   e1 uuid := gen_random_uuid(); eb1 uuid := gen_random_uuid(); eb2 uuid := gen_random_uuid(); eb4 uuid := gen_random_uuid();
-  eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid(); eb7 uuid := gen_random_uuid(); ck uuid := gen_random_uuid();
+  eb5 uuid := gen_random_uuid(); eb6 uuid := gen_random_uuid(); eb7 uuid := gen_random_uuid(); ff uuid := gen_random_uuid(); fk uuid := gen_random_uuid();
   fid uuid; inv uuid; newcat uuid; n int; r record; ok boolean;
 begin
   insert into auth.users (id, email, aud, role, raw_user_meta_data) values
@@ -22,7 +22,11 @@ begin
   perform public.register_push_token('tok-a');
   select count(*) into n from public.categories where family_id = fid; assert n = 0, 'family owns no categories';
   select count(*) into n from public.categories where id = ca and owner_id = a and deleted_at is null; assert n = 1, 'Food stays A''s own';
-  insert into public.categories (id, owner_id, name, color_hex) values (ck, a, 'Kino', 'C07FA6'); -- admin in a family: own category
+  insert into public.categories (id, owner_id, name, color_hex) values (gen_random_uuid(), a, 'Kino', 'C07FA6'); -- admin in a family: own category
+  -- legacy family categories (pre-2.3.0 rows an old APK or offline edit may still name)
+  execute 'reset role';
+  insert into public.categories (id, family_id, name, color_hex) values (ff, fid, 'FOOD', '6FA86A'), (fk, fid, 'Kino', 'C07FA6');
+  execute 'set local role authenticated';
   insert into public.invites (family_id, email, invited_by) values (fid, 'b@test.uz', a) returning id into inv;
 
   -- B: personal data, joins with history
@@ -49,19 +53,25 @@ begin
   select category_id into newcat from public.expenses where id = eb1; assert newcat = cb1, 'joining keeps own food';
   select count(*) into n from public.expenses where id = eb2 and category_id = cb2 and pending_category is null; assert n = 1, 'joining keeps own Gym';
   select count(*) into n from public.categories where owner_id = b and deleted_at is null; assert n = 2, 'B keeps own categories, got ' || n;
-  select count(*) into n from public.categories where id in (ca, ck); assert n = 0, 'B cannot read A categories';
+  select count(*) into n from public.categories where id in (ca, ff, fk); assert n = 0, 'B cannot read A or family categories';
   update public.categories set name = 'Hacked', updated_at = now() + interval '1 second' where id = ca;
   get diagnostics n = row_count; assert n = 0, 'B cannot edit A category';
-  -- an expense naming someone else's category moves to the owner's same-name one
+  -- another user's personal category is refused
+  begin
+    insert into public.expenses (id, category_id, description, amount, date, source) values (gen_random_uuid(), ca, 'x', 1, now(), 'manual');
+    ok := false;
+  exception when others then ok := sqlerrm = 'foreign_category'; end;
+  assert ok, 'expense cannot point at A''s category';
+  -- an expense naming an old family category moves to the owner's same-name one
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, is_private, raw_input)
-    values (eb4, fid, ca, 'secret', 30, now(), 'typed', true, 'secret 30');
-  select count(*) into n from public.expenses where id = eb4 and category_id = cb1; assert n = 1, 'foreign Food -> own food';
+    values (eb4, fid, ff, 'secret', 30, now(), 'typed', true, 'secret 30');
+  select count(*) into n from public.expenses where id = eb4 and category_id = cb1; assert n = 1, 'family FOOD -> own food';
   select count(*) into n from public.expenses where id = eb4 and not is_private; assert n = 1, 'old APK is_private forced false';
   update public.expenses set is_private = true, updated_at = now() + interval '1 second' where id = eb4;
   select count(*) into n from public.expenses where id = eb4 and not is_private; assert n = 1, 'is_private stays false on update';
   -- transfer to A: out of family totals and the family list
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, transfer_to, raw_input)
-    values (eb7, fid, ca, '-> Ali', 500, now(), 'typed', a, 'Aliga 500');
+    values (eb7, fid, ff, '-> Ali', 500, now(), 'typed', a, 'Aliga 500');
   -- new-expense push (#79): eb4 only; owner excluded; transfer, edit, delete, bulk and old rows don't enqueue
   update public.expenses set description = 'secret2', updated_at = now() + interval '2 second' where id = eb4;
   update public.expenses set deleted_at = now(), updated_at = now() + interval '3 second' where id = eb2;
@@ -104,12 +114,12 @@ begin
   insert into public.categories (id, owner_id, name, color_hex) values (gen_random_uuid(), b, 'Taxi', '5B8DB8'); -- member: own category
   -- ...or to a copy when the owner has none (old APK, offline edit)
   insert into public.expenses (id, family_id, category_id, description, amount, date, source)
-    values (eb5, fid, ck, 'film', 10, now(), 'typed');
+    values (eb5, fid, fk, 'film', 10, now(), 'typed');
   select count(*) into n from public.expenses e join public.categories c on c.id = e.category_id
-  where e.id = eb5 and c.owner_id = b and c.name = 'Kino' and c.color_hex = 'C07FA6'; assert n = 1, 'foreign Kino -> own copy';
-  update public.expenses set category_id = ck, updated_at = now() + interval '10 second' where id = eb2;
+  where e.id = eb5 and c.owner_id = b and c.name = 'Kino' and c.color_hex = 'C07FA6'; assert n = 1, 'family Kino -> own copy';
+  update public.expenses set category_id = fk, updated_at = now() + interval '10 second' where id = eb2;
   select count(*) into n from public.expenses e join public.categories c on c.id = e.category_id
-  where e.id = eb2 and c.owner_id = b and c.name = 'Kino'; assert n = 1, 'update to foreign category -> own copy';
+  where e.id = eb2 and c.owner_id = b and c.name = 'Kino'; assert n = 1, 'update to family category -> own copy';
   update public.expenses set category_id = cb2, updated_at = now() + interval '11 second' where id = eb2;
   insert into public.expenses (id, family_id, category_id, description, amount, date, source, pending_category)
     values (eb6, fid, cb1, 'soup', 10, now(), 'typed', 'FOOD');

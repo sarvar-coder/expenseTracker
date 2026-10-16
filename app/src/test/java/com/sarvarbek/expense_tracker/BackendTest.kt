@@ -153,6 +153,17 @@ class BackendTest {
         assertEquals(Triple("srv-food", "u1", true), Triple(e.categoryId, e.ownerId, e.dirty))
     }
 
+    @Test fun adoptLocalMergesUnpushedOwnedCategoryIntoPulledTwin() = runBlocking {
+        val local = db.insertCategory(Category(name = "Kino", colorHex = "AAAAAA", ownerId = "u1")) // claimed, push refused
+        val expenseId = addExpense(local)
+        applyCategories(database, listOf(serverCategory("srv-kino", "kino ")))
+
+        adoptLocal(database, "u1", "fam")
+
+        assertEquals(listOf("srv-kino"), db.allCategoryRows().filter { "kino" in it.name.lowercase() }.map { it.id })
+        assertEquals("srv-kino", db.getExpenses().single { it.id == expenseId }.categoryId)
+    }
+
     @Test fun adoptLocalInFamilyKeepsCategoriesPersonal() = runBlocking {
         val gym = db.insertCategory(Category(name = "Gym", colorHex = "AAAAAA"))
         val expenseId = addExpense(gym)

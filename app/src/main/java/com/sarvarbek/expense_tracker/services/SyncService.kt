@@ -260,18 +260,25 @@ class SyncService(
 /**
  * Gives unowned local rows (made before sign-in or since the last sync) to
  * [uid]. Unowned categories named like an existing one are merged into it;
- * the rest become the user's own (in a family too).
+ * the rest become the user's own (in a family too). An owned, still unpushed
+ * category whose name a pulled row now holds (another device, the 2.3.0
+ * server copy) is merged too: the server's unique name would refuse it forever.
  */
 suspend fun adoptLocal(database: AppDatabase, uid: String, familyId: String?) =
     database.withTransaction {
         val db = database.dao()
-        val (orphans, rest) = db.allCategoryRows().partition { it.ownerId == null && it.familyId == null }
-        val owned = rest.filter { it.deletedAt == null }.associate { norm(it.name) to it.id }
-        for (k in orphans) {
-            val twin = owned[norm(k.name)] ?: continue
+        suspend fun merge(k: Category, into: Map<String, String>) {
+            val twin = into[norm(k.name)]?.takeIf { it != k.id } ?: return
             db.moveExpenses(k.id, twin)
-            db.hardDeleteCategory(k.id) // never pushed, so a hard delete is safe
+            db.hardDeleteCategory(k.id) // the server can't hold it under this name, so nothing to tombstone
         }
+        val live = db.allCategoryRows().filter { it.deletedAt == null }
+        val pulled = live.filter { it.ownerId != null && !it.dirty }.associate { norm(it.name) to it.id }
+        for (k in live.filter { it.ownerId != null && it.dirty }) merge(k, pulled)
+        val (orphans, owned) = db.allCategoryRows().filter { it.deletedAt == null }
+            .partition { it.ownerId == null && it.familyId == null }
+        val byName = owned.associate { norm(it.name) to it.id }
+        for (k in orphans) merge(k, byName)
         db.claimCategories(uid)
         db.claimExpenses(uid, familyId)
     }

@@ -55,9 +55,12 @@ from public.categories p
 where m.personal is null
   and p.owner_id = m.user_id and lower(p.name) = m.lname and p.deleted_at is null;
 
--- Repoint (frozen history included) and bump updated_at so clients pull it.
+-- Repoint (frozen history included). updated_at stays: sync_stamp bumps
+-- synced_at so clients pull the row, and an offline edit queued before this
+-- (older client stamp than now()) still lands instead of being dropped as
+-- stale; expense_guard then moves its old family category_id to the copy.
 update public.expenses e
-set category_id = m.personal, pending_category = null, updated_at = now()
+set category_id = m.personal, pending_category = null
 from cat_map m
 where e.category_id = m.fam_cat and e.owner_id = m.user_id;
 
@@ -86,9 +89,10 @@ create policy categories_update on public.categories for update to authenticated
   using (owner_id = (select auth.uid()) and family_id is null)
   with check (owner_id = (select auth.uid()) and family_id is null);
 
--- An expense always points at its owner's category. A write naming someone
--- else's (an offline edit still on the old family category, an old APK) is
--- moved to the owner's same-name category, copied over if missing.
+-- An expense always points at its owner's category. A write naming an old
+-- family category (an offline edit from before this migration, an old APK)
+-- is moved to the owner's same-name category, copied over if missing.
+-- Another user's personal category is refused (no copying by guessed id).
 create function private.own_category(p_cat uuid) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -99,13 +103,13 @@ begin
   select owner_id, name, icon_key, color_hex, is_archived into c
   from public.categories where id = p_cat;
   if not found or c.owner_id = uid then return p_cat; end if; -- missing: the FK reports it
+  if c.owner_id is not null then raise exception 'foreign_category'; end if;
+  -- another device of this user may insert the same name concurrently
+  insert into public.categories (id, owner_id, name, icon_key, color_hex, is_archived)
+  values (gen_random_uuid(), uid, c.name, c.icon_key, c.color_hex, c.is_archived)
+  on conflict do nothing;
   select id into cid from public.categories
   where owner_id = uid and lower(name) = lower(c.name) and deleted_at is null;
-  if cid is null then
-    insert into public.categories (id, owner_id, name, icon_key, color_hex, is_archived)
-    values (gen_random_uuid(), uid, c.name, c.icon_key, c.color_hex, c.is_archived)
-    returning id into cid;
-  end if;
   return cid;
 end $$;
 revoke execute on function private.own_category(uuid) from public, anon;
