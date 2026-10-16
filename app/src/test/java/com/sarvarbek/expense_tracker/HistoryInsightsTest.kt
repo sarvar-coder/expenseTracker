@@ -37,8 +37,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.services.mergeFeed
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import com.sarvarbek.expense_tracker.ui.common.LocalToaster
 import com.sarvarbek.expense_tracker.ui.common.Toaster
@@ -179,57 +177,6 @@ class HistoryInsightsTest {
         rule.onNodeWithText("Dekabr").assertExists()
     }
 
-    @Test fun insightsCountsWholeFamilyAndFiltersByMember() {
-        add("Coffee", 45000, "Food & dining") // mine, not yet synced: no ownerId
-        val transport = runBlocking { db.getCategories().first { it.name == "Transport" }.id }
-        fun other(id: String, amount: Long, owner: String) = Expense(
-            id = id, description = "Taksi", amount = amount, categoryId = transport,
-            date = System.currentTimeMillis(), source = ExpenseSource.manual, ownerId = owner,
-        )
-        val others = MutableStateFlow(listOf(FamilyExpense(other("o1", 30000, "u2"), "Vali"), FamilyExpense(other("o2", 5000, "u3"), "Gul")))
-        val feed = combine(db.watchExpenses(), others) { own, o -> mergeFeed(own, o, "Siz", "u1") }
-        show { InsightsScreen(db, feed, showList = false) }
-        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 80 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("Transport").assertExists()
-
-        // A'zo: Vali only, total and legend follow the filtered rows.
-        rule.onNodeWithContentDescription("Filtr").performClick()
-        tap("A'zo")
-        waitFor("Tayyor")
-        rule.onNode(hasText("Vali") and isToggleable()).performClick()
-        tap("Tayyor")
-        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
-        tap("Qo'llash")
-        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 30 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
-        chip("Vali").assertExists()
-        rule.onNodeWithText("Food & dining").assertDoesNotExist()
-
-        // Me ("Siz"): my unsynced row counts under my id.
-        removeChip()
-        rule.onNodeWithContentDescription("Filtr").performClick()
-        tap("A'zo")
-        waitFor("Tayyor")
-        rule.onNode(hasText("Siz") and isToggleable()).performClick()
-        tap("Tayyor")
-        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
-        tap("Qo'llash")
-        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 45 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
-
-        // Vali picked, then Vali leaves the feed: the stale pick stops filtering.
-        removeChip()
-        rule.onNodeWithContentDescription("Filtr").performClick()
-        tap("A'zo")
-        waitFor("Tayyor")
-        rule.onNode(hasText("Vali") and isToggleable()).performClick()
-        tap("Tayyor")
-        rule.waitUntil(5000) { rule.onAllNodesWithText("Tayyor").fetchSemanticsNodes().isEmpty() }
-        tap("Qo'llash")
-        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 30 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
-        others.value = others.value.filter { it.ownerName != "Vali" }
-        rule.waitUntil(5000) { rule.onAllNodes(hasContentDescription("Jami 50 000 UZS")).fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithContentDescription("Olib tashlash").assertDoesNotExist()
-    }
-
     @Test fun insightsListByDefaultToggleAndCategoryTapOpenItsExpenses() {
         add("Coffee", 45000, "Food & dining")
         add("Bus", 5000, "Transport")
@@ -291,7 +238,7 @@ class HistoryInsightsTest {
     }
 
     @Test fun filterSurvivesSaveRestore() {
-        val f = ActivityFilter(setOf("a", "b"), LocalDate.of(2026, 7, 5)..LocalDate.of(2026, 7, 9), 1000, null, setOf("u2"))
+        val f = ActivityFilter(setOf("a", "b"), LocalDate.of(2026, 7, 5)..LocalDate.of(2026, 7, 9), 1000, null)
         val saved = with(ActivityFilterSaver) { SaverScope { true }.save(f) }!!
         assertEquals(f, ActivityFilterSaver.restore(saved))
         assertEquals(ActivityFilter(), ActivityFilterSaver.restore(with(ActivityFilterSaver) { SaverScope { true }.save(ActivityFilter()) }!!))

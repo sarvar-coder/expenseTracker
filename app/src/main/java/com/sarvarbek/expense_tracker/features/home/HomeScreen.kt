@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -27,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +35,7 @@ import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
+import com.sarvarbek.expense_tracker.ui.common.ListBanner
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.ui.common.Money
@@ -53,19 +51,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Today: my total (plus the family's, in a family), slim personal month-budget
- * line, and today's rows from the family [feed]: mine plus other members'
- * shared ones, newest first. Not in a family the feed is just mine.
- * [offline]: others' rows are as last fetched. [inFamily]: show the family line.
+ * Today: my total, slim personal month-budget line, the Hissa banner
+ * ([onLedger]), and today's rows from [feed]: only mine, newest first
+ * (other members' rows live on the Oila tab).
  */
 @Composable
 fun HomeScreen(
     db: ExpenseDao,
     settings: SettingsStore,
     feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
-    offline: Boolean = false,
-    inFamily: Boolean = false,
     onSettings: () -> Unit,
+    onLedger: () -> Unit = {},
     onEdit: (Expense) -> Unit,
 ) {
     val feedRows by feed.collectAsStateWithLifecycle(null) // null = loading
@@ -78,11 +74,9 @@ fun HomeScreen(
     val contributions by remember(db) { db.watchContributions() }.collectAsStateWithLifecycle(emptyList())
     val now = LocalDate.now()
     val today = remember(rows, now) { todayExpenses(rows, now) }
-    // The month line stays personal: my contributions + received vs my spending.
+    // The month line: my contributions + received vs my spending.
     val received = s.receivedIn(now)
-    val month = remember(rows, contributions, received, now) { balance(rows.filter { it.mine }.map { it.expense }, contributions, received, now).summary }
-    // Others' rows also count: the family pref can lag a join until the next recomposition.
-    val family = inFamily || today.any { !it.mine }
+    val month = remember(rows, contributions, received, now) { balance(rows.map { it.expense }, contributions, received, now).summary }
     val catById = categories.associateBy { it.id }
 
     // Bottom padding clears the floating add button.
@@ -92,20 +86,15 @@ fun HomeScreen(
         // Transfers stay in the list but aren't "spent".
         item {
             val spent = today.filter { it.expense.transferTo == null }
-            val mine = spent.filter { it.mine }
-            TodayHero(mine.sumOf { it.expense.amount }, mine.size, month, spent.takeIf { family }?.sumOf { it.expense.amount })
+            TodayHero(spent.sumOf { it.expense.amount }, spent.size, month)
+        }
+        item {
+            Spacer(Modifier.height(AppSpace.gap))
+            ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // Hissa works without a family too
         }
         item {
             Spacer(Modifier.height(AppSpace.section))
             Text(t("home.today_expenses"), style = MaterialTheme.typography.titleMedium)
-            if (offline) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.WifiOff, null, tint = AppTheme.colors.muted)
-                    Spacer(Modifier.width(8.dp))
-                    Text(t("insights.offline"), color = AppTheme.colors.muted, style = MaterialTheme.typography.bodySmall)
-                }
-            }
             Spacer(Modifier.height(10.dp))
         }
         item {
@@ -139,8 +128,7 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
 }
 
 @Composable
-/** [familyTotal]: today's family spend (mine included), null when not in a family. */
-private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: Long?) {
+private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
@@ -148,18 +136,9 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary, familyTotal: 
     Column(
         Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp),
     ) {
-        val label = when {
-            familyTotal != null -> t("home.mine_today", count)
-            count == 0 -> t("home.spent_today")
-            else -> t("home.spent_today_count", count)
-        }
-        Text(label, style = ty.labelMedium.copy(color = soft))
+        Text(if (count == 0) t("home.spent_today") else t("home.spent_today_count", count), style = ty.labelMedium.copy(color = soft))
         Spacer(Modifier.height(6.dp))
         Money(total, style = ty.displayLarge, color = c.onHero, autoSize = true)
-        if (familyTotal != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(t("home.family_today", formatMoney(familyTotal)), style = ty.labelMedium.copy(color = c.onHero))
-        }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             if (month.budget <= 0) {

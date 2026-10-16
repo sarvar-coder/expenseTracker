@@ -182,8 +182,7 @@ class SettingsFamilyTest : ScreenTest() {
     @Test fun notInFamilyShowsInvitesAndCreate() {
         val state = FamilyState(null, load = { null }, loadInvites = { listOf(FamilyInvite("i1", "Uy", "Ali")) })
         var categories = false
-        var ledger = false
-        show { FamilyScreen(state, db, onLedger = { ledger = true }, onCategories = { categories = true }) }
+        show { FamilyScreen(state, db, onCategories = { categories = true }) }
 
         waitFor("“Uy” oilasiga taklif")
         rule.onNodeWithText("Siz hali oilada emassiz").assertExists()
@@ -192,8 +191,7 @@ class SettingsFamilyTest : ScreenTest() {
         assertTapTargets()
         rule.onNodeWithText("Turkumlar").performSemanticsAction(SemanticsActions.OnClick)
         assertTrue(categories)
-        rule.onNodeWithText("Hissa").performSemanticsAction(SemanticsActions.OnClick) // Hissa adds work without a family too
-        assertTrue(ledger)
+        rule.onNodeWithText("Hissa").assertDoesNotExist() // moved to Home
     }
 
     @Test fun offlineFamilyShowsError() {
@@ -382,10 +380,14 @@ class LedgerScreenTest : ScreenTest() {
 
     @Test fun parseLedgerRows() {
         val json = kotlinx.serialization.json.Json.parseToJsonElement(
-            """[{"kind":"transfer","id":"1","from_name":"Ali","to_name":null,"amount":5,"note":"x","date":"2026-10-01T10:00:00+00:00"},
-               {"kind":"contribution","id":"2","from_name":"Ali","to_name":null,"amount":7,"note":"y","date":"2026-10-01T10:00:00+00:00"}]""",
+            """[{"kind":"transfer","id":"1","from_user":"me","from_name":"Ali","to_user":null,"to_name":null,"amount":5,"note":"x","date":"2026-10-01T10:00:00+00:00"},
+               {"kind":"contribution","id":"2","from_user":"me","from_name":"Ali","to_name":null,"amount":7,"note":"y","date":"2026-10-01T10:00:00+00:00"},
+               {"kind":"contribution","id":"3","from_user":"vali","from_name":"Vali","to_name":null,"amount":9,"note":"z","date":"2026-10-01T10:00:00+00:00"},
+               {"kind":"transfer","id":"4","from_user":"vali","from_name":"Vali","to_user":"me","to_name":"Ali","amount":3,"note":"w","date":"2026-10-01T10:00:00+00:00"},
+               {"kind":"transfer","id":"5","from_user":"vali","from_name":"Vali","to_user":"ota","to_name":"Ota","amount":4,"note":"v","date":"2026-10-01T10:00:00+00:00"}]""",
         ) as kotlinx.serialization.json.JsonArray
-        val r = parseLedger(json.map { it as kotlinx.serialization.json.JsonObject })
+        val r = parseLedger(json.map { it as kotlinx.serialization.json.JsonObject }, "me")
+        assertEquals(listOf("1", "2", "4"), r.map { it.id }) // only rows I sent or got
         assertEquals("?", r[0].to)
         assertTrue(r[0].isTransfer)
         assertFalse(r[1].isTransfer)

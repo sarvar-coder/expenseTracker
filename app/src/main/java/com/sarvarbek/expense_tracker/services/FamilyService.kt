@@ -184,13 +184,13 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
         }
     }
 
-    /** The family's (or, outside one, own) contributions and transfers in [month], newest first. Syncs first so own new rows show. */
+    /** My contributions and the transfers I sent or got in [month], newest first. Syncs first so own new rows show. */
     suspend fun ledger(month: LocalDate): List<LedgerRow> {
         sync.run()
         return parseLedger(rpc("family_ledger", buildJsonObject {
             put("p_from", Instant.ofEpochMilli(month.startMillis()).toString())
             put("p_to", Instant.ofEpochMilli(month.plusMonths(1).startMillis()).toString())
-        }).decodeList())
+        }).decodeList(), uid)
     }
 
     suspend fun create(name: String, includeHistory: Boolean): String =
@@ -276,8 +276,11 @@ internal fun parseMember(it: JsonObject): FamilyMember {
     )
 }
 
-/** `family_ledger` rows; a transfer whose receiver's account is gone keeps a "?" name. */
-internal fun parseLedger(rows: List<JsonObject>) = rows.map {
+/**
+ * `family_ledger` rows that are [me]'s (sent or received; the RPC returns the whole
+ * family's). A transfer whose receiver's account is gone keeps a "?" name.
+ */
+internal fun parseLedger(rows: List<JsonObject>, me: String) = rows.filter { it.str("from_user") == me || it.str("to_user") == me }.map {
     val transfer = it.str("kind") == "transfer"
     LedgerRow(
         it.str("id")!!, it.str("from_name").orEmpty(), if (transfer) it.str("to_name") ?: "?" else null,

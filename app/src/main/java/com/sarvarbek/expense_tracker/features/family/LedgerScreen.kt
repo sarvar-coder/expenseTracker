@@ -58,8 +58,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * Hissa page: the family's contributions and transfers (who → who) for a
- * month, newest first; "+" opens Hissa qo'shish. Online only ([load] =
+ * Hissa page: my contributions and the transfers I sent or got (who → who)
+ * for a month, newest first; "+" opens Hissa qo'shish. Online only ([load] =
  * FamilyService.ledger); a failed refresh keeps the last rows with an offline note.
  * ponytail: rows refetch on every visit (no cache); hold them above the route if that flickers.
  */
