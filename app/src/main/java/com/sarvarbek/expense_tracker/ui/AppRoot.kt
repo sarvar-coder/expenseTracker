@@ -116,9 +116,10 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     val mine = remember { container.db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } }
     var tab by remember { mutableStateOf<Int?>(null) }
     // Notification taps: a new member expense is someone else's, so it opens Oila's Ro'yxat
-    // (back lands on the Oila tab). The resume sync brings the new row in.
+    // (back lands on the Oila tab). A sync pass refreshes others' rows, so the new one shows.
     LaunchedEffect(pushRoute) {
         if (pushRoute?.startsWith(Push.ROUTE_EXPENSE) == true) {
+            scope.launch { container.sync.run() }
             nav.popBackStack("shell", inclusive = false)
             tab = TAB_FAMILY
             nav.navigate("family-list")
