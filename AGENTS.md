@@ -86,3 +86,4 @@ finds nothing). Robolectric is pinned to `sdk=34` because SDK 35+ sandboxes need
 ## Lessons learned
 When the user corrects a mistake, add a one-line entry to Lessons learned. When a lesson recurs, promote it
 to Conventions. Remove lessons that no longer apply. Format: `- YYYY-MM-DD <mistake> → <what to do instead>`.
+- 2026-11-02 Swapped Shell's Scaffold for a Box and lost LocalContentColor (dark-mode text went black, shipped in 2.5.0) → when removing a Scaffold/Surface, re-provide `LocalContentColor` = `c.text`; check dark mode, light hides it.

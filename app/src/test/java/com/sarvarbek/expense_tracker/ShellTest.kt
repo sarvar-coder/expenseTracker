@@ -204,6 +204,30 @@ class ShellTest {
         rule.runOnIdle { assertEquals(0, pageTaps) }
     }
 
+    @Test fun pagesGetThemeTextColorInDark() = pageTextColor(dark = true)
+    @Test fun pagesGetThemeTextColorInLight() = pageTextColor(dark = false)
+
+    // Uncoloured Text/Icon on a tab page take the Shell's content colour: c.text, never Compose's default black.
+    private fun pageTextColor(dark: Boolean) {
+        var content = Color.Unspecified
+        rule.setContent {
+            AppTheme(dark = dark) {
+                Shell(onAdd = {}) { _, _ ->
+                    content = androidx.compose.material3.LocalContentColor.current
+                    Text("probe")
+                }
+            }
+        }
+        val expected = if (dark) AppColors.Dark.text else AppColors.Light.text
+        val layouts = mutableListOf<TextLayoutResult>()
+        rule.onNodeWithText("probe", useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult].action!!.invoke(layouts)
+        rule.runOnIdle {
+            assertEquals(expected, content)
+            assertEquals(expected, layouts.single().layoutInput.style.color)
+        }
+    }
+
     @Test fun fitTabsFollowsTelegramPasses() {
         val pad = { dp: Float -> dp }
         // Short labels: first pass (16dp padding), grown to fill.

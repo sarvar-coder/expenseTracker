@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.FamilyRestroom
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -159,7 +160,9 @@ fun Shell(
     // Edge to edge, the keyboard doesn't shrink the window: lists must also clear it (Tahlil search).
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val overlayBottom = maxOf(navBottom, imeBottom)
-    Box(Modifier.fillMaxSize().background(c.bg)) {
+    // A Box, not a Scaffold (the bar floats over the pages), so it must hand pages the theme's text colour
+    // itself: Scaffold's Surface did (onBackground); without it uncoloured Text/Icon fall back to black.
+    Box(Modifier.fillMaxSize().background(c.bg)) { CompositionLocalProvider(LocalContentColor provides c.text) {
         CompositionLocalProvider(LocalShellBottom provides maxOf(navBottom + BAR_SPACE + FAB_SIZE + FAB_GAP, imeBottom + AppSpace.gap)) {
             Box(Modifier.statusBarsPadding().fillMaxSize()) {
                 for (i in visited) key(i) {
@@ -195,7 +198,7 @@ fun Shell(
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = maxOf(navBottom + BAR_SPACE + FAB_SIZE + FAB_GAP, overlayBottom))) {
             snackbarHost()
         }
-    }
+    } }
 }
 
 // ponytail: empty tab bodies until each feature step lands.
