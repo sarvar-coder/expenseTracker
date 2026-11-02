@@ -22,8 +22,8 @@ android {
         applicationId = "com.sarvarbek.expense_tracker"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.5.0"
+        versionCode = 9
+        versionName = "2.5.1"
     }
 
     signingConfigs {
