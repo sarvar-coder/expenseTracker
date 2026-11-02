@@ -40,9 +40,6 @@ import com.sarvarbek.expense_tracker.features.family.FamilyState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Forum
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
-import com.sarvarbek.expense_tracker.features.family.LedgerScreen
-import com.sarvarbek.expense_tracker.features.home.ContributionScreen
-import com.sarvarbek.expense_tracker.services.SyncService
 import com.sarvarbek.expense_tracker.features.settings.CategoriesScreen
 import com.sarvarbek.expense_tracker.features.settings.SettingsScreen
 import kotlinx.coroutines.launch
@@ -102,14 +99,9 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
     val edit = { e: Expense -> nav.go("edit/${e.id}") }
     @Composable
     fun Add(editing: Expense?) {
-        // O'tkazma recipients come from the Oila overview; fetch it if the tab wasn't opened yet.
-        LaunchedEffect(Unit) {
-            if (family.overview == null && !container.prefs.getString(SyncService.K_FAMILY, null).isNullOrEmpty()) family.refresh()
-        }
-        val members = family.overview?.let { f -> f.members.filter { it.userId != f.myId }.map { it.userId to it.label } }.orEmpty()
         AddScreen(
             container.db, container.settings, container.aiParser::parse, container.speech,
-            onClose = { nav.back() }, editing = editing, members = members,
+            onClose = { nav.back() }, editing = editing,
         )
     }
     // Asosiy, Tahlil and a category's page show only my rows; others' live on the Oila tab.
@@ -145,8 +137,8 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
                 ) { index, active ->
                     when (index) {
                         0 -> HomeScreen(
-                            container.db, container.settings, mine,
-                            onSettings = { nav.go("settings") }, onLedger = { nav.go("ledger") }, onEdit = edit,
+                            container.db, mine,
+                            onSettings = { nav.go("settings") }, onEdit = edit,
                         )
                         1 -> InsightsScreen(
                             container.db, mine, container.settings.insightsList, { container.settings.insightsList = it },
@@ -187,8 +179,6 @@ private fun Routes(pushRoute: String?, onPushRouted: () -> Unit) {
             }
             // Also popped when the family vanishes (maybe while backgrounded): unguarded, route-scoped.
             composable("family-settings") { FamilySettingsScreen(family) { nav.popBackStack("family-settings", inclusive = true) } }
-            composable("ledger") { LedgerScreen(container.family::ledger, onBack = { nav.back() }) { nav.go("contribution-add") } }
-            composable("contribution-add") { ContributionScreen(container.db) { nav.back() } }
             composable("family-list") {
                 val stale by container.family.othersStale.collectAsStateWithLifecycle()
                 FamilyListScreen(family, container.db, offline = stale, onBack = { nav.back() }, onEdit = edit)

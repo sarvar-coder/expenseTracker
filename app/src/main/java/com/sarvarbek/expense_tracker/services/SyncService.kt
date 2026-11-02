@@ -9,7 +9,6 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.room.withTransaction
 import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Category
-import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
@@ -18,7 +17,6 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.CancellationException
@@ -45,13 +43,10 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
-import com.sarvarbek.expense_tracker.ui.common.startMillis
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.OffsetDateTime
-import java.time.YearMonth
 
 /**
  * Background two-way sync between Room (source of truth) and Supabase.
@@ -136,7 +131,6 @@ class SyncService(
             // Another account on this device: its rows are not ours to show or push.
             db.resetLocal()
             settings.applyProfile(displayName = "")
-            settings.setReceived("", 0)
             prefs.edit { prefs.all.keys.filter { it.startsWith("sync.") }.forEach { remove(it) } }
         }
         prefs.edit { putString(K_UID, uid) }
@@ -150,7 +144,7 @@ class SyncService(
         val prevFamily = prefs.getString(K_FAMILY, null)
         prefs.edit {
             if (prevFamily != null && prevFamily != (familyId ?: "")) {
-                remove("sync.categories"); remove("sync.expenses"); remove("sync.contributions")
+                remove("sync.categories"); remove("sync.expenses")
             }
             putString(K_FAMILY, familyId ?: "")
         }
@@ -164,25 +158,12 @@ class SyncService(
         push("categories", db.dirtyCategories(), Category::toJson) { db.markCategoryClean(it.id, it.updatedAt) }
         push("expenses", db.dirtyExpenses(), Expense::toJson) { db.markExpenseClean(it.id, it.updatedAt) }
         pull("expenses") { applyExpenses(database, it) }
-        push("contributions", db.dirtyContributions(), Contribution::toJson) { db.markContributionClean(it.id, it.updatedAt) }
-        pull("contributions") { applyContributions(database, it) }
-        cacheReceived(uid, familyId)
-    }
-
-    /** This month's transfers to me (others' rows aren't in Room), kept for Home's offline balance. */
-    private suspend fun cacheReceived(uid: String, familyId: String?) {
-        val month = YearMonth.now()
-        val received = if (familyId == null) 0L else client.postgrest.rpc("family_summary", buildJsonObject {
-            put("p_from", Instant.ofEpochMilli(month.atDay(1).startMillis()).toString())
-            put("p_to", Instant.ofEpochMilli(month.plusMonths(1).atDay(1).startMillis()).toString())
-        }).decodeList<JsonObject>().firstOrNull { it.str("user_id") == uid }
-            ?.get("received")?.jsonPrimitive?.longOrNull ?: 0L // server before 20261013120000: no column
-        settings.setReceived(month.toString(), received)
+        // Contributions (Hissa) are dropped since 2.4.0: no longer pushed or pulled; the server keeps them for old APKs.
     }
 
     /**
      * Name: push a local edit, otherwise take the server's (another device may
-     * have changed it). profiles.budget is left alone (old APKs; Hissa replaced it).
+     * have changed it). profiles.budget is left alone (old APKs).
      */
     private suspend fun syncProfile(uid: String) {
         val local = settings.load()
@@ -319,17 +300,6 @@ suspend fun applyExpenses(database: AppDatabase, rows: List<JsonObject>) {
     })
 }
 
-suspend fun applyContributions(database: AppDatabase, rows: List<JsonObject>) {
-    val db = database.dao()
-    val pending = db.dirtyContributions().associate { it.id to it.updatedAt }
-    db.upsertContributions(rows.filter { isFresh(it, pending) }.map { r ->
-        Contribution(
-            id = r.str("id")!!, amount = r.getValue("amount").jsonPrimitive.long, note = r.str("note")!!,
-            date = r.ts("date")!!, updatedAt = r.ts("updated_at")!!, deletedAt = r.ts("deleted_at"), dirty = false,
-        )
-    })
-}
-
 private fun isFresh(r: JsonObject, pending: Map<String, Long>): Boolean {
     val mine = pending[r.str("id")] ?: return true
     return r.ts("updated_at")!! > mine
@@ -361,9 +331,4 @@ private fun Expense.toJson() = jsonOf(
     "description" to description, "amount" to amount, "date" to iso(date), "source" to source.name,
     "raw_input" to rawInput, "is_private" to isPrivate, "pending_category" to pendingCategory, "transfer_to" to transferTo,
     "created_at" to iso(createdAt), "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
-)
-
-private fun Contribution.toJson() = jsonOf(
-    "id" to id, "amount" to amount, "note" to note, "date" to iso(date),
-    "updated_at" to iso(updatedAt), "deleted_at" to iso(deletedAt),
 )

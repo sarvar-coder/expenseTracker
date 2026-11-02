@@ -57,8 +57,8 @@ data class Expense(
 )
 
 /**
- * Hissa: money a member puts into their month (repeat top-ups, note required).
- * Own rows only (the server sets the owner); the family sees totals via family_summary.
+ * Hissa: money a member put into their month. Dropped in 2.4.0: no longer read,
+ * written or synced; the table stays so no migration is destructive.
  */
 @Entity(tableName = "contributions")
 data class Contribution(

@@ -32,14 +32,16 @@ UI words are Uzbek; use them for the features they name.
   Settings opens from the Home gear; **Turkumlar** = categories in Settings.
 - **Oila** — the family tab: family spending only (month total, members' spending, category donut merged by
   normalized name, **Ro'yxat** list). Home and Tahlil show only own rows.
-- **Hissa** — contributions (own `Contribution` rows: money in) plus transfers; the personal budget on Home.
-- **Transfer** — an `Expense` with `transferTo` set. Never counts in family spending.
-- **Available** — own contributions + transfers received − own spending − transfers given, per calendar month
-  (`myAvailable`; mirrors `family_summary.available`). **Shortfall** = overspend beyond it, asked about on save.
+- The app tracks **expenses only**: no income, budget or balance. Home shows today's total plus the month's spending.
+- **Transfer** — legacy: an `Expense` with `transferTo` set. Old rows still show (badge) and stay editable, but new
+  ones can't be made, and they never count in any total.
 - **Frozen** — an ex-member's shared expenses kept in family history, read-only.
 - **Title** — a member's family title (Ota, Ona…), set only by an admin.
 - **Dirty** — local-only flag: row not yet pushed.
 - **Kerakli / needs / category requests** — dropped features (2.3.0); migrations remain in history.
+- **Hissa / contributions / Available / Shortfall / new transfers** — dropped (2.4.0). The Room `contributions` table,
+  the server table and the `family_ledger`/`family_summary` Hissa columns stay for old APKs; the client never reads,
+  writes or syncs them.
 - `is_private`, `pendingCategory`, `profiles.default_private` — legacy, always false/unused; kept for old APKs.
 
 ## Run & test

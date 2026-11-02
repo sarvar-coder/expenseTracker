@@ -43,13 +43,10 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
-import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseSource
 import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.features.add.AddScreen
-import com.sarvarbek.expense_tracker.features.add.shortfallFor
-import com.sarvarbek.expense_tracker.features.home.ContributionScreen
 import com.sarvarbek.expense_tracker.features.home.HomeScreen
 import com.sarvarbek.expense_tracker.services.ParsedExpense
 import com.sarvarbek.expense_tracker.services.SpeechService
@@ -70,7 +67,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.LocalDate
-import java.time.YearMonth
 
 /** Fake STT: `listen` emits a canned transcript at once, no microphone. */
 private class FakeSpeech(context: Context, val transcript: String) : SpeechService(context) {
@@ -108,9 +104,8 @@ class HomeAddTest {
         editing: Expense? = null,
         parsed: ParsedExpense? = null,
         speech: SpeechService = FakeSpeech(context, ""),
-        members: List<Pair<String, String>> = emptyList(),
         aiModes: Boolean = true,
-    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, onClose = {}, editing = editing, members = members, aiModes = aiModes)
+    ) = AddScreen(db, settings, { _, _ -> parsed }, speech, onClose = {}, editing = editing, aiModes = aiModes)
 
     private fun waitFor(text: String, substring: Boolean = false) =
         rule.waitUntil(5000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }
@@ -118,12 +113,6 @@ class HomeAddTest {
     private fun rows() = runBlocking { db.getExpenses() }
 
     private fun waitRows(n: Int) = rule.waitUntil(5000) { rows().size == n }
-
-    /** Enough contributions this month and aiCoffee's month that saves don't hit "Pul qayerdan?". */
-    private fun fund() = runBlocking {
-        db.insertContribution(Contribution(amount = 10_000_000, note = "Oylik"))
-        db.insertContribution(Contribution(amount = 10_000_000, note = "Oylik", date = aiCoffee.date.startMillis()))
-    }
 
     private fun SemanticsNodeInteraction.tap() = performScrollTo().performClick()
 
@@ -138,61 +127,30 @@ class HomeAddTest {
 
     // --- home_screen_test ---
 
-    @Test fun emptyDayShowsEmptyStateAndBudgetHint() {
-        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
+    @Test fun emptyDayShowsEmptyStateAndMonthLine() {
+        show { HomeScreen(db, onSettings = {}, onEdit = {}) }
         waitFor("Bugun hali xarajat yo'q")
-        rule.onNodeWithText("hali hissa yo'q", substring = true).assertExists()
+        rule.onNodeWithText("Oy: 0 UZS").assertExists()
         rule.onNodeWithContentDescription("Sozlamalar").assertHeightIsAtLeast(48.dp)
     }
 
-    @Test fun listsOnlyMyTodayAndShowsMonthLineAndHissa() {
+    @Test fun listsOnlyMyTodayAndShowsMonthSpentWithoutHissa() {
         val food = runBlocking { db.getCategories() }.first()
         val now = System.currentTimeMillis()
         runBlocking {
             db.insertExpense(Expense(description = "Coffee", amount = 45000, categoryId = food.id, date = now, source = ExpenseSource.manual))
             db.insertExpense(Expense(description = "Old taxi", amount = 30000, categoryId = food.id, date = now - 40L * 86_400_000, source = ExpenseSource.manual))
         }
-        runBlocking { db.insertContribution(Contribution(amount = 1_000_000, note = "Oylik")) }
-        settings.setReceived(YearMonth.now().toString(), 200_000) // a transfer from Ali
-        var ledger = false
         // Default feed = own Room rows (AppRoot passes the same): others' rows never reach Home.
-        show { HomeScreen(db, settings, onSettings = {}, onLedger = { ledger = true }, onEdit = {}) }
+        show { HomeScreen(db, onSettings = {}, onEdit = {}) }
         waitFor("Coffee")
         rule.onNodeWithText("Old taxi").assertDoesNotExist()
         rule.onNodeWithText("Bugun hali xarajat yo'q").assertDoesNotExist()
-        // Hero: just mine, no family line; budget line stays personal.
+        // Hero: just mine, no family line; the month line is spending only (Hissa/budget dropped in 2.4.0).
         rule.onNodeWithText("Bugun sarflangan · 1 ta").assertExists()
         rule.onNodeWithText("Oila bugun", substring = true).assertDoesNotExist()
-        rule.onNodeWithText("Oy: 45 000 / 1 200 000", substring = true).assertExists()
-        // Hissa opens from Home now.
-        rule.onNodeWithText("Hissa").performClick()
-        assertTrue(ledger)
-    }
-
-    @Test fun addsContributionWithRequiredNoteThenDeletes() {
-        // The Hissa page's "+" is the only way in (Home's month line no longer opens it).
-        show { ContributionScreen(db) {} }
-        waitFor("Bu oy hali hissa qo'shilmagan")
-        rule.onNodeWithTag("contrib_amount").performTextInput("400000")
-        rule.onNodeWithText("Qo'shish").performClick()
-        rule.waitForIdle()
-        assertTrue("note is required", runBlocking { db.getContributions() }.isEmpty())
-        rule.onNodeWithTag("contrib_note").performTextInput("Oylik")
-        rule.onNodeWithText("Qo'shish").performClick()
-        rule.waitUntil(5000) { runBlocking { db.getContributions() }.isNotEmpty() }
-        assertEquals(listOf(400_000L to "Oylik"), runBlocking { db.getContributions() }.map { it.amount to it.note })
-        waitFor("Bu oy: 400 000 UZS")
-        rule.onNodeWithContentDescription("O'chirish").performClick()
-        waitFor("Hissani o'chirasizmi?")
-        rule.onNodeWithText("O'chirish").performClick()
-        rule.waitUntil(5000) { runBlocking { db.getContributions() }.isEmpty() }
-    }
-
-    @Test fun monthLineCountsContributions() {
-        runBlocking { db.insertContribution(Contribution(amount = 400_000, note = "Oylik")) }
-        show { HomeScreen(db, settings, onSettings = {}, onEdit = {}) }
-        waitFor("Oy: 0 / 400 000", substring = true)
-        rule.onNodeWithText("+ Hissa qo'shish").assertDoesNotExist() // adding lives on the Hissa page only
+        rule.onNodeWithText("Oy: 45 000 UZS").assertExists() // old taxi (40 days back) is never this month
+        rule.onNodeWithText("Hissa", substring = true).assertDoesNotExist()
     }
 
     @Test fun tabsKeepScrollAfterPageAndBack() {
@@ -206,7 +164,7 @@ class HomeAddTest {
             nav = rememberNavController()
             NavHost(nav, "shell") {
                 composable("shell") {
-                    Shell(onAdd = {}) { i, _ -> if (i == 0) HomeScreen(db, settings, onSettings = {}, onEdit = {}) else InsightsScreen(db) }
+                    Shell(onAdd = {}) { i, _ -> if (i == 0) HomeScreen(db, onSettings = {}, onEdit = {}) else InsightsScreen(db) }
                 }
                 composable("page") {}
             }
@@ -264,7 +222,6 @@ class HomeAddTest {
     }
 
     @Test fun manualValidatesThenSavesAmountDescCategoryKecha() {
-        fund()
         settings.lastAddMode = "manual"
         show { Add() }
 
@@ -288,36 +245,28 @@ class HomeAddTest {
         assertEquals(LocalDate.now().minusDays(1), row.date.toLocalDate())
     }
 
-    @Test fun transferPicksMemberSkipsCategoryAndSaves() {
-        fund()
-        settings.lastAddMode = "manual"
-        show { Add(members = listOf("u2" to "Malika · Singil")) }
-
-        rule.onNodeWithTag("transfer").tap()
+    @Test fun editingOldTransferKeepsItATransfer() {
+        val boshqa = runBlocking { db.getCategories() }.first()
+        val old = Expense(description = "→ Malika", amount = 200000, categoryId = boshqa.id, date = System.currentTimeMillis(), source = ExpenseSource.manual, transferTo = "u2")
+        runBlocking { db.insertExpense(old) }
+        show { Add(editing = old) }
+        rule.onNodeWithTag("transfer").assertDoesNotExist()
         rule.onNodeWithText("Turkum tanlang").assertDoesNotExist()
-        maxfiy().assertDoesNotExist()
-        rule.onNodeWithTag("amount").performTextInput("200000")
+        rule.onNodeWithTag("desc").performTextInput("!")
         rule.onNodeWithText("Saqlash").tap()
-        waitFor("Kimga berilganini tanlang")
-
-        rule.onNodeWithText("Malika · Singil").tap()
-        rule.onNodeWithText("Saqlash").tap()
-        waitRows(1)
+        rule.waitUntil(5000) { rows().single().description != old.description }
         val row = rows().single()
-        val boshqa = runBlocking { db.getCategories() }.first { it.name == "Boshqa" }
         assertEquals("u2", row.transferTo)
-        assertEquals("→ Malika · Singil", row.description)
         assertEquals(boshqa.id, row.categoryId)
     }
 
-    @Test fun noTransferToggleOutsideFamily() {
+    @Test fun noTransferToggle() {
         settings.lastAddMode = "manual"
         show { Add() }
         rule.onNodeWithTag("transfer").assertDoesNotExist()
     }
 
     @Test fun noMaxfiyAndNewRowsShared() {
-        fund()
         settings.lastAddMode = "manual"
         show { Add() }
 
@@ -330,77 +279,29 @@ class HomeAddTest {
         assertFalse(rows().single().isPrivate)
     }
 
-    // --- overspend ("Pul qayerdan?") ---
+    // --- no budget: any amount saves at once ---
 
-    private fun fillCoffee(amount: String) {
+    @Test fun bigExpenseSavesWithoutAsking() {
         settings.lastAddMode = "manual"
         show { Add() }
-        rule.onNodeWithTag("amount").performTextInput(amount)
-        rule.onNodeWithTag("desc").performTextInput("Coffee")
+        rule.onNodeWithTag("amount").performTextInput("99000000")
+        rule.onNodeWithTag("desc").performTextInput("Car")
         pickCategory("Turkum tanlang", "Food & dining")
         rule.onNodeWithText("Saqlash").tap()
-    }
-
-    @Test fun overspendAsksSourceNeedsNoteThenWritesBoth() {
-        runBlocking { db.insertContribution(Contribution(amount = 30000, note = "Oylik")) }
-        fillCoffee("45000")
-        waitFor("Pul qayerdan?")
-        rule.onNodeWithText("15 000 UZS", substring = true).assertExists()
-        rule.onNodeWithTag("source_confirm").assertIsNotEnabled()
-        assertEquals(0, rows().size)
-        rule.onNodeWithText("Qarz").performClick()
-        rule.onNodeWithTag("source_confirm").assertIsEnabled().performClick()
-        waitRows(1)
-        val source = runBlocking { db.getContributions() }.first { it.note == "Qarz" }
-        assertEquals(15000L, source.amount)
-        assertTrue(source.dirty && rows().single().dirty)
-    }
-
-    @Test fun overspendCancelSavesNothing() {
-        fillCoffee("45000")
-        waitFor("Pul qayerdan?")
-        rule.onNodeWithText("Bekor qilish").performClick()
-        rule.waitUntil(5000) { rule.onAllNodesWithText("Pul qayerdan?").fetchSemanticsNodes().isEmpty() }
-        assertEquals(0, rows().size)
-        assertEquals(0, runBlocking { db.getContributions() }.size)
-        rule.onNodeWithText("Saqlash").assertIsEnabled()
-    }
-
-    @Test fun withinAvailableSavesDirectly() {
-        runBlocking { db.insertContribution(Contribution(amount = 45000, note = "Oylik")) }
-        fillCoffee("45000")
         waitRows(1)
         rule.onNodeWithText("Pul qayerdan?").assertDoesNotExist()
-        assertEquals(1, runBlocking { db.getContributions() }.size)
+        assertTrue(rows().single().dirty)
     }
 
-    @Test fun aiOverspendGoesThroughSheetAndUndoRemovesBoth() {
+    @Test fun aiSaveUndoRemovesRow() {
         show { Add(parsed = aiCoffee) }
         rule.onNodeWithText("Yozish").performClick()
         rule.onNodeWithTag("input").performTextInput("coffee 45000")
         rule.onNodeWithText("AI bilan qo'shish").tap()
-        waitFor("Pul qayerdan?")
-        rule.onNodeWithText("Maosh").performClick()
-        rule.onNodeWithTag("source_confirm").performClick()
         waitFor("Qo'shildi: Coffee — 45 000 UZS")
-        assertEquals(45000L, runBlocking { db.getContributions() }.single().amount)
+        assertEquals(1, rows().size)
         rule.onNodeWithText("Bekor qilish").performClick()
         waitRows(0)
-        assertEquals(0, runBlocking { db.getContributions() }.size)
-    }
-
-    @Test fun shortfallForEditsAndPastMonths() = runBlocking {
-        val food = db.getCategories().first()
-        val today = LocalDate.now()
-        val past = today.minusMonths(2)
-        db.insertContribution(Contribution(amount = 100_000, note = "Oylik"))
-        db.insertContribution(Contribution(amount = 10_000, note = "Oylik", date = past.startMillis()))
-        val old = Expense(description = "Taxi", amount = 80_000, categoryId = food.id, date = today.startMillis(), source = ExpenseSource.manual)
-        db.insertExpense(old) // 20 000 left this month
-        assertEquals("new row: over by 10 000", 10_000L, shortfallFor(db, settings, old.copy(id = "n", amount = 30_000), null))
-        assertEquals("edit same month: only the 25 000 increase counts", 5_000L, shortfallFor(db, settings, old.copy(amount = 105_000), old))
-        assertEquals("edit down", 0L, shortfallFor(db, settings, old.copy(amount = 50_000), old))
-        assertEquals("moved to a past month: that month's 10 000", 70_000L, shortfallFor(db, settings, old.copy(date = past.startMillis()), old))
     }
 
     // --- add_edit_test ---
@@ -437,7 +338,6 @@ class HomeAddTest {
     }
 
     @Test fun typeModeParsesAndSavesWithSourceTyped() {
-        fund()
         show { Add(parsed = aiCoffee) }
         rule.onNodeWithText("Yozish").performClick()
         rule.onNodeWithTag("input").performTextInput("coffee 45000")
@@ -446,7 +346,6 @@ class HomeAddTest {
     }
 
     @Test fun speakModeTranscribesParsesAndSavesWithSourceVoice() {
-        fund()
         shadowOf(context as Application).grantPermissions(Manifest.permission.RECORD_AUDIO)
         show { Add(parsed = aiCoffee, speech = FakeSpeech(context, "coffee 45000")) }
         rule.onNodeWithText("Aytish").performClick()

@@ -392,7 +392,7 @@ fun <T> DividedCard(items: List<T>, indent: Dp = 72.dp, row: @Composable (T) -> 
     }
 }
 
-/** Edge-to-edge rounded hero strip: title + subtitle, opens a page (Oila's "Ro'yxat", Asosiy's "Hissa"). */
+/** Edge-to-edge rounded hero strip: title + subtitle, opens a page (Oila's "Ro'yxat"). */
 @Composable
 fun ListBanner(title: String, subtitle: String, onClick: () -> Unit) {
     val c = AppTheme.colors

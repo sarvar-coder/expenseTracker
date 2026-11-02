@@ -26,10 +26,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.time.Instant
-import java.time.LocalDate
 import java.time.OffsetDateTime
 import com.sarvarbek.expense_tracker.ui.common.t
-import com.sarvarbek.expense_tracker.ui.common.startMillis
 
 /** A pending invite addressed to the signed-in user. */
 data class FamilyInvite(val id: String, val familyName: String, val invitedBy: String)
@@ -79,11 +77,6 @@ data class FamilyOverview(
 ) {
     /** Family spending this month (transfers excluded). */
     val spent get() = members.sumOf { it.shared }
-}
-
-/** A Hissa page row: a contribution ([to] null) or a transfer [from] → [to]. Names are "Ali · Ota". */
-data class LedgerRow(val id: String, val from: String, val to: String?, val amount: Long, val note: String, val date: Long) {
-    val isTransfer get() = to != null
 }
 
 /** Thrown by [FamilyService] with a message ready to show (Uzbek). */
@@ -171,15 +164,6 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
         }
     }
 
-    /** My contributions and the transfers I sent or got in [month], newest first. Syncs first so own new rows show. */
-    suspend fun ledger(month: LocalDate): List<LedgerRow> {
-        sync.run()
-        return parseLedger(rpc("family_ledger", buildJsonObject {
-            put("p_from", Instant.ofEpochMilli(month.startMillis()).toString())
-            put("p_to", Instant.ofEpochMilli(month.plusMonths(1).startMillis()).toString())
-        }).decodeList(), client.auth.currentUserOrNull()?.id)
-    }
-
     suspend fun create(name: String, includeHistory: Boolean): String =
         change { rpc("create_family", buildJsonObject { put("p_name", name.trim()); put("p_include_history", includeHistory) }) }
             .decodeAs<String>()
@@ -250,21 +234,9 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 
 private fun JsonObject.num(k: String) = getValue(k).jsonPrimitive.long
 
-/** A family_summary row. Its Hissa columns are personal (Home) and ignored here. */
+/** A family_summary row. Its legacy Hissa columns (contributed, received, available) are ignored. */
 internal fun parseMember(it: JsonObject) =
     FamilyMember(it.str("user_id")!!, it.str("display_name")!!, it.str("role") == "admin", it.num("shared_total"), it.str("title"))
-
-/**
- * `family_ledger` rows that are [me]'s (sent or received; the RPC returns the whole
- * family's; signed out: none). A transfer whose receiver's account is gone keeps a "?" name.
- */
-internal fun parseLedger(rows: List<JsonObject>, me: String?) = rows.filter { it.str("from_user") == me || it.str("to_user") == me }.map {
-    val transfer = it.str("kind") == "transfer"
-    LedgerRow(
-        it.str("id")!!, it.str("from_name").orEmpty(), if (transfer) it.str("to_name") ?: "?" else null,
-        it.num("amount"), it.str("note").orEmpty(), OffsetDateTime.parse(it.str("date")!!).toInstant().toEpochMilli(),
-    )
-}
 
 /** `family_expenses_since` rows to feed rows. Transfers (and old private rows) come as tombstones flagged is_private, details null: skipped. */
 internal fun parseOthers(rows: List<JsonObject>, familyId: String) = rows.mapNotNull { e ->
