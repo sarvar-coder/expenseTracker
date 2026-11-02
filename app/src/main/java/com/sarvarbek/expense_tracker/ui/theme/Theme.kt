@@ -35,6 +35,10 @@ data class AppColors(
     val muted: Color,
     val danger: Color,
     val navInactive: Color,
+    /** Hairline around floating glass surfaces (the tab bar). */
+    val glassStroke: Color,
+    /** Soft drop shadow under floating glass surfaces. */
+    val glassShadow: Color,
 ) {
     companion object {
         val Light = AppColors(
@@ -49,6 +53,8 @@ data class AppColors(
             muted = Color(0xFF6F6B64), // AA on bg
             danger = Color(0xFFC6443A),
             navInactive = Color(0xFF6F6B64),
+            glassStroke = Color(0x1A000000),
+            glassShadow = Color(0x20000000),
         )
         val Dark = AppColors(
             accent = Color(0xFF3FB58C),
@@ -62,6 +68,8 @@ data class AppColors(
             muted = Color(0xFF9A968E),
             danger = Color(0xFFE57368),
             navInactive = Color(0xFF9A968E),
+            glassStroke = Color(0x14FFFFFF),
+            glassShadow = Color(0x40000000),
         )
     }
 }

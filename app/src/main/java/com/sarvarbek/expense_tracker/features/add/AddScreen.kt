@@ -52,10 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SelectableDates
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -103,6 +100,7 @@ import com.sarvarbek.expense_tracker.ui.common.toLocalDateTime
 import com.sarvarbek.expense_tracker.ui.common.toMillis
 import com.sarvarbek.expense_tracker.ui.common.uzDayMonth
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
+import com.sarvarbek.expense_tracker.ui.theme.AppTabs
 import com.sarvarbek.expense_tracker.ui.theme.AppSnackbar
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
@@ -125,7 +123,7 @@ enum class AddMode(val label: String) { type("add.mode.type"), speak("add.mode.s
 private data class Prefill(val amount: String, val desc: String, val categoryId: String?)
 
 /**
- * Pushed from the shell FAB (new) or an expense row ([editing]). Segmented
+ * Pushed from the shell FAB (new) or an expense row ([editing]). Tabs for
  * Type / Speak / Manual; editing forces Manual. [parse] and [speech] are the
  * test seams.
  */
@@ -162,17 +160,9 @@ fun AddScreen(
                 .padding(start = AppSpace.page, end = AppSpace.page, top = 8.dp, bottom = AppSpace.section),
         ) {
             // Labels only: the Speak form has its own mic, one mic on screen.
-            if (aiModes) SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                AddMode.entries.forEachIndexed { i, m ->
-                    SegmentedButton(
-                        selected = mode == m,
-                        onClick = { mode = m; settings.lastAddMode = m.name },
-                        shape = SegmentedButtonDefaults.itemShape(i, AddMode.entries.size),
-                        icon = {},
-                        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-                    ) { Text(t(m.label)) }
-                }
-            }
+            if (aiModes) AppTabs(AddMode.entries.map { t(it.label) }, mode.ordinal, { i ->
+                mode = AddMode.entries[i]; settings.lastAddMode = mode.name
+            })
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
