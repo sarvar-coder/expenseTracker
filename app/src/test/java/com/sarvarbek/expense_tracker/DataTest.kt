@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Category
-import com.sarvarbek.expense_tracker.data.Contribution
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
 import com.sarvarbek.expense_tracker.data.ExpenseSource
@@ -65,14 +64,14 @@ class DataTest {
             val range = day.startMillis() to day.plusDays(1).startMillis()
             assertEquals(20L, dao.totalSpent(range.first, range.second))
             assertEquals(mapOf("c1" to 20L), dao.categoryTotals(range.first, range.second))
-            // v4 (3→4): contributions, soft delete, dirty count
-            dao.insertContribution(Contribution(amount = 400_000, note = "Oylik"))
-            val gone = Contribution(amount = 5, note = "x").also { dao.insertContribution(it) }
-            dao.deleteContribution(gone.id)
-            assertEquals(listOf("Oylik"), dao.watchContributions().first().map { it.note })
-            assertEquals(2, dao.dirtyContributions().size) // the deletion waits to be pushed
+            // v4 (3→4): contributions. Hissa is dropped (2.4.0) but the table stays: no destructive migration.
+            assertTrue(upgraded.hasTable("contributions"))
+            // ...and an account switch still wipes the previous user's old rows from it.
+            upgraded.openHelper.writableDatabase.execSQL(
+                "INSERT INTO contributions (id, amount, note, date, updated_at, deleted_at, dirty) VALUES ('c1', 5, 'x', 0, 0, NULL, 1)",
+            )
             dao.resetLocal()
-            assertTrue(dao.getContributions().isEmpty())
+            assertEquals(0L, upgraded.openHelper.readableDatabase.query("SELECT count(*) FROM contributions").use { it.moveToFirst(); it.getLong(0) })
         } finally {
             upgraded.close()
             context.deleteDatabase(name)
@@ -217,11 +216,6 @@ class DataTest {
         store.applyProfile(displayName = "Ali")
         assertFalse("pulled values aren't pushed back", store.profileDirty)
         assertEquals("Ali", store.settings.value.displayName)
-
-        // received: cached per month, written through, 0 in another month
-        store.setReceived("2026-10", 500)
-        assertEquals(500L, SettingsStore(prefs).load().receivedIn(LocalDate.of(2026, 10, 31)))
-        assertEquals(0L, store.settings.value.receivedIn(LocalDate.of(2026, 11, 1)))
 
         store.markProfileClean()
         store.setDisplayName("Vali")

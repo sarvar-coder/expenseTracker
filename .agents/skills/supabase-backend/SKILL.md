@@ -20,7 +20,7 @@ Supabase plugin/MCP is enabled in `.claude/settings.json` (`apply_migration`, `e
   ends in an exception so everything rolls back: `ALL_TESTS_PASSED` = green, any other message = the failed assert.
   Extend it for new rules.
 - Client mirrors: Room has its own hand-written migrations (`data/AppDatabase.kt`); sync JSON mapping is in
-  `services/SyncService.kt` (`applyCategories`/`applyExpenses`/`applyContributions`, `*.toJson`).
+  `services/SyncService.kt` (`applyCategories`/`applyExpenses`, `*.toJson`). Contributions are no longer synced (dropped in 2.4.0).
 
 ## Family rules (enforced server-side)
 - One family per user. Any number of admins (`20261007090000_multiple_admins.sql`); admins promote/demote via
@@ -30,7 +30,7 @@ Supabase plugin/MCP is enabled in `.claude/settings.json` (`apply_migration`, `e
   sets members' titles (`set_title`; members can't set even their own).
 - Admins can't edit others' expenses. An ex-member's shared expenses stay as read-only history (`frozen`).
 - No private expenses since 2.1.0: every member's expense is shared and counts in family spending.
-- Budget is personal only. Family spending = members' `shared_total` from `family_summary`; transfers never count.
+- No budget or Hissa since 2.4.0 (server tables/columns kept for old APKs). Family spending = members' `shared_total` from `family_summary`; transfers never count.
 - Categories are per user; others' category name/colour reach the Oila feed via `family_expenses_since`.
 - Server-only tables: `families`, `family_members(role)`, `invites(email)`, `device_tokens`,
   `private.push_outbox`. (`needs`, `category_requests` dropped in 2.3.0.)

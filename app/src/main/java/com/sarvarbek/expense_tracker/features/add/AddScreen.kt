@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -37,7 +36,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -59,7 +57,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -82,7 +79,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -141,8 +137,6 @@ fun AddScreen(
     speech: SpeechService,
     onClose: () -> Unit,
     editing: Expense? = null,
-    /** Other family members (id to label) for O'tkazma; empty outside a family. */
-    members: List<Pair<String, String>> = emptyList(),
     // ponytail: Type/Speak hidden for now; flip default to true to bring them back.
     aiModes: Boolean = false,
 ) {
@@ -182,7 +176,7 @@ fun AddScreen(
             if (aiModes) Spacer(Modifier.height(AppSpace.gap + 4.dp))
             when (mode) {
                 AddMode.manual -> key(prefill) {
-                    ManualForm(db, settings, editing, prefill ?: Prefill("", "", null), members, onClose)
+                    ManualForm(db, editing, prefill ?: Prefill("", "", null), onClose)
                 }
                 AddMode.type, AddMode.speak -> key(mode) {
                     TypeForm(db, settings, parse, speech, voice = mode == AddMode.speak, onClose) { raw ->
@@ -202,10 +196,8 @@ private fun Label(text: String) =
 @Composable
 private fun ManualForm(
     db: ExpenseDao,
-    settings: SettingsStore,
     editing: Expense?,
     init: Prefill,
-    members: List<Pair<String, String>>,
     onClose: () -> Unit,
 ) {
     val c = AppTheme.colors
@@ -216,8 +208,8 @@ private fun ManualForm(
     var desc by rememberSaveable { mutableStateOf(init.desc) }
     var categoryId by rememberSaveable { mutableStateOf(init.categoryId) }
     var date by rememberSaveable { mutableStateOf(editing?.date?.toLocalDateTime() ?: LocalDateTime.now()) }
-    var transfer by rememberSaveable { mutableStateOf(editing?.transferTo != null) }
-    var transferTo by rememberSaveable { mutableStateOf(editing?.transferTo) }
+    // Transfers are gone (2.4.0): an old one is still editable, kept a transfer, without a category.
+    val transfer = editing?.transferTo != null
     var saving by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -228,26 +220,24 @@ private fun ManualForm(
     val today = LocalDate.now()
     val isToday = date.toLocalDate() == today
     val isYesterday = date.toLocalDate() == today.minusDays(1)
-    val saveChecked = rememberExpenseSaver(db, settings)
 
     fun save() {
         val a = parseAmount(amount)
-        val to = transferTo.takeIf { transfer }
-        // A transfer needs no description: "→ Singil" by default.
-        val d = desc.trim().ifEmpty { if (to != null) "→ ${members.firstOrNull { it.first == to }?.second ?: "O'tkazma"}" else "" }
+        val d = desc.trim()
         when {
             a == null || a <= 0 -> return toaster.show(t("add.err_amount"))
-            transfer && to == null -> return toaster.show(t("add.err_recipient"))
             d.isEmpty() -> return toaster.show(t("add.err_description"))
-            to == null && categoryId == null -> return toaster.show(t("add.err_category"))
+            !transfer && categoryId == null -> return toaster.show(t("add.err_category"))
         }
         saving = true
         scope.launch {
-            // Transfers sit in Boshqa (no category of their own); every total skips them.
-            val cat = if (to != null) matchOrCreateCategory(db, "Boshqa") else categoryId!!
-            val e = editing?.copy(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = null, transferTo = to)
-                ?: Expense(description = d, amount = a!!, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual, transferTo = to)
-            if (saveChecked(e, editing) != null) onClose() else saving = false
+            val cat = if (transfer) editing.categoryId else categoryId!!
+            if (editing != null) {
+                db.updateExpense(editing.copy(description = d, amount = a, categoryId = cat, date = date.toMillis(), isPrivate = false, pendingCategory = null))
+            } else {
+                db.insertExpense(Expense(description = d, amount = a, categoryId = cat, date = date.toMillis(), source = ExpenseSource.manual))
+            }
+            onClose()
         }
     }
 
@@ -279,31 +269,7 @@ private fun ManualForm(
         shape = fieldShape, colors = fieldColors(),
     )
     Spacer(Modifier.height(AppSpace.gap))
-    if (members.isNotEmpty() || transfer) {
-        // O'tkazma: money handed to a family member, who logs what they buy with it.
-        AppCard(Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.testTag("transfer").toggleable(transfer, role = Role.Switch) { transfer = it }.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.SwapHoriz, null, tint = c.muted)
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(t("add.transfer"), style = ty.bodyLarge)
-                    Text(t("add.transfer_hint"), color = AppTheme.colors.muted, style = ty.bodySmall)
-                }
-                Switch(transfer, null)
-            }
-        }
-        Spacer(Modifier.height(AppSpace.gap))
-    }
-    if (transfer) {
-        Label(t("add.recipient"))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            for ((id, label) in members) AppChip(label, transferTo == id, { transferTo = id })
-        }
-        if (members.isEmpty()) Text(t("add.members_failed"), color = AppTheme.colors.muted, style = ty.bodySmall, modifier = Modifier.padding(start = 4.dp))
-    } else {
+    if (!transfer) {
         Label(t("add.category"))
         AppCard(Modifier.fillMaxWidth()) {
             Row(
@@ -476,7 +442,6 @@ private fun TypeForm(
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     val micError = t("add.mic_error")
-    val saveChecked = rememberExpenseSaver(db, settings)
 
     fun startListening() {
         speech.listen(settings.settings.value.sttLocale, onResult = { input = it }, onEnd = { listening = false })
@@ -510,16 +475,15 @@ private fun TypeForm(
                 return@launch
             }
             val cat = matchOrCreateCategory(db, p.category)
-            val undo = saveChecked(
+            val id = db.insertExpense(
                 Expense(
                     description = p.item, amount = p.amount, categoryId = cat, date = p.date.startMillis(),
                     source = if (voice) ExpenseSource.voice else ExpenseSource.typed, rawInput = raw,
                     isPrivate = false,
                 ),
-                null,
-            ) ?: return@launch run { busy = false }
+            )
             onClose()
-            toaster.show(t("add.added", p.item, formatMoney(p.amount)), t("common.cancel")) { undo() }
+            toaster.show(t("add.added", p.item, formatMoney(p.amount)), t("common.cancel")) { db.deleteExpense(id) }
         }
     }
 

@@ -170,35 +170,6 @@ abstract class ExpenseDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE deleted_at IS NULL AND transfer_to IS NULL AND date >= :start AND date < :end")
     abstract suspend fun totalSpent(start: Long, end: Long): Long
 
-    // --- Contributions (own only) ---
-    /** Newest first. */
-    @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
-    abstract fun watchContributions(): Flow<List<Contribution>>
-
-    @Query("SELECT * FROM contributions WHERE deleted_at IS NULL ORDER BY date DESC")
-    abstract suspend fun getContributions(): List<Contribution>
-
-    @Insert abstract suspend fun insertContribution(c: Contribution)
-
-    @Upsert abstract suspend fun upsertContributions(rows: List<Contribution>)
-
-    /** New ([update] false) or edited expense plus the overspend's [source] contribution, all or nothing. */
-    @Transaction
-    open suspend fun saveExpense(e: Expense, update: Boolean, source: Contribution?) {
-        source?.let { insertContribution(it) }
-        if (update) updateExpense(e) else insertExpenseRow(e)
-    }
-
-    /** Undo of a new [saveExpense]: soft-deletes both rows together. */
-    @Transaction
-    open suspend fun deleteExpenseWithSource(id: String, sourceId: String?) {
-        deleteExpense(id)
-        sourceId?.let { deleteContribution(it) }
-    }
-
-    @Query("UPDATE contributions SET deleted_at = :now, updated_at = :now, dirty = 1 WHERE id = :id")
-    abstract suspend fun deleteContribution(id: String, now: Long = System.currentTimeMillis())
-
     // --- Sync (raw: no dirty/updatedAt bump unless stated) ---
     /** Every row, soft-deleted included. */
     @Query("SELECT * FROM categories") abstract suspend fun allCategoryRows(): List<Category>
@@ -207,12 +178,7 @@ abstract class ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE dirty = 1") abstract suspend fun dirtyExpenses(): List<Expense>
 
-    @Query("SELECT * FROM contributions WHERE dirty = 1") abstract suspend fun dirtyContributions(): List<Contribution>
-
-    @Query(
-        "SELECT (SELECT count(*) FROM categories WHERE dirty = 1) + (SELECT count(*) FROM expenses WHERE dirty = 1) " +
-            "+ (SELECT count(*) FROM contributions WHERE dirty = 1)",
-    )
+    @Query("SELECT (SELECT count(*) FROM categories WHERE dirty = 1) + (SELECT count(*) FROM expenses WHERE dirty = 1)")
     abstract fun watchDirtyCount(): Flow<Int>
 
     /** Clean only if not edited again while the push was in flight. */
@@ -221,9 +187,6 @@ abstract class ExpenseDao {
 
     @Query("UPDATE expenses SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     abstract suspend fun markExpenseClean(id: String, updatedAt: Long)
-
-    @Query("UPDATE contributions SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
-    abstract suspend fun markContributionClean(id: String, updatedAt: Long)
 
     /** Repoints expenses (dirty). */
     @Query("UPDATE expenses SET category_id = :to, updated_at = :now, dirty = 1 WHERE category_id = :from")

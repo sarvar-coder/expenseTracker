@@ -18,7 +18,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,16 +25,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sarvarbek.expense_tracker.data.Expense
 import com.sarvarbek.expense_tracker.data.ExpenseDao
-import com.sarvarbek.expense_tracker.data.SettingsStore
 import com.sarvarbek.expense_tracker.services.mergeFeed
 import com.sarvarbek.expense_tracker.ui.common.EmptyState
-import com.sarvarbek.expense_tracker.ui.common.ListBanner
 import com.sarvarbek.expense_tracker.ui.common.ExpenseTile
 import com.sarvarbek.expense_tracker.services.FamilyExpense
 import com.sarvarbek.expense_tracker.ui.common.Money
@@ -51,17 +46,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Today: my total, slim personal month-budget line, the Hissa banner
- * ([onLedger]), and today's rows from [feed]: only mine, newest first
+ * Today: my total, my month's spending, and today's rows from [feed]: only mine, newest first
  * (other members' rows live on the Oila tab).
  */
 @Composable
 fun HomeScreen(
     db: ExpenseDao,
-    settings: SettingsStore,
     feed: Flow<List<FamilyExpense>> = remember(db) { db.watchExpenses().map { mergeFeed(it, emptyList(), t("family.you")) } },
     onSettings: () -> Unit,
-    onLedger: () -> Unit = {},
     onEdit: (Expense) -> Unit,
 ) {
     val feedRows by feed.collectAsStateWithLifecycle(null) // null = loading
@@ -70,13 +62,9 @@ fun HomeScreen(
     // the scroll position the list restores when coming back from a pushed page.
     val rows = feedRows ?: return
     val categories = cats ?: return
-    val s by settings.settings.collectAsStateWithLifecycle()
-    val contributions by remember(db) { db.watchContributions() }.collectAsStateWithLifecycle(emptyList())
     val now = LocalDate.now()
     val today = remember(rows, now) { todayExpenses(rows, now) }
-    // The month line: my contributions + received vs my spending.
-    val received = s.receivedIn(now)
-    val month = remember(rows, contributions, received, now) { balance(rows.map { it.expense }, contributions, received, now).summary }
+    val month = remember(rows, now) { monthSpent(rows.map { it.expense }, now) }
     val catById = categories.associateBy { it.id }
 
     // Bottom padding clears the floating add button.
@@ -87,10 +75,6 @@ fun HomeScreen(
         item {
             val spent = today.filter { it.expense.transferTo == null }
             TodayHero(spent.sumOf { it.expense.amount }, spent.size, month)
-        }
-        item {
-            Spacer(Modifier.height(AppSpace.gap))
-            ListBanner(t("ledger.title"), t("ledger.banner_hint"), onLedger) // Hissa works without a family too
         }
         item {
             Spacer(Modifier.height(AppSpace.section))
@@ -128,11 +112,10 @@ private fun Header(date: LocalDate, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
+private fun TodayHero(total: Long, count: Int, month: Long) {
     val c = AppTheme.colors
     val ty = MaterialTheme.typography
     val soft = c.onHero.copy(alpha = 0.72f)
-    val over = month.budget > 0 && month.spent > month.budget
     Column(
         Modifier.fillMaxWidth().background(c.hero, RoundedCornerShape(AppRadii.hero)).padding(22.dp, 22.dp, 22.dp, 18.dp),
     ) {
@@ -140,27 +123,6 @@ private fun TodayHero(total: Long, count: Int, month: HomeSummary) {
         Spacer(Modifier.height(6.dp))
         Money(total, style = ty.displayLarge, color = c.onHero, autoSize = true)
         Spacer(Modifier.height(12.dp))
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            if (month.budget <= 0) {
-                Text(t("home.month_no_budget", formatMoney(month.spent)), style = ty.labelSmall.copy(color = soft))
-            } else {
-                LinearProgressIndicator(
-                    progress = { month.progress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(AppRadii.chip)),
-                    color = if (over) c.danger else c.accent,
-                    trackColor = c.onHero.copy(alpha = 0.15f),
-                    gapSize = 0.dp,
-                    drawStopIndicator = {},
-                )
-                Spacer(Modifier.height(8.dp))
-                Row {
-                    Text(t("home.month_of_budget", formatMoney(month.spent), formatMoney(month.budget)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.weight(1f))
-                    Text(
-                        if (over) t("home.over", formatMoney(-month.remaining)) else t("home.left", formatMoney(month.remaining)),
-                        style = ty.labelSmall.copy(color = c.onHero, fontWeight = if (over) FontWeight.ExtraBold else null),
-                    )
-                }
-            }
-        }
+        Text(t("home.month_spent", formatMoney(month)), style = ty.labelSmall.copy(color = soft), modifier = Modifier.padding(vertical = 8.dp))
     }
 }
