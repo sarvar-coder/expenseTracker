@@ -35,6 +35,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -42,6 +44,24 @@ import androidx.compose.ui.unit.sp
 // global component themes, so screens use these instead of the raw M3 widgets.
 
 private val md = RoundedCornerShape(AppRadii.md)
+
+/**
+ * Widens a horizontal scroller by [horizontal] on each side, through its parent's page
+ * padding, so content slides to the screen edge instead of being cut 20dp short. Pair it
+ * with `.horizontalScroll(…).padding(horizontal = …)` so content still rests on the page edge.
+ * Under an unbounded width it doesn't grow; the content just overhangs [horizontal] on each side.
+ */
+fun Modifier.bleedHorizontal(horizontal: Dp) = layout { measurable, constraints ->
+    val extra = horizontal.roundToPx() * 2
+    val p = measurable.measure(
+        if (constraints.hasBoundedWidth) {
+            constraints.copy(minWidth = constraints.minWidth + extra, maxWidth = constraints.maxWidth + extra)
+        } else {
+            constraints
+        },
+    )
+    layout((p.width - extra).coerceAtLeast(0), p.height) { p.place(-extra / 2, 0) }
+}
 
 /**
  * Page motion (M3 emphasized easing, Android 14 feel). Push: new page slides in

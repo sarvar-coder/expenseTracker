@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -89,6 +90,7 @@ import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppSheet
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
+import com.sarvarbek.expense_tracker.ui.theme.bleedHorizontal
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -236,11 +238,16 @@ fun InsightsScreen(
 private fun MonthPills(year: Int, month: Int, onPick: (Int) -> Unit) {
     val scroll = rememberScrollState()
     var selectedCenter by remember { mutableIntStateOf(-1) }
+    // Edge to edge through the page padding; the inner padding keeps the first chip on the page edge.
+    val pad = with(LocalDensity.current) { AppSpace.page.roundToPx() }
     LaunchedEffect(year) {
         val (center, viewport) = snapshotFlow { selectedCenter to scroll.viewportSize }.first { it.first >= 0 && it.second > 0 }
-        scroll.animateScrollTo((center - viewport / 2).coerceIn(0, scroll.maxValue))
+        scroll.animateScrollTo((pad + center - viewport / 2).coerceIn(0, scroll.maxValue))
     }
-    Row(Modifier.horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        Modifier.bleedHorizontal(AppSpace.page).horizontalScroll(scroll).padding(horizontal = AppSpace.page),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         for (m in 1..lastMonth(year)) {
             AppChip(
                 monthName(m), month == m, { onPick(m) },
