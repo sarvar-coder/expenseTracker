@@ -129,7 +129,7 @@ class FamilyService(private val client: SupabaseClient, private val sync: SyncSe
 
     /**
      * Null when not in a family. Syncs first so the server has our latest
-     * contributions and expenses. Online only: the summary is computed server-side.
+     * expenses. Online only: the summary is computed server-side.
      * [from]/[to] (epoch millis, [to] exclusive) bound the summary only.
      * Others' expenses come from [feed] (the sync above refreshed it).
      */

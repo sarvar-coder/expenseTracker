@@ -66,6 +66,12 @@ class DataTest {
             assertEquals(mapOf("c1" to 20L), dao.categoryTotals(range.first, range.second))
             // v4 (3→4): contributions. Hissa is dropped (2.4.0) but the table stays: no destructive migration.
             assertTrue(upgraded.hasTable("contributions"))
+            // ...and an account switch still wipes the previous user's old rows from it.
+            upgraded.openHelper.writableDatabase.execSQL(
+                "INSERT INTO contributions (id, amount, note, date, updated_at, deleted_at, dirty) VALUES ('c1', 5, 'x', 0, 0, NULL, 1)",
+            )
+            dao.resetLocal()
+            assertEquals(0L, upgraded.openHelper.readableDatabase.query("SELECT count(*) FROM contributions").use { it.moveToFirst(); it.getLong(0) })
         } finally {
             upgraded.close()
             context.deleteDatabase(name)
