@@ -21,6 +21,12 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertLeftPositionInRootIsEqualTo
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
 import com.sarvarbek.expense_tracker.data.Expense
@@ -83,6 +89,20 @@ class HistoryInsightsTest {
     private fun chip(label: String) = rule.onNode(hasText(label) and hasContentDescription("Olib tashlash"))
 
     private fun removeChip() = rule.onNodeWithContentDescription("Olib tashlash").performClick()
+
+    /** Month pills scroll edge to edge (no hard cut at the page padding) yet rest on the page edge. */
+    @Test fun monthPillsScrollEdgeToEdge() {
+        show { InsightsScreen(db) }
+        waitFor(monthName(1))
+        val row = rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+        row.assertLeftPositionInRootIsEqualTo(0.dp).assertWidthIsEqualTo(400.dp)
+        rule.waitForIdle() // let the centre-the-selected-month animation finish first
+        row.performSemanticsAction(SemanticsActions.ScrollBy) { it(-100_000f, 0f) }
+        rule.waitForIdle()
+        // Rests on the 20dp page edge; a chip narrower than its 48dp touch target is centred inside it.
+        val chip = rule.onNode(hasText(monthName(1)) and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        assertEquals(20f + maxOf(0f, (48f - chip.width) / 2), chip.left, 0.5f)
+    }
 
     @Test fun filterPageAndSearchFilterRowsDayTotalEmptyState() {
         add("Coffee", 10000, "Food & dining")
