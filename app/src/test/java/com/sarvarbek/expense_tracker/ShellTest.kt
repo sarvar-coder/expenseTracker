@@ -29,6 +29,8 @@ import com.sarvarbek.expense_tracker.ui.TAB_PASSES
 import com.sarvarbek.expense_tracker.ui.fitTabs
 import com.sarvarbek.expense_tracker.ui.rememberShellListState
 import com.sarvarbek.expense_tracker.ui.theme.AppTabs
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import com.sarvarbek.expense_tracker.ui.back
 import com.sarvarbek.expense_tracker.ui.go
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
@@ -152,6 +155,53 @@ class ShellTest {
         }
         rule.onNodeWithText("Oila").assertIsSelected()
         rule.onNodeWithText("Asosiy").assertIsNotSelected()
+    }
+
+    @Test fun longPressInPlaceSwitchesButNeverRetaps() {
+        lateinit var list: androidx.compose.foundation.lazy.LazyListState
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { i, _ ->
+                    if (i == 0) {
+                        list = rememberShellListState()
+                        LazyColumn(state = list) { items(200) { Text("row $it", Modifier.height(48.dp)) } }
+                    }
+                }
+            }
+        }
+        rule.runOnIdle { kotlinx.coroutines.runBlocking { list.scrollToItem(120) } }
+        fun longPressInPlace(label: String) {
+            val at = rule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.center
+            rule.onRoot().performTouchInput { down(at) }
+            rule.mainClock.advanceTimeBy(1_000)
+            rule.onRoot().performTouchInput { up() }
+            rule.waitForIdle()
+        }
+        // On the showing tab: no switch, and no scroll-to-top.
+        longPressInPlace("Asosiy")
+        rule.onNodeWithText("Asosiy").assertIsSelected()
+        rule.runOnIdle { assertEquals(120, list.firstVisibleItemIndex) }
+        // On another tab: one switch, and coming back keeps the scroll.
+        longPressInPlace("Tahlil")
+        rule.onNodeWithText("Tahlil").assertIsSelected()
+        rule.onNodeWithText("Asosiy").performClick()
+        rule.runOnIdle { assertEquals(120, list.firstVisibleItemIndex) }
+    }
+
+    @Test fun barRimDoesNotLeakTapsToPage() {
+        var pageTaps = 0
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { _, _ ->
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().clickable { pageTaps++ })
+                }
+            }
+        }
+        val tab = rule.onNodeWithText("Asosiy").fetchSemanticsNode().boundsInRoot
+        // 2dp left of the first tab: inside the pill's 4dp rim.
+        val rimX = tab.left - with(rule.density) { 2.dp.toPx() }
+        rule.onRoot().performTouchInput { click(Offset(rimX, tab.center.y)) }
+        rule.runOnIdle { assertEquals(0, pageTaps) }
     }
 
     @Test fun fitTabsFollowsTelegramPasses() {

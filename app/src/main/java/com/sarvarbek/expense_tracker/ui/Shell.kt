@@ -9,7 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,9 +23,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -65,13 +66,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -83,15 +84,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.sarvarbek.expense_tracker.ui.common.t
+import com.sarvarbek.expense_tracker.ui.theme.AppSpace
 import com.sarvarbek.expense_tracker.ui.theme.AppTheme
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private data class Tab(val labelKey: String, val icon: ImageVector, val selectedIcon: ImageVector)
@@ -155,8 +156,11 @@ fun Shell(
     LaunchedEffect(tab) { if (tab != null) { index = tab; onTab() } }
     if (index !in visited) visited = visited + index
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // Edge to edge, the keyboard doesn't shrink the window: lists must also clear it (Tahlil search).
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val overlayBottom = maxOf(navBottom, imeBottom)
     Box(Modifier.fillMaxSize().background(c.bg)) {
-        CompositionLocalProvider(LocalShellBottom provides navBottom + BAR_SPACE + FAB_SIZE + FAB_GAP) {
+        CompositionLocalProvider(LocalShellBottom provides maxOf(navBottom + BAR_SPACE + FAB_SIZE + FAB_GAP, imeBottom + AppSpace.gap)) {
             Box(Modifier.statusBarsPadding().fillMaxSize()) {
                 for (i in visited) key(i) {
                     val active = i == index
@@ -182,13 +186,13 @@ fun Shell(
         )
         NavBar(
             index,
-            onTap = { i ->
-                if (i == index) reselect = reselect.toMutableList().also { it[i]++ } else index = i
-            },
+            // A tap on the showing tab scrolls it to the top; a long-press drag only ever switches.
+            onTap = { i -> if (i == index) reselect = reselect.toMutableList().also { it[i]++ } else index = i },
+            onSelect = { i -> index = i },
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(BAR_MARGIN),
         )
         Fab(onAdd, Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = BAR_SPACE + 4.dp))
-        Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = BAR_SPACE + FAB_SIZE + FAB_GAP)) {
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = maxOf(navBottom + BAR_SPACE + FAB_SIZE + FAB_GAP, overlayBottom))) {
             snackbarHost()
         }
     }
@@ -234,24 +238,28 @@ internal fun fitTabs(textWidth: (sizeSp: Float) -> List<Float>, padPx: (dp: Floa
 private val decelerate = CubicBezierEasing(0f, 0f, 0.2f, 1f)
 private val easeOutQuint = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
+/** Bar labels follow the font scale up to 1.3×, then stop: the bar's height is fixed (Telegram uses fixed px). */
+private const val LABEL_MAX_SCALE = 1.3f
+
 /**
  * Floating frosted pill (Telegram 12.4+ main tabs): text-measured tabs, one selection pill that springs
- * between them, long-press + drag to slide the pill and pick a tab on release.
+ * between them, long-press + drag to slide the pill and pick a tab on release ([onSelect], never a re-tap).
  */
 @Composable
-private fun NavBar(index: Int, onTap: (Int) -> Unit, modifier: Modifier) {
+private fun NavBar(index: Int, onTap: (Int) -> Unit, onSelect: (Int) -> Unit, modifier: Modifier) {
     val c = AppTheme.colors
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val haptic = LocalHapticFeedback.current
     val labels = tabs.map { t(it.labelKey) }
+    val labelScale = minOf(density.fontScale, LABEL_MAX_SCALE) / density.fontScale
     val labelStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold)
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
         val availDp = minOf(maxWidth - BAR_INSET * 2, TABS_MAX)
         val (pass, widthsPx) = remember(labels, availDp, density, labelStyle) {
             with(density) {
                 fitTabs(
-                    textWidth = { sp -> labels.map { measurer.measure(it, labelStyle.copy(fontSize = sp.sp), maxLines = 1).size.width.toFloat() } },
+                    textWidth = { sp -> labels.map { measurer.measure(it, labelStyle.copy(fontSize = (sp * labelScale).sp), maxLines = 1).size.width.toFloat() } },
                     padPx = { it.dp.toPx() },
                     avail = availDp.toPx(),
                     minTotal = availDp.toPx(),
@@ -260,13 +268,16 @@ private fun NavBar(index: Int, onTap: (Int) -> Unit, modifier: Modifier) {
         }
         val lefts = remember(widthsPx) { widthsPx.runningFold(0f) { a, w -> a + w } }
         val centers = remember(widthsPx) { widthsPx.indices.map { lefts[it] + widthsPx[it] / 2 } }
+        val insetPx = with(density) { BAR_INSET.toPx() }
 
+        // Finger x in tab-row coordinates while long-press dragging, else null.
         var dragX by remember { mutableStateOf<Float?>(null) }
-        fun nearestTo(x: Float) = centers.indices.minBy { abs(centers[it] - x) }
-        val nearest = dragX?.let(::nearestTo)
+        // The tab under the finger (tabs differ in width, so not the nearest centre).
+        fun tabAt(x: Float) = (lefts.indexOfLast { it <= x }).coerceIn(0, tabs.lastIndex)
+        val under = dragX?.let(::tabAt)
         // The gesture block outlives recompositions: read the latest callback through this.
-        val tap by rememberUpdatedState(onTap)
-        val shown = nearest ?: index
+        val select by rememberUpdatedState(onSelect)
+        val shown = under ?: index
         val pillCenter = remember { Animatable(centers[index]) }
         val pillWidth = remember { Animatable(widthsPx[index]) }
         // Pill target: the finger while dragging (width blends between the two nearest tabs), else the tab.
@@ -281,7 +292,12 @@ private fun NavBar(index: Int, onTap: (Int) -> Unit, modifier: Modifier) {
             launch { pillCenter.animateTo(target.first, s) }
             launch { pillWidth.animateTo(target.second, s) }
         }
-        LaunchedEffect(nearest) { if (nearest != null) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+        // Tick when the finger crosses into another tab (the drag start has its own long-press buzz).
+        val lastUnder = remember { mutableStateOf<Int?>(null) }
+        LaunchedEffect(under) {
+            if (under != null && lastUnder.value != null && under != lastUnder.value) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            lastUnder.value = under
+        }
         val pressScale by animateFloatAsState(if (dragX != null) 1.019f else 1f, tween(380, easing = easeOutQuint), label = "barScale")
 
         val shape = CircleShape
@@ -293,29 +309,54 @@ private fun NavBar(index: Int, onTap: (Int) -> Unit, modifier: Modifier) {
                 .background(c.card.copy(alpha = 0.85f))
                 .border(0.4.dp, c.glassStroke, shape)
                 .height(BAR_HEIGHT)
-                .padding(BAR_INSET)
-                .pointerInput(centers) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { o: Offset -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); dragX = o.x },
-                        onDrag = { change, _ -> dragX = change.position.x; change.consume() },
-                        onDragEnd = { dragX?.let { tap(nearestTo(it)) }; dragX = null },
-                        onDragCancel = { dragX = null },
-                    )
+                // Before the inset padding, so the pill's rim also catches touches instead of the list below.
+                .pointerInput(lefts) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        // Released, moved or taken by someone else before the timeout: a plain tap, the tab handles it.
+                        val notLong = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val ch = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                                if (!ch.pressed || ch.isConsumed || (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+                            }
+                            true
+                        }
+                        if (notLong != null) return@awaitEachGesture
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        dragX = down.position.x - insetPx
+                        try {
+                            while (true) {
+                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                                // Consumed in Initial pass: the tab under the finger never sees a click.
+                                e.changes.forEach { it.consume() }
+                                if (!ch.pressed) { select(tabAt(ch.position.x - insetPx)); break }
+                                dragX = ch.position.x - insetPx
+                            }
+                        } finally {
+                            dragX = null
+                        }
+                    }
                 }
+                .padding(BAR_INSET)
                 .selectableGroup(),
         ) {
-            // Selection pill behind the tabs: 9% of the selected colour, fully rounded.
+            // Selection pill behind the tabs: 9% of the selected colour, fully rounded. Read in layout/draw
+            // phases only, so the spring doesn't recompose the bar every frame.
             Box(
                 Modifier
-                    .offset { IntOffset((pillCenter.value - pillWidth.value / 2).roundToInt(), 0) }
-                    .width(with(density) { pillWidth.value.toDp() })
                     .fillMaxHeight()
+                    .layout { m, cons ->
+                        val w = pillWidth.value.roundToInt().coerceAtLeast(0)
+                        val p = m.measure(Constraints.fixed(w, cons.maxHeight))
+                        layout(w, p.height) { p.place((pillCenter.value - pillWidth.value / 2).roundToInt(), 0) }
+                    }
                     .background(c.accent.copy(alpha = 0.09f), CircleShape),
             )
             Row(Modifier.fillMaxHeight()) {
                 tabs.forEachIndexed { i, tab ->
                     NavItem(
-                        tab, labels[i], selected = i == index, highlighted = i == shown, textSp = pass.textSp,
+                        tab, labels[i], selected = i == index, highlighted = i == shown, textSp = pass.textSp * labelScale,
                         onTap = { onTap(i) },
                         modifier = Modifier.width(with(density) { widthsPx[i].toDp() }),
                     )
@@ -334,7 +375,9 @@ private fun NavItem(tab: Tab, label: String, selected: Boolean, highlighted: Boo
     Column(
         modifier
             .fillMaxHeight()
-            .selectable(selected = selected, interactionSource = null, indication = null, role = Role.Tab, onClick = onTap),
+            // Ripple kept (clipped to the pill) so keyboard / switch-access focus stays visible.
+            .clip(CircleShape)
+            .selectable(selected = selected, role = Role.Tab, onClick = onTap),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -348,6 +391,7 @@ private fun NavItem(tab: Tab, label: String, selected: Boolean, highlighted: Boo
             style = MaterialTheme.typography.labelSmall.copy(
                 color = color,
                 fontSize = textSp.sp,
+                lineHeight = (textSp * 1.2f).sp,
                 fontWeight = if (highlighted) FontWeight.ExtraBold else FontWeight.Bold,
             ),
         )

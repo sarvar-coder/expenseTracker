@@ -48,8 +48,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.getValue
@@ -60,7 +58,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.runtime.remember
 import kotlin.math.roundToInt
 
 // Component styles ported from buildTheme() in lib/app/theme.dart. Compose has no
@@ -217,16 +217,20 @@ fun AppTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifi
     BoxWithConstraints(modifier.fillMaxWidth().selectableGroup()) {
         val tab = constraints.maxWidth.toFloat() / labels.size
         val pad = with(density) { 25.dp.toPx() }
-        val pill = labels.map { minOf(tab, measurer.measure(it, style, maxLines = 1).size.width + pad) }
+        val pill = remember(labels, style, tab, density) { labels.map { minOf(tab, measurer.measure(it, style, maxLines = 1).size.width + pad) } }
         val s = spring<Float>(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium)
         val x by animateFloatAsState(tab * selected + (tab - pill[selected]) / 2, s, label = "tabPillX")
         val w by animateFloatAsState(pill[selected], s, label = "tabPillW")
+        // Pill position/width read in the layout phase: the spring doesn't recompose the row every frame.
         Box(
             Modifier
                 .align(Alignment.CenterStart)
-                .offset { IntOffset(x.roundToInt(), 0) }
-                .width(with(density) { w.toDp() })
                 .height(28.dp)
+                .layout { m, cons ->
+                    val pw = w.roundToInt().coerceAtLeast(0)
+                    val pl = m.measure(Constraints.fixed(pw, cons.maxHeight))
+                    layout(pw, pl.height) { pl.place(x.roundToInt(), 0) }
+                }
                 .background(c.accent.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
         )
         Row(Modifier.fillMaxWidth()) {
@@ -236,7 +240,9 @@ fun AppTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifi
                     Modifier
                         .weight(1f)
                         .defaultMinSize(minHeight = 48.dp)
-                        .selectable(i == selected, interactionSource = null, indication = null, role = Role.Tab) { onSelect(i) },
+                        // Ripple kept so keyboard / switch-access focus stays visible.
+                        .clip(RoundedCornerShape(AppRadii.md))
+                        .selectable(i == selected, role = Role.Tab) { onSelect(i) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(label, style = style.copy(color = lerp(c.muted, c.accent, f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
