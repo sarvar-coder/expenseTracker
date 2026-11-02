@@ -1,5 +1,7 @@
 package com.sarvarbek.expense_tracker.features.family
 
+import com.sarvarbek.expense_tracker.ui.LocalShellBottom
+import com.sarvarbek.expense_tracker.ui.rememberShellListState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -190,8 +192,9 @@ fun FamilyScreen(
         val cats = allCats ?: return@PullToRefreshBox
         LazyColumn(
             Modifier.fillMaxSize(),
-            // Bottom padding clears the floating add button.
-            contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp),
+            state = rememberShellListState(),
+            // Bottom padding clears the floating tab bar and add button.
+            contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, LocalShellBottom.current),
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {

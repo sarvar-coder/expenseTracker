@@ -1,5 +1,7 @@
 package com.sarvarbek.expense_tracker.features.insights
 
+import com.sarvarbek.expense_tracker.ui.LocalShellBottom
+import com.sarvarbek.expense_tracker.ui.rememberShellListState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -67,9 +69,6 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.ui.semantics.semantics
 import com.sarvarbek.expense_tracker.features.activity.ActiveFilters
 import com.sarvarbek.expense_tracker.features.activity.ActivityFilter
@@ -85,6 +84,7 @@ import com.sarvarbek.expense_tracker.ui.common.formatMoney
 import com.sarvarbek.expense_tracker.ui.common.monthName
 import com.sarvarbek.expense_tracker.ui.common.t
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
+import com.sarvarbek.expense_tracker.ui.theme.AppTabs
 import com.sarvarbek.expense_tracker.ui.theme.AppChip
 import com.sarvarbek.expense_tracker.ui.theme.AppRadii
 import com.sarvarbek.expense_tracker.ui.theme.AppSpace
@@ -149,7 +149,7 @@ fun InsightsScreen(
     val data = insightsFor(visible.map { it.expense }, categories, start, end)
 
     // Bottom padding clears the floating add button.
-    LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
+    LazyColumn(state = rememberShellListState(), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, LocalShellBottom.current)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(t("insights.title"), style = ty.headlineMedium, modifier = Modifier.weight(1f))
@@ -179,17 +179,7 @@ fun InsightsScreen(
                 Money(data.total, style = ty.headlineMedium, autoSize = true)
             }
             Spacer(Modifier.height(12.dp))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf(true to "insights.list", false to "insights.categories").forEachIndexed { i, (isList, label) ->
-                    SegmentedButton(
-                        selected = list == isList,
-                        onClick = { list = isList; onMode(isList) },
-                        shape = SegmentedButtonDefaults.itemShape(i, 2),
-                        icon = {},
-                        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
-                    ) { Text(t(label), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                }
-            }
+            AppTabs(listOf(t("insights.list"), t("insights.categories")), if (list) 0 else 1, { i -> list = i == 0; onMode(list) })
             Spacer(Modifier.height(AppSpace.gap))
         }
         if (list) {

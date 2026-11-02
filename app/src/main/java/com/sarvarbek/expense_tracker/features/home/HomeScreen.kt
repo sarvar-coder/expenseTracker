@@ -1,5 +1,7 @@
 package com.sarvarbek.expense_tracker.features.home
 
+import com.sarvarbek.expense_tracker.ui.LocalShellBottom
+import com.sarvarbek.expense_tracker.ui.rememberShellListState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -68,7 +70,7 @@ fun HomeScreen(
     val catById = categories.associateBy { it.id }
 
     // Bottom padding clears the floating add button.
-    LazyColumn(contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, AppSpace.section + 72.dp)) {
+    LazyColumn(state = rememberShellListState(), contentPadding = PaddingValues(AppSpace.page, 8.dp, AppSpace.page, LocalShellBottom.current)) {
         item { Header(now, onSettings) }
         item { Spacer(Modifier.height(AppSpace.gap)) }
         // Transfers stay in the list but aren't "spent".

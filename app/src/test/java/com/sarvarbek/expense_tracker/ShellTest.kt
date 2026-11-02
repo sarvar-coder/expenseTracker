@@ -23,7 +23,24 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.sarvarbek.expense_tracker.ui.LocalShellBottom
 import com.sarvarbek.expense_tracker.ui.Shell
+import com.sarvarbek.expense_tracker.ui.TAB_PASSES
+import com.sarvarbek.expense_tracker.ui.fitTabs
+import com.sarvarbek.expense_tracker.ui.rememberShellListState
+import com.sarvarbek.expense_tracker.ui.theme.AppTabs
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import com.sarvarbek.expense_tracker.ui.back
 import com.sarvarbek.expense_tracker.ui.go
 import com.sarvarbek.expense_tracker.ui.theme.AppCard
@@ -98,6 +115,127 @@ class ShellTest {
         // Same `remember` instance: tab 0 was never disposed and rebuilt.
         rule.onNodeWithText("page0 1").assertExists()
         rule.onNodeWithText("page1").assertDoesNotExist()
+    }
+
+    @Test fun retapScrollsActiveTabToTop() {
+        lateinit var list: androidx.compose.foundation.lazy.LazyListState
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { i, _ ->
+                    if (i == 0) {
+                        list = rememberShellListState()
+                        LazyColumn(state = list) { items(200) { Text("row $it", Modifier.height(48.dp)) } }
+                    }
+                }
+            }
+        }
+        rule.runOnIdle { kotlinx.coroutines.runBlocking { list.scrollToItem(120) } }
+        rule.onNodeWithText("Asosiy").performClick()
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals(0, list.firstVisibleItemIndex) }
+    }
+
+    @Test fun pagesLeaveRoomForBarAndFab() {
+        var bottom = 0.dp
+        rule.setContent { AppTheme { Shell(onAdd = {}) { _, _ -> bottom = LocalShellBottom.current } } }
+        // Bar (56 + 2×8 margin) plus the 56dp button and its gap.
+        rule.runOnIdle { assertTrue("bottom=$bottom", bottom >= 140.dp) }
+    }
+
+    @Test fun longPressDragPicksTabUnderFinger() {
+        rule.setContent { AppTheme { Shell(onAdd = {}) } }
+        val start = rule.onNodeWithText("Asosiy").fetchSemanticsNode().boundsInRoot.center
+        val end = rule.onNodeWithText("Oila").fetchSemanticsNode().boundsInRoot.center
+        rule.onRoot().performTouchInput { down(start) }
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onRoot().performTouchInput {
+            moveTo(Offset((start.x + end.x) / 2, start.y))
+            moveTo(end)
+            up()
+        }
+        rule.onNodeWithText("Oila").assertIsSelected()
+        rule.onNodeWithText("Asosiy").assertIsNotSelected()
+    }
+
+    @Test fun longPressInPlaceSwitchesButNeverRetaps() {
+        lateinit var list: androidx.compose.foundation.lazy.LazyListState
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { i, _ ->
+                    if (i == 0) {
+                        list = rememberShellListState()
+                        LazyColumn(state = list) { items(200) { Text("row $it", Modifier.height(48.dp)) } }
+                    }
+                }
+            }
+        }
+        rule.runOnIdle { kotlinx.coroutines.runBlocking { list.scrollToItem(120) } }
+        fun longPressInPlace(label: String) {
+            val at = rule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.center
+            rule.onRoot().performTouchInput { down(at) }
+            rule.mainClock.advanceTimeBy(1_000)
+            rule.onRoot().performTouchInput { up() }
+            rule.waitForIdle()
+        }
+        // On the showing tab: no switch, and no scroll-to-top.
+        longPressInPlace("Asosiy")
+        rule.onNodeWithText("Asosiy").assertIsSelected()
+        rule.runOnIdle { assertEquals(120, list.firstVisibleItemIndex) }
+        // On another tab: one switch, and coming back keeps the scroll.
+        longPressInPlace("Tahlil")
+        rule.onNodeWithText("Tahlil").assertIsSelected()
+        rule.onNodeWithText("Asosiy").performClick()
+        rule.runOnIdle { assertEquals(120, list.firstVisibleItemIndex) }
+    }
+
+    @Test fun barRimDoesNotLeakTapsToPage() {
+        var pageTaps = 0
+        rule.setContent {
+            AppTheme {
+                Shell(onAdd = {}) { _, _ ->
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().clickable { pageTaps++ })
+                }
+            }
+        }
+        val tab = rule.onNodeWithText("Asosiy").fetchSemanticsNode().boundsInRoot
+        // 2dp left of the first tab: inside the pill's 4dp rim.
+        val rimX = tab.left - with(rule.density) { 2.dp.toPx() }
+        rule.onRoot().performTouchInput { click(Offset(rimX, tab.center.y)) }
+        rule.runOnIdle { assertEquals(0, pageTaps) }
+    }
+
+    @Test fun fitTabsFollowsTelegramPasses() {
+        val pad = { dp: Float -> dp }
+        // Short labels: first pass (16dp padding), grown to fill.
+        val (p1, w1) = fitTabs({ listOf(40f, 40f, 60f, 30f) }, pad, avail = 320f, minTotal = 320f)
+        assertEquals(TAB_PASSES[0], p1)
+        assertEquals(320f, w1.sum(), 0.01f)
+        // Too long for 16dp padding but fits with 8dp: second pass.
+        val (p2, w2) = fitTabs({ listOf(60f, 60f, 60f, 60f) }, pad, avail = 320f, minTotal = 320f)
+        assertEquals(TAB_PASSES[1], p2)
+        assertEquals(320f, w2.sum(), 0.01f)
+        // Nothing fits: last pass, shrunk to the available width.
+        val (p3, w3) = fitTabs({ sp -> List(4) { sp * 10f } }, pad, avail = 320f, minTotal = 320f)
+        assertEquals(TAB_PASSES[2], p3)
+        assertEquals(320f, w3.sum(), 0.01f)
+        // A wide label keeps its width; only the others grow (8dp pass: 210 + 64 fits).
+        val (_, w4) = fitTabs({ listOf(20f, 20f, 20f, 150f) }, pad, avail = 320f, minTotal = 320f)
+        assertEquals(166f, w4[3], 0.01f) // 8dp pass: 150 + 2×8
+    }
+
+    @Test fun appTabsSelectAndMeetTouchTarget() {
+        var picked = 0
+        rule.setContent {
+            AppTheme {
+                var sel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+                AppTabs(listOf("Yozish", "Aytish", "Qo'lda"), sel, { sel = it; picked = it })
+            }
+        }
+        rule.onNodeWithText("Yozish").assertIsSelected()
+        rule.onNodeWithText("Qo'lda").assertIsNotSelected().assertHeightIsAtLeast(48.dp).performClick()
+        rule.onNodeWithText("Qo'lda").assertIsSelected()
+        rule.onNodeWithText("Yozish").assertIsNotSelected()
+        assertEquals(2, picked)
     }
 }
 

@@ -39,6 +39,29 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.runtime.remember
+import kotlin.math.roundToInt
 
 // Component styles ported from buildTheme() in lib/app/theme.dart. Compose has no
 // global component themes, so screens use these instead of the raw M3 widgets.
@@ -179,6 +202,54 @@ fun AppChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
         ),
         border = FilterChipDefaults.filterChipBorder(true, selected, borderColor = c.border, selectedBorderColor = c.accent),
     )
+}
+
+/**
+ * Text tabs in Telegram's folder-tab style (FilterTabsView): 14sp bold labels on equal-width tabs, one
+ * 28dp pill (accent at 12%, label width + 12.5dp a side) that springs to the selected tab.
+ */
+@Composable
+fun AppTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val c = AppTheme.colors
+    val style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier.fillMaxWidth().selectableGroup()) {
+        val tab = constraints.maxWidth.toFloat() / labels.size
+        val pad = with(density) { 25.dp.toPx() }
+        val pill = remember(labels, style, tab, density) { labels.map { minOf(tab, measurer.measure(it, style, maxLines = 1).size.width + pad) } }
+        val s = spring<Float>(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium)
+        val x by animateFloatAsState(tab * selected + (tab - pill[selected]) / 2, s, label = "tabPillX")
+        val w by animateFloatAsState(pill[selected], s, label = "tabPillW")
+        // Pill position/width read in the layout phase: the spring doesn't recompose the row every frame.
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .height(28.dp)
+                .layout { m, cons ->
+                    val pw = w.roundToInt().coerceAtLeast(0)
+                    val pl = m.measure(Constraints.fixed(pw, cons.maxHeight))
+                    layout(pw, pl.height) { pl.place(x.roundToInt(), 0) }
+                }
+                .background(c.accent.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
+        )
+        Row(Modifier.fillMaxWidth()) {
+            labels.forEachIndexed { i, label ->
+                val f by animateFloatAsState(if (i == selected) 1f else 0f, label = "tabColor")
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                        // Ripple kept so keyboard / switch-access focus stays visible.
+                        .clip(RoundedCornerShape(AppRadii.md))
+                        .selectable(i == selected, role = Role.Tab) { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, style = style.copy(color = lerp(c.muted, c.accent, f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
 }
 
 /** Floating snackbar on hero color. Pass to SnackbarHost(snackbar = { AppSnackbar(it) }). */
