@@ -25,7 +25,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertLeftPositionInRootIsEqualTo
-import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.sarvarbek.expense_tracker.data.AppDatabase
@@ -95,7 +94,8 @@ class HistoryInsightsTest {
         show { InsightsScreen(db) }
         waitFor(monthName(1))
         val row = rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
-        row.assertLeftPositionInRootIsEqualTo(0.dp).assertWidthIsEqualTo(400.dp)
+        // Starts at the screen edge, not the page padding (width varies: chips stop at this month).
+        row.assertLeftPositionInRootIsEqualTo(0.dp)
         rule.waitForIdle() // let the centre-the-selected-month animation finish first
         row.performSemanticsAction(SemanticsActions.ScrollBy) { it(-100_000f, 0f) }
         rule.waitForIdle()

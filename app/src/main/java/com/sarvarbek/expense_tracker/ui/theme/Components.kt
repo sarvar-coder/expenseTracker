@@ -49,6 +49,7 @@ private val md = RoundedCornerShape(AppRadii.md)
  * Widens a horizontal scroller by [horizontal] on each side, through its parent's page
  * padding, so content slides to the screen edge instead of being cut 20dp short. Pair it
  * with `.horizontalScroll(…).padding(horizontal = …)` so content still rests on the page edge.
+ * Under an unbounded width it doesn't grow; the content just overhangs [horizontal] on each side.
  */
 fun Modifier.bleedHorizontal(horizontal: Dp) = layout { measurable, constraints ->
     val extra = horizontal.roundToPx() * 2
